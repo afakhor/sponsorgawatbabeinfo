@@ -51,7 +51,8 @@ jobs:
           apply plugin: 'kotlin-android'
           android {
               namespace "com.wasabeef.flutter_gl"
-              compileSdk 33
+              compileSdk 35
+              ndkVersion "26.1.10909125"
               compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
               kotlinOptions { jvmTarget = "1.8" }
               defaultConfig { minSdk 24 }
@@ -69,8 +70,36 @@ jobs:
           sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt
           sed -i 's/3\.31/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt
 
-      - run: flutter build apk --release
+      # === INI YANG KAMU TANYA - TARUH DISINI ===
+      - name: Build APK Release VERBOSE + Simpan Log
+        run: |
+          flutter doctor -v
+          flutter build apk --release -v 2>&1 | tee build-verbose.log
+          echo "--- CEK AAR & SO ---" | tee -a build-verbose.log
+          find ~/.pub-cache -name "*.so" | grep flutter_gl | tee -a build-verbose.log || echo "so tidak ketemu" | tee -a build-verbose.log
+          unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -E "libflutter_gl|libangle|babe_gold" | tee -a build-verbose.log || echo "lib di apk tidak ketemu" | tee -a build-verbose.log
+
+      - name: Upload Log Biar Bisa Dibaca
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log-verbose
+          path: build-verbose.log
+
+      - name: Build APK Profile (Anti Blink Checker)
+        run: flutter build apk --profile -v 2>&1 | tee profile.log
+
+      - name: Upload Profile APK + Log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: profile-apk-anti-blink
+          path: |
+            build/app/outputs/flutter-apk/app-profile.apk
+            profile.log
+
       - run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
+      
       - name: Release APK
         uses: softprops/action-gh-release@v2
         with:
