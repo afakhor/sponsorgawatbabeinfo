@@ -1,10 +1,10 @@
 name: babe_info_fixed
-description: BABE.INFO - Globe Fixed Tidak Nutupin Tulisan
+description: BABE.INFO - Globe Fixed
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.7.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -20,9 +20,6 @@ dependencies:
   audio_waveforms: ^1.1.0
   device_info_plus: ^9.1.1
   screenshot: ^2.1.0
-
-dependency_overrides:
-  web: ^1.1.1
 
 flutter:
   uses-material-design: true
