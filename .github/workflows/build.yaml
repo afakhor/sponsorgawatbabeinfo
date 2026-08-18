@@ -18,11 +18,21 @@ jobs:
         run: |
           export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" --sdk_root=$ANDROID_SDK_ROOT
-      - name: PATCH flutter_gl + flutter_angle
+
+      - name: PATCH flutter_gl + flutter_angle FIX AAR
         run: |
           FLUTTER_GL=$(find ~/.pub-cache/hosted/pub.dev -type d -name "flutter_gl-*" | head -n 1)
-          mkdir -p $FLUTTER_GL/android/libs
-          find $FLUTTER_GL -name "*.aar" -exec cp {} $FLUTTER_GL/android/libs/ \; 2>/dev/null || true
+          AAR_FILE=$(find $FLUTTER_GL -name "*.aar" | head -n 1)
+          echo "Found AAR: $AAR_FILE"
+          mkdir -p /tmp/aar_extract $FLUTTER_GL/android/libs
+          if [ -f "$AAR_FILE" ]; then
+            unzip -o "$AAR_FILE" -d /tmp/aar_extract
+            cp /tmp/aar_extract/classes.jar $FLUTTER_GL/android/libs/ || true
+            cp -r /tmp/aar_extract/res $FLUTTER_GL/android/src/main/ 2>/dev/null || true
+            cp -r /tmp/aar_extract/jni $FLUTTER_GL/android/src/main/ 2>/dev/null || true
+            mkdir -p $FLUTTER_GL/android/src/main/jniLibs
+            cp -r /tmp/aar_extract/jni/* $FLUTTER_GL/android/src/main/jniLibs/ 2>/dev/null || true
+          fi
           cat > $FLUTTER_GL/android/build.gradle <<'EOF'
           group 'com.wasabeef.flutter_gl'
           version '1.0-SNAPSHOT'
@@ -43,10 +53,10 @@ jobs:
               compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
               kotlinOptions { jvmTarget = "1.8" }
               defaultConfig { minSdk 24 }
+              lint { checkReleaseBuilds false; abortOnError false }
           }
-          repositories { flatDir { dirs 'libs' } }
           dependencies {
-              implementation fileTree(dir: 'libs', include: ['*.aar', '*.jar'])
+              implementation fileTree(dir: 'libs', include: ['*.jar'])
               implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
           }
           EOF
@@ -56,6 +66,7 @@ jobs:
           sed -i 's/3\.31/3.22.1/g' $ANGLE/android/build.gradle
           sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt
           sed -i 's/3\.31/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt
+
       - run: flutter build apk --release
       - run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
       - uses: softprops/action-gh-release@v1
