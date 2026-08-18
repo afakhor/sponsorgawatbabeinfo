@@ -7,6 +7,14 @@ android {
     namespace = "com.example.babe_info_fixed"
     compileSdk = 35
     ndkVersion = "25.1.8937393"
+    
+    // FIX DUPLICATE libc++_shared.so - INI KUNCINYA BOS
+    packaging {
+        jniLibs {
+            pickFirsts += listOf("**/libc++_shared.so")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
