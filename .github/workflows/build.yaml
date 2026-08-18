@@ -20,9 +20,16 @@ jobs:
       - name: Get deps
         run: flutter pub get
 
-      - name: OVERWRITE flutter_gl build.gradle FIX JVM 1.8 TOTAL
+      - name: OVERWRITE flutter_gl FIX threeegl + JVM
         run: |
           FLUTTER_GL=$(find ~/.pub-cache/hosted/pub.dev -type d -name "flutter_gl-*" | head -n 1)
+          echo "Found: $FLUTTER_GL"
+          ls -R $FLUTTER_GL | grep -i aar || true
+          # copy semua aar yang ada
+          mkdir -p $FLUTTER_GL/android/libs
+          find $FLUTTER_GL -name "*.aar" -exec cp {} $FLUTTER_GL/android/libs/ \; 2>/dev/null || true
+          ls $FLUTTER_GL/android/libs/
+
           cat > $FLUTTER_GL/android/build.gradle <<'EOF'
           group 'com.wasabeef.flutter_gl'
           version '1.0-SNAPSHOT'
@@ -49,11 +56,16 @@ jobs:
               kotlinOptions { jvmTarget = "1.8" }
               defaultConfig { minSdk 24 }
           }
+          repositories {
+              flatDir { dirs 'libs' }
+          }
           dependencies {
+              implementation fileTree(dir: 'libs', include: ['*.aar', '*.jar'])
               implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
           }
           EOF
           echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"></manifest>' > $FLUTTER_GL/android/src/main/AndroidManifest.xml
+          cat $FLUTTER_GL/android/build.gradle
 
       - name: Build APK Direct (bukan zip)
         run: flutter build apk --release
