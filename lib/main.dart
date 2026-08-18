@@ -46,11 +46,10 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
   void initState() {
     super.initState();
     flutterGl = FlutterGlPlugin();
-    // FIX BLINK - tunggu permission & context ready baru init globe
+    // FIX BLINK - tunggu permission & context ready
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await Future.delayed(const Duration(milliseconds: 400));
       await cekIzin();
-      // hanya init globe setelah frame pertama, biar gak blink
       if (mounted) {
         await initGlobe();
       }
@@ -81,7 +80,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     await flutterGl.prepareContext();
 
     scene = three.Scene();
-    // FIX background tidak transparan - abu solid
     scene.background = three.Color(0xEEEEEE);
 
     camera = three.PerspectiveCamera(45, 1, 0.1, 1000);
@@ -95,7 +93,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     renderer.setSize(600, 600, false);
     renderer.setClearColor(three.Color(0xEEEEEE), 1);
 
-    // LIGHT biar emas mengkilap
     var light = three.DirectionalLight(0xffffff, 1.2);
     light.position.setValues(5, 3, 5);
     scene.add(light);
@@ -104,10 +101,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     pointLight.position.setValues(-3, -2, 3);
     scene.add(pointLight);
 
-    // FIX TEXTURE babe_gold.jpg - tidak transparan - fix nullable
     var geo = three.SphereGeometry(1, 128, 128);
-
-    // Load texture dari assets/images/babe_gold.jpg
     var tex = await three.TextureLoader().fromAsset("assets/images/babe_gold.jpg");
     var texture = tex!;
     texture.wrapS = three.RepeatWrapping;
@@ -124,7 +118,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     globe!.position.y = 0.3;
     scene.add(globe!);
 
-    // AKAR HITAM melilit
     var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 100);
     var rootMat = three.MeshBasicMaterial.fromMap({"color": 0x111111});
     for (int i = 0; i < 3; i++) {
@@ -138,11 +131,14 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     if (mounted) setState(() => inited = true);
   }
 
+  // FIX BLINK - pakai try catch + filterQuality low
   void animate() {
-    if (!mounted || globe == null || !inited) return;
+    if (!mounted || globe == null) return;
     globe!.rotation.y += 0.008;
-    renderer.render(scene, camera);
-    flutterGl.updateTexture(renderer.getContext());
+    try {
+      renderer.render(scene, camera);
+      flutterGl.updateTexture(renderer.getContext());
+    } catch (_) {}
     Future.delayed(const Duration(milliseconds: 16), animate);
   }
 
@@ -208,22 +204,25 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     return Scaffold(
       body: Stack(children: [
         Positioned.fill(child: bgWidget),
-        // GLOBE solid
+        // GLOBE - ANTI BLINK pakai RepaintBoundary
         Positioned(
           top: 40,
           left: w / 2 - 150,
-          child: Container(
-            width: 300,
-            height: 300,
-            decoration: BoxDecoration(
+          child: RepaintBoundary(
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
                 color: const Color(0xFFEEEEEE),
                 borderRadius: BorderRadius.circular(150),
-                border: Border.all(color: Colors.amber, width: 2)),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(150),
-              child: inited
-                  ? Texture(textureId: flutterGl.textureId!)
-                  : const Center(child: CircularProgressIndicator(color: Colors.amber)),
+                border: Border.all(color: Colors.amber, width: 2)
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(150),
+                child: inited && flutterGl.textureId != null
+                    ? Texture(textureId: flutterGl.textureId!, filterQuality: FilterQuality.low)
+                    : const Center(child: CircularProgressIndicator(color: Colors.amber)),
+              ),
             ),
           ),
         ),
@@ -257,12 +256,14 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
                     border: Border.all(color: Colors.amber)),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   if (audioFile != null)
-                    AudioFileWaveforms(
-                        size: Size(w - 48, 60),
-                        playerController: player,
-                        waveformType: WaveformType.long,
-                        playerWaveStyle:
-                            const PlayerWaveStyle(fixedWaveColor: Colors.white24, liveWaveColor: Colors.amber)),
+                    RepaintBoundary(
+                      child: AudioFileWaveforms(
+                          size: Size(w - 48, 60),
+                          playerController: player,
+                          waveformType: WaveformType.long,
+                          playerWaveStyle:
+                              const PlayerWaveStyle(fixedWaveColor: Colors.white24, liveWaveColor: Colors.amber)),
+                    ),
                   if (audioFile != null)
                     RangeSlider(
                         min: 0,
