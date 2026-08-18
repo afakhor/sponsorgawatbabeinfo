@@ -1,33 +1,74 @@
-name: babe_info_fixed
-description: BABE.INFO - Globe Fixed Learn three_js
-publish_to: 'none'
-version: 1.0.0+1
+name: BABE.INFO Learn three_js
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
-environment:
-  sdk: '>=3.7.0 <4.0.0'
-  flutter: '>=3.22.0'
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.3'
+          channel: stable
 
-dependencies:
-  flutter:
-    sdk: flutter
-  cupertino_icons: ^1.0.6
-  three_js: ^0.2.7
-  file_picker: ^8.1.0
-  ffmpeg_kit_flutter_new_audio: ^1.0.0
-  path_provider: ^2.1.2
-  permission_handler: ^11.3.1
-  share_plus: ^10.0.3
-  audio_waveforms: ^1.0.2
-  device_info_plus: ^9.1.1
-  webview_flutter: ^4.8.0
+      - run: flutter pub get
 
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^3.0.0
+      - name: Install CMake
+        run: |
+          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" --sdk_root=$ANDROID_SDK_ROOT
 
-flutter:
-  uses-material-design: true
-  assets:
-    - assets/images/
-    - web/babe.html
+      - name: PATCH flutter_angle if exists
+        run: |
+          PUB_DIR=${PUB_CACHE:-/home/runner/.pub-cache}/hosted/pub.dev
+          ANGLE=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_angle-*" | head -n 1)
+          echo "ANGLE: $ANGLE"
+          if [ -n "$ANGLE" ] && [ -d "$ANGLE" ]; then
+            sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/build.gradle || true
+            sed -i 's/3\.31/3.22.1/g' $ANGLE/android/build.gradle || true
+            if [ -f "$ANGLE/android/src/main/cpp/CMakeLists.txt" ]; then
+              sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt || true
+              sed -i 's/3\.31/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt || true
+            fi
+          else
+            echo "flutter_angle not found, skip"
+          fi
+
+      - run: flutter build apk --release
+
+      - run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
+
+      - name: Release APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v3d-${{ github.run_number }}
+          name: BABE.INFO 3D Globe ${{ github.run_number }}
+          body: APK + Web 3D siap share WhatsApp - texture babe_gold.jpg anti blink
+          files: build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-web:
+    runs-on: ubuntu-latest
+    needs: build-apk
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build web simple
+        run: |
+          mkdir -p _site/assets/images
+          cp web/babe.html _site/
+          cp assets/images/babe_gold.jpg _site/assets/images/ 2>/dev/null || true
+          cp assets/images/bg.jpg _site/assets/images/ 2>/dev/null || true
+          cp web/babe.html _site/index.html
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          publish_branch: gh-pages
