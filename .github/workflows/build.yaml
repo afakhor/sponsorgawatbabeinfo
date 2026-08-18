@@ -23,19 +23,25 @@ jobs:
 
       - name: PATCH flutter_gl + flutter_angle FIX AAR
         run: |
-          FLUTTER_GL=$(find ~/.pub-cache/hosted/pub.dev -type d -name "flutter_gl-*" | head -n 1)
-          AAR_FILE=$(find $FLUTTER_GL -name "*.aar" | head -n 1)
-          echo "Found AAR: $AAR_FILE"
-          mkdir -p /tmp/aar_extract $FLUTTER_GL/android/libs
-          if [ -f "$AAR_FILE" ]; then
-            unzip -o "$AAR_FILE" -d /tmp/aar_extract
-            cp /tmp/aar_extract/classes.jar $FLUTTER_GL/android/libs/ || true
-            cp -r /tmp/aar_extract/res $FLUTTER_GL/android/src/main/ 2>/dev/null || true
-            cp -r /tmp/aar_extract/jni $FLUTTER_GL/android/src/main/ 2>/dev/null || true
-            mkdir -p $FLUTTER_GL/android/src/main/jniLibs
-            cp -r /tmp/aar_extract/jni/* $FLUTTER_GL/android/src/main/jniLibs/ 2>/dev/null || true
-          fi
-          cat > $FLUTTER_GL/android/build.gradle <<'EOF'
+          PUB_DIR=${PUB_CACHE:-/home/runner/.pub-cache}/hosted/pub.dev
+          if [ ! -d "$PUB_DIR" ]; then PUB_DIR=~/.pub-cache/hosted/pub.dev; fi
+          echo "PUB_DIR: $PUB_DIR"
+          ls $PUB_DIR | grep flutter_gl || true
+          
+          FLUTTER_GL=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_gl-*" | head -n 1)
+          echo "FLUTTER_GL: $FLUTTER_GL"
+          
+          if [ -n "$FLUTTER_GL" ] && [ -d "$FLUTTER_GL" ]; then
+            AAR_FILE=$(find $FLUTTER_GL -name "*.aar" | head -n 1)
+            echo "Found AAR: $AAR_FILE"
+            mkdir -p /tmp/aar_extract $FLUTTER_GL/android/libs
+            if [ -n "$AAR_FILE" ] && [ -f "$AAR_FILE" ]; then
+              unzip -o "$AAR_FILE" -d /tmp/aar_extract
+              cp /tmp/aar_extract/classes.jar $FLUTTER_GL/android/libs/ || true
+              mkdir -p $FLUTTER_GL/android/src/main/jniLibs
+              cp -r /tmp/aar_extract/jni/* $FLUTTER_GL/android/src/main/jniLibs/ 2>/dev/null || true
+            fi
+            cat > $FLUTTER_GL/android/build.gradle <<'EOF'
           group 'com.wasabeef.flutter_gl'
           version '1.0-SNAPSHOT'
           buildscript {
@@ -62,12 +68,19 @@ jobs:
               implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
           }
           EOF
-          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"></manifest>' > $FLUTTER_GL/android/src/main/AndroidManifest.xml
-          ANGLE=$(find ~/.pub-cache/hosted/pub.dev -type d -name "flutter_angle-*" | head -n 1)
-          sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/build.gradle
-          sed -i 's/3\.31/3.22.1/g' $ANGLE/android/build.gradle
-          sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt
-          sed -i 's/3\.31/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt
+            echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"></manifest>' > $FLUTTER_GL/android/src/main/AndroidManifest.xml
+          else
+            echo "flutter_gl not found, skip patch"
+          fi
+          
+          ANGLE=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_angle-*" | head -n 1)
+          echo "ANGLE: $ANGLE"
+          if [ -n "$ANGLE" ] && [ -d "$ANGLE" ]; then
+            sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/build.gradle || true
+            sed -i 's/3\.31/3.22.1/g' $ANGLE/android/build.gradle || true
+            sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt || true
+            sed -i 's/3\.31/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt || true
+          fi
 
       - run: flutter build apk --release
       - run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
@@ -87,7 +100,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Build web simple (bukan flutter web biar ringan)
+      - name: Build web simple
         run: |
           mkdir -p _site/assets/images
           cp web/babe.html _site/
