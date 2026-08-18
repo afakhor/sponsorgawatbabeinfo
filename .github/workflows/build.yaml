@@ -1,0 +1,42 @@
+name: BABE.INFO Direct APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build APK Release
+        run: flutter build apk --release
+
+      - name: Rename APK biar jelas
+        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-Globe-Fixed.apk
+
+      - name: Create Release + Upload APK Langsung
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: BABE.INFO v1.0.${{ github.run_number }} - Globe Fixed
+          body: |
+            Fix:
+            - Globe tidak menutupi tulisan BABE.INFO & Heru Wingchun
+            - Tulisan di globe lengkap BABE.INFO
+            - Globe touch responsive, background + wave jadi MP4
+            - Link globe touchable: https://afakhor.github.io/sponsorgawatbabeinfo/
+          files: build/app/outputs/flutter-apk/BABE-INFO-Globe-Fixed.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
