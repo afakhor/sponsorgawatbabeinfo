@@ -94,7 +94,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     var geo = three.SphereGeometry(1, 128, 128);
     
     // Load texture dari assets/babe_gold.jpg
-    var texture = await three.TextureLoader().fromAsset("assets/babe_gold.jpg");
+    var texture = await three.TextureLoader().fromAsset("assets/images/babe_gold.jpg");
     texture.wrapS = three.RepeatWrapping;
     texture.wrapT = three.RepeatWrapping;
     texture.flipY = false;
