@@ -7,11 +7,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-// TEST BLINK - DIKOMEN DULU BUAT CEK
-// import 'package:audio_waveforms/audio_waveforms.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized(); // WAJIB
+  WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await Hive.initFlutter();
   runApp(const MyApp());
@@ -32,7 +30,6 @@ class GlobeLearnPage extends StatefulWidget {
 class _GlobeLearnPageState extends State<GlobeLearnPage> {
   late three.ThreeJS threeJs;
   File? audioFile, bgFile, outVideo;
-  double total=180, s=0, e=60;
   bool load=false;
 
   @override
@@ -46,7 +43,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
 
   Future<void> setup() async {
     threeJs.scene = three.Scene();
-    threeJs.scene.background = three.Color.fromHex(0xEEEEEE);
+    threeJs.scene.background = three.Color(0xEEEEEE);
     threeJs.camera = three.PerspectiveCamera(45, threeJs.width/threeJs.height, 0.1, 1000);
     threeJs.camera.position.z = 2.8;
 
@@ -56,15 +53,14 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     threeJs.scene.add(three.AmbientLight(0xffffff, 0.8));
 
     var geo = three.SphereGeometry(1, 128, 128);
-    var tex = await three.TextureLoader().fromAsset(threeJs, "assets/images/babe_gold.jpg").loadAsync();
+    // FIX API 0.2.7: fromAsset cuma 1 argumen
+    var tex = await three.TextureLoader().fromAsset("assets/images/babe_gold.jpg").loadAsync(threeJs);
     var mat = three.MeshStandardMaterial.fromMap({"map": tex, "metalness": 0.75, "roughness": 0.28});
     var globe = three.Mesh(geo, mat);
     globe.position.y = 0.3;
     threeJs.scene.add(globe);
 
-    threeJs.addAnimationEvent((dt){
-      globe.rotation.y += 0.008;
-    });
+    threeJs.addAnimationEvent((dt){ globe.rotation.y += 0.008; });
   }
 
   Future<void> pickAudio() async {
@@ -100,15 +96,10 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
       body: Stack(children: [
         Positioned.fill(child: bgFile!=null?Image.file(bgFile!, fit: BoxFit.cover):Image.asset('assets/images/bg.jpg', fit: BoxFit.cover)),
         Positioned(top:40, left:w/2-150, child: Container(width:300, height:300, decoration: BoxDecoration(color: Color(0xFFEEEEEE), borderRadius: BorderRadius.circular(150), border: Border.all(color: Colors.amber, width:2)), child: ClipRRect(borderRadius: BorderRadius.circular(150), child: threeJs.build()))),
-        Positioned(top:360, left:0, right:0, child: Column(children: [Text("BABE.INFO", style: TextStyle(fontSize:32, fontWeight: FontWeight.w900, color: Colors.amber)), Text("HeruWingchun three_js 0.2.7 + Firebase + Hive", style: TextStyle(color: Colors.white70, fontSize: 10))])),
         SafeArea(child: Align(alignment: Alignment.bottomCenter, child: Padding(padding: EdgeInsets.all(12), child: Container(padding: EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.amber)), child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Row(children: [
-            Expanded(child: ElevatedButton.icon(onPressed: pickAudio, icon: Icon(Icons.music_note), label: Text(audioFile==null?"AMBIL MUSIK":"GANTI"))),
-            SizedBox(width:6),
-            Expanded(child: ElevatedButton.icon(onPressed: () async { var r=await FilePicker.platform.pickFiles(type: FileType.image); if(r!=null) setState(()=> bgFile=File(r.files.single.path!)); }, icon: Icon(Icons.image), label: Text("BG"))),
-          ]),
+          Row(children: [Expanded(child: ElevatedButton.icon(onPressed: pickAudio, icon: Icon(Icons.music_note), label: Text(audioFile==null?"AMBIL MUSIK":"GANTI")))]),
           SizedBox(width:double.infinity, child: ElevatedButton.icon(onPressed: load?null:buatMp4, icon: Icon(Icons.video_file), label: Text(load?"RENDER...":"BUAT MP4"))),
-          if(outVideo!=null) ElevatedButton.icon(onPressed: ()=> Share.shareXFiles([XFile(outVideo!.path)], text: "BABE.INFO: https://afakhor.github.io/sponsorgawatbabeinfo/"), icon: Icon(Icons.share), label: Text("SHARE WA")),
+          if(outVideo!=null) ElevatedButton.icon(onPressed: ()=> Share.shareXFiles([XFile(outVideo!.path)]), icon: Icon(Icons.share), label: Text("SHARE WA")),
         ]))))),
       ]),
     );
