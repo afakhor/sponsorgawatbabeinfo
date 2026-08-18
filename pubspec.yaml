@@ -2,31 +2,19 @@ name: babe_info_fixed
 description: BABE.INFO - Globe Fixed Learn three_js
 publish_to: 'none'
 version: 1.0.0+1
-
 environment:
   sdk: '>=3.7.0 <4.0.0'
-
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.2
-  three_js: ^0.1.1
-  #flutter_gl: ^0.0.21
-  flutter_angle: ^0.2.8
+  webview_flutter: ^4.8.0
   file_picker: ^8.1.0
   ffmpeg_kit_flutter_new_audio: ^1.0.0
   path_provider: ^2.1.2
-  #permission_handler: ^11.3.1
   share_plus: ^10.0.3
-  #audio_waveforms: ^1.1.0
-  #device_info_plus: ^9.1.1
-
-dependency_overrides:
-  flutter_gl: ^0.0.21
-  flutter_angle: ^0.2.8
-
 flutter:
   uses-material-design: true
   assets:
     - assets/images/bg.jpg
     - assets/images/babe_gold.jpg
+    - web/babe.html
