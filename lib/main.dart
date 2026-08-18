@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:three_js/three_js.dart' as three;
 import 'package:flutter_gl/flutter_gl.dart';
@@ -12,14 +11,21 @@ import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
 void main() => runApp(const MyApp());
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-  @override Widget build(BuildContext c) => MaterialApp(debugShowCheckedModeBanner: false, theme: ThemeData.dark(), home: const GlobeLearnPage());
+  @override
+  Widget build(BuildContext c) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData.dark(),
+        home: const GlobeLearnPage(),
+      );
 }
 
 class GlobeLearnPage extends StatefulWidget {
   const GlobeLearnPage({super.key});
-  @override State<GlobeLearnPage> createState() => _GlobeLearnPageState();
+  @override
+  State<GlobeLearnPage> createState() => _GlobeLearnPageState();
 }
 
 class _GlobeLearnPageState extends State<GlobeLearnPage> {
@@ -29,7 +35,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
   late three.PerspectiveCamera camera;
   late three.Mesh globe;
   bool inited = false;
-  double w = 0, h = 0;
 
   // audio
   File? audioFile, bgFile, outVideo;
@@ -62,7 +67,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     await flutterGl.prepareContext();
 
     scene = three.Scene();
-    scene.background = three.Color.fromHex(0x000000);
+    scene.background = three.Color(0x000000);
     camera = three.PerspectiveCamera(75, 1, 0.1, 1000);
     camera.position.z = 3;
 
@@ -78,28 +83,19 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     scene.add(light);
     scene.add(three.AmbientLight(0xffffff, 0.6));
 
-    // GEOMETRY GLOBE
+    // GEOMETRY GLOBE - fix tidak nutupin tulisan
     var geo = three.SphereGeometry(1, 64, 64);
     
-    // TEXTURE - pakai MeshPhongMaterial yang benar di three_js 0.1.1
-    var loader = three.TextureLoader();
-    // pakai earth texture default atau warna emas biar kelihatan BABE.INFO
     var mat = three.MeshPhongMaterial();
-    mat.color = three.Color.fromHex(0xFFD700); // emas
+    mat.color = three.Color(0xFFD700); // emas BABE.INFO
     mat.shininess = 150;
-    mat.specular = three.Color.fromHex(0xFFD700);
+    mat.specular = three.Color(0xFFD700);
 
     globe = three.Mesh(geo, mat);
-    // Posisi globe di atas biar tidak nutupin tulisan BABE.INFO & HeruWingchun
-    globe.position.y = 0.8;
+    globe.position.y = 0.8; // naik ke atas biar tidak nutupin BABE.INFO & HeruWingchun
     scene.add(globe);
 
-    // Animasi rotasi
-    flutterGl.gl.drawingBufferWidth = 400;
-    flutterGl.gl.drawingBufferHeight = 400;
-
     animate();
-
     setState(() => inited = true);
   }
 
@@ -147,18 +143,22 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
       bgPath = f.path;
     }
     await FFmpegKit.execute("-y -loop 1 -i \"$bgPath\" -i \"$trim\" -c:v libx264 -tune stillimage -c:a aac -pix_fmt yuv420p -shortest -t ${e - s} \"$out\"").then((st) async {
-      if ((await st.getReturnCode())!.isValueSuccess()) setState(() { outVideo = File(out); load = false; });
+      if ((await st.getReturnCode())!.isValueSuccess()) {
+        setState(() { outVideo = File(out); load = false; });
+      } else {
+        setState(() => load = false);
+      }
     });
   }
 
-  @override Widget build(BuildContext c) {
-    w = MediaQuery.of(c).size.width;
-    h = 400;
+  @override
+  Widget build(BuildContext context) {
+    double w = MediaQuery.of(context).size.width;
     Widget bg = bgFile != null ? Image.file(bgFile!, fit: BoxFit.cover) : Image.asset('assets/images/bg.jpg', fit: BoxFit.cover);
     return Scaffold(
       body: Stack(children: [
         Positioned.fill(child: bg),
-        // GLOBE three_js + flutter_gl (learn by doing)
+        // GLOBE three_js + flutter_gl - learn by doing
         Positioned(
           top: 40,
           left: w / 2 - 150,
@@ -172,7 +172,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
             ),
           ),
         ),
-        // Tulisan BABE.INFO di bawah globe (tidak ketutup)
+        // Tulisan BABE.INFO di bawah globe - tidak ketutup (fix)
         Positioned(
           top: 360,
           left: 0,
@@ -184,7 +184,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)),
-              child: const Text("GLOBE BABE.INFO - GOLD", style: TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
+              child: const Text("GLOBE BABE.INFO - TOUCHABLE", style: TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
             )
           ]),
         ),
@@ -218,7 +218,8 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     );
   }
 
-  @override void dispose() {
+  @override
+  void dispose() {
     flutterGl.dispose();
     super.dispose();
   }
