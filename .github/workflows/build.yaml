@@ -20,29 +20,22 @@ jobs:
       - name: Get deps
         run: flutter pub get
 
-      - name: OVERWRITE flutter_gl build.gradle FIX JVM 1.8 TOTAL
+            - name: OVERWRITE flutter_gl build.gradle FIX JVM 1.8 TOTAL
         run: |
           FLUTTER_GL=$(find ~/.pub-cache/hosted/pub.dev -type d -name "flutter_gl-*" | head -n 1)
-          echo "Found: $FLUTTER_GL"
           cat > $FLUTTER_GL/android/build.gradle <<'EOF'
           group 'com.wasabeef.flutter_gl'
           version '1.0-SNAPSHOT'
           buildscript {
               ext.kotlin_version = '1.9.22'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
               dependencies {
                   classpath 'com.android.tools.build:gradle:8.1.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
           rootProject.allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+              repositories { google(); mavenCentral() }
           }
           apply plugin: 'com.android.library'
           apply plugin: 'kotlin-android'
@@ -53,24 +46,14 @@ jobs:
                   sourceCompatibility JavaVersion.VERSION_1_8
                   targetCompatibility JavaVersion.VERSION_1_8
               }
-              kotlinOptions {
-                  jvmTarget = "1.8"
-              }
-              defaultConfig {
-                  minSdk 24
-              }
+              kotlinOptions { jvmTarget = "1.8" }
+              defaultConfig { minSdk 24 }
           }
           dependencies {
               implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
           }
           EOF
-          # Fix manifest
           echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"></manifest>' > $FLUTTER_GL/android/src/main/AndroidManifest.xml
-          cat $FLUTTER_GL/android/build.gradle
-          # threeegl
-          mkdir -p $FLUTTER_GL/android/libs
-          mkdir -p android/app/libs/aars
-          find $FLUTTER_GL -name "*.aar" -exec cp {} $FLUTTER_GL/android/libs/ \; 2>/dev/null || true
 
       - name: Build APK Direct (bukan zip)
         run: flutter build apk --release
