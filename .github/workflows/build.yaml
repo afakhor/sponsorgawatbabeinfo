@@ -20,7 +20,7 @@ jobs:
       - name: Get deps
         run: flutter pub get
 
-            - name: OVERWRITE flutter_gl build.gradle FIX JVM 1.8 TOTAL
+      - name: OVERWRITE flutter_gl build.gradle FIX JVM 1.8 TOTAL
         run: |
           FLUTTER_GL=$(find ~/.pub-cache/hosted/pub.dev -type d -name "flutter_gl-*" | head -n 1)
           cat > $FLUTTER_GL/android/build.gradle <<'EOF'
