@@ -7,8 +7,8 @@ android {
     namespace = "com.example.babe_info_fixed"
     compileSdk = 35
     ndkVersion = "25.1.8937393"
-    
-    // FIX DUPLICATE libc++_shared.so - INI KUNCINYA BOS
+
+    // FIX DUPLICATE libc++_shared.so
     packaging {
         jniLibs {
             pickFirsts += listOf("**/libc++_shared.so")
@@ -32,6 +32,9 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
             signingConfig = signingConfigs.getByName("debug")
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
         }
     }
 }
