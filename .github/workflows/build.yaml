@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -20,28 +20,39 @@ jobs:
       - name: Get deps
         run: flutter pub get
 
-      - name: PATCH flutter_gl + threeegl + kotlin (fix total)
+      - name: PATCH flutter_gl + threeegl + kotlin + manifest (FIX TOTAL AGP 8)
         run: |
           FLUTTER_GL=$(find ~/.pub-cache/hosted/pub.dev -type d -name "flutter_gl-*" | head -n 1)
           echo "Found: $FLUTTER_GL"
           # 1. Fix kotlin 1.3.61 -> 1.9.22
           sed -i 's/1.3.61/1.9.22/g' $FLUTTER_GL/android/build.gradle
           sed -i 's/1.5.20/1.9.22/g' $FLUTTER_GL/android/build.gradle
+          sed -i 's/ext.kotlin_version.*/ext.kotlin_version = "1.9.22"/g' $FLUTTER_GL/android/build.gradle
+          
           # 2. Add namespace kalau belum ada
           if ! grep -q "namespace" $FLUTTER_GL/android/build.gradle; then
             sed -i '/android {/a \    namespace "com.wasabeef.flutter_gl"' $FLUTTER_GL/android/build.gradle
           fi
-          # 3. Fix threeegl.aar location - copy ke lokasi yang dicari Gradle
+          
+          # 3. FIX TERAKHIR - Hapus package= dari AndroidManifest.xml (AGP 8 tidak boleh)
+          MANIFEST=$FLUTTER_GL/android/src/main/AndroidManifest.xml
+          echo "Before manifest:"
+          cat $MANIFEST
+          sed -i 's/package="com.futouapp.flutter_gl.flutter_gl"//g' $MANIFEST
+          sed -i 's/package="com.wasabeef.flutter_gl"//g' $MANIFEST
+          # Bersihkan tag <manifest> biar valid
+          sed -i 's/<manifest.*/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">/g' $MANIFEST
+          echo "After manifest:"
+          cat $MANIFEST
+          
+          # 4. Fix threeegl.aar location
           mkdir -p $FLUTTER_GL/android/libs
-          mkdir -p $FLUTTER_GL/android/app/libs/aars
-          find $FLUTTER_GL -name "*.aar" -exec cp {} $FLUTTER_GL/android/libs/ \; 2>/dev/null || true
-          find $FLUTTER_GL -name "threeegl*" -exec cp {} $FLUTTER_GL/android/libs/ \; 2>/dev/null || true
-          # Buat folder libs di app juga biar tidak error
           mkdir -p android/app/libs/aars
+          find $FLUTTER_GL -name "*.aar" -exec cp {} $FLUTTER_GL/android/libs/ \; 2>/dev/null || true
           cp $FLUTTER_GL/android/libs/*.aar android/app/libs/aars/ 2>/dev/null || true
-          cp $FLUTTER_GL/android/*.aar android/app/libs/aars/ 2>/dev/null || true
-          ls -R $FLUTTER_GL/android/libs || true
-          cat $FLUTTER_GL/android/build.gradle
+          
+          echo "Build.gradle:"
+          cat $FLUTTER_GL/android/build.gradle | head -n 40
 
       - name: Build APK Direct (bukan zip)
         run: flutter build apk --release
@@ -55,7 +66,9 @@ jobs:
           tag_name: v3d-${{ github.run_number }}
           name: BABE.INFO 3D Globe ${{ github.run_number }}
           body: |
-            Learn by doing three_js + flutter_gl - FIXED
+            Learn by doing three_js + flutter_gl - FIXED TOTAL
+            - Fix namespace + kotlin 1.3.61 -> 1.9.22
+            - Fix AndroidManifest package= removed (AGP 8)
             - Globe di atas, tidak nutupin BABE.INFO & HeruWingchun
             - Tulisan di globe lengkap BABE.INFO
             - APK langsung install (bukan zip)
