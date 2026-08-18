@@ -16,7 +16,10 @@ jobs:
       - name: Get deps
         run: flutter pub get
       - name: Install CMake
-        run: sdkmanager --install "cmake;3.22.1" --sdk_root=/usr/local/lib/android/sdk
+        run: |
+          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" --sdk_root=$ANDROID_SDK_ROOT
+          ls $ANDROID_SDK_ROOT/cmake/
       - name: PATCH flutter_gl + flutter_angle
         run: |
           FLUTTER_GL=$(find ~/.pub-cache/hosted/pub.dev -type d -name "flutter_gl-*" | head -n 1)
@@ -65,7 +68,6 @@ jobs:
           name: BABE.INFO 3D Globe ${{ github.run_number }}
           body: |
             FIX CMAKE + JVM + MATERIAL
-            - APK langsung install
           files: build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
