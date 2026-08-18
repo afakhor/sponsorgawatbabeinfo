@@ -10,15 +10,15 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  three_js: ^0.0.9
-  flutter_gl: ^0.0.21
-  flutter_angle: ^1.0.7
+  cupertino_icons: ^1.0.6
+  three_js: 0.0.9
+  flutter_gl: any
   file_picker: ^8.1.0
   ffmpeg_kit_flutter_new_audio: ^1.0.0
   path_provider: ^2.1.2
   permission_handler: ^11.3.1
   share_plus: ^10.0.3
-  audio_waveforms: ^1.1.0
+  audio_waveforms: ^1.0.2
   device_info_plus: ^9.1.1
   webview_flutter: ^4.8.0
 
