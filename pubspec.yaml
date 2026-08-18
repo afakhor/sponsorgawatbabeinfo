@@ -29,4 +29,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/bg.jpg
-    - assets/babe_gold.jpg
+    - assets/images/babe_gold.jpg
