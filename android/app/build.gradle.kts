@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.babe_info_fixed"
-    compileSdk = 34
+    compileSdk = 35
     ndkVersion = "25.1.8937393"
 
     compileOptions {
@@ -20,7 +20,7 @@ android {
     defaultConfig {
         applicationId = "com.example.babe_info_fixed"
         minSdk = 23
-        targetSdk = 34
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
