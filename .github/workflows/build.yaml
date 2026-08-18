@@ -1,4 +1,4 @@
-name: BABE.INFO Direct APK
+name: BABE.INFO Learn three_js + flutter_gl
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-release:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,26 +17,37 @@ jobs:
           flutter-version: '3.29.3'
           channel: stable
 
-      - name: Get dependencies
+      - name: Get deps
         run: flutter pub get
 
-      - name: Build APK Release
+      - name: PATCH flutter_gl jadul -> Kotlin 1.9.22 + namespace
+        run: |
+          FLUTTER_GL_DIR=$(find ~/.pub-cache -type d -name "flutter_gl-*" | head -n 1)
+          echo "Patching $FLUTTER_GL_DIR"
+          # patch kotlin version
+          sed -i 's/1.3.61/1.9.22/g' $FLUTTER_GL_DIR/android/build.gradle
+          # tambah namespace kalau belum ada
+          if ! grep -q "namespace" $FLUTTER_GL_DIR/android/build.gradle; then
+            sed -i '/android {/a \    namespace "com.wasabeef.flutter_gl"' $FLUTTER_GL_DIR/android/build.gradle
+          fi
+          cat $FLUTTER_GL_DIR/android/build.gradle
+
+      - name: Build APK Direct (bukan zip)
         run: flutter build apk --release
 
-      - name: Rename APK biar jelas
-        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-Globe-Fixed.apk
+      - name: Rename biar langsung install
+        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
 
-      - name: Create Release + Upload APK Langsung
+      - name: Release APK Langsung Download
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: BABE.INFO v1.0.${{ github.run_number }} - Globe Fixed
+          tag_name: v3d-${{ github.run_number }}
+          name: BABE.INFO 3D Globe Learn - ${{ github.run_number }}
           body: |
-            Fix:
-            - Globe tidak menutupi tulisan BABE.INFO & Heru Wingchun
-            - Tulisan di globe lengkap BABE.INFO
-            - Globe touch responsive, background + wave jadi MP4
-            - Link globe touchable: https://afakhor.github.io/sponsorgawatbabeinfo/
-          files: build/app/outputs/flutter-apk/BABE-INFO-Globe-Fixed.apk
+            Learn by doing three_js + flutter_gl
+            - Fix namespace flutter_gl
+            - Fix Kotlin 1.3.61 -> 1.9.22
+            - Globe fix tidak nutupin BABE.INFO, tulisan di globe lengkap BABE.INFO
+          files: build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
