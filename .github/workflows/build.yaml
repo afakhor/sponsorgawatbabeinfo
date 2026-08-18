@@ -7,6 +7,8 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -69,14 +71,14 @@ jobs:
 
       - run: flutter build apk --release
       - run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
-      - uses: softprops/action-gh-release@v1
+      - name: Release APK
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v3d-${{ github.run_number }}
           name: BABE.INFO 3D Globe ${{ github.run_number }}
-          body: APK + Web 3D siap share WhatsApp
+          body: APK + Web 3D siap share WhatsApp - texture babe_gold.jpg
           files: build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   deploy-web:
     runs-on: ubuntu-latest
