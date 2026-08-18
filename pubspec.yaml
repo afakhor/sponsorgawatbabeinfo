@@ -11,8 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
-  three_js: 0.0.9
-  flutter_gl: any
+  three_js: ^0.2.7
   file_picker: ^8.1.0
   ffmpeg_kit_flutter_new_audio: ^1.0.0
   path_provider: ^2.1.2
