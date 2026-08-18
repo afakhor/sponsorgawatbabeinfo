@@ -1,5 +1,5 @@
 name: babe_info_fixed
-description: BABE.INFO - Globe Fixed
+description: BABE.INFO - Globe Fixed Learn three_js
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -11,15 +11,17 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.2
   three_js: ^0.1.1
-  flutter_gl: ^0.0.4
+  flutter_gl:
+    git:
+      url: https://github.com/niko1234566/flutter_gl.git
+      ref: main
   file_picker: ^8.1.0
-  ffmpeg_kit_flutter_audio: ^6.0.3
+  ffmpeg_kit_flutter_new_audio: ^1.0.0
   path_provider: ^2.1.2
   permission_handler: ^11.3.1
   share_plus: ^10.0.3
   audio_waveforms: ^1.1.0
   device_info_plus: ^9.1.1
-  screenshot: ^2.1.0
 
 flutter:
   uses-material-design: true
