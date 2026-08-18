@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:three_js/three_js.dart' as three;
 import 'package:flutter_gl/flutter_gl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
@@ -34,10 +34,9 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
   late three.WebGLRenderer renderer;
   late three.Scene scene;
   late three.PerspectiveCamera camera;
-  late three.Mesh globe;
+  three.Mesh? globe;
   bool inited = false;
 
-  // audio
   File? audioFile, bgFile, outVideo;
   final player = PlayerController();
   double total = 180, s = 0, e = 60;
@@ -61,48 +60,72 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     await flutterGl.initialize(options: {
       "antialias": true,
       "alpha": false,
-      "width": 400,
-      "height": 400,
+      "width": 600,
+      "height": 600,
       "dpr": 1.0
     });
     await flutterGl.prepareContext();
 
     scene = three.Scene();
-    scene.background = three.Color(0x000000);
-    camera = three.PerspectiveCamera(75, 1, 0.1, 1000);
-    camera.position.z = 3;
+    // FIX background tidak transparan - pakai abu-abu solid seperti foto
+    scene.background = three.Color(0xEEEEEE);
+
+    camera = three.PerspectiveCamera(45, 1, 0.1, 1000);
+    camera.position.z = 2.8;
 
     renderer = three.WebGLRenderer({
       "gl": flutterGl.gl,
       "antialias": true,
+      "alpha": false,
     });
-    renderer.setSize(400, 400, false);
+    renderer.setSize(600, 600, false);
+    renderer.setClearColor(three.Color(0xEEEEEE), 1);
 
-    // LIGHT
-    var light = three.DirectionalLight(0xffffff, 1);
+    // LIGHT - biar emas mengkilap
+    var light = three.DirectionalLight(0xffffff, 1.2);
     light.position.setValues(5, 3, 5);
     scene.add(light);
-    scene.add(three.AmbientLight(0xffffff, 0.6));
+    scene.add(three.AmbientLight(0xffffff, 0.8));
+    var pointLight = three.PointLight(0xFFD700, 0.8, 10);
+    pointLight.position.setValues(-3, -2, 3);
+    scene.add(pointLight);
 
-    // GEOMETRY GLOBE - fix tidak nutupin tulisan
-    var geo = three.SphereGeometry(1, 64, 64);
+    // FIX TEXTURE pakai babe_gold.jpg - tidak transparan
+    var geo = three.SphereGeometry(1, 128, 128);
     
-    var mat = three.MeshPhongMaterial();
-    mat.color = three.Color(0xFFD700); // emas BABE.INFO
-    mat.shininess = 150;
-    mat.specular = three.Color(0xFFD700);
+    // Load texture dari assets/babe_gold.jpg
+    var texture = await three.TextureLoader().fromAsset("assets/babe_gold.jpg");
+    texture.wrapS = three.RepeatWrapping;
+    texture.wrapT = three.RepeatWrapping;
+    texture.flipY = false;
+    
+    var mat = three.MeshStandardMaterial.fromMap({
+      "map": texture,
+      "metalness": 0.75,
+      "roughness": 0.28,
+    });
 
     globe = three.Mesh(geo, mat);
-    globe.position.y = 0.8; // naik ke atas biar tidak nutupin BABE.INFO & HeruWingchun
-    scene.add(globe);
+    globe!.position.y = 0.3; // naik ke atas biar tidak nutupin BABE.INFO
+    scene.add(globe!);
+
+    // AKAR HITAM 3D melilit (tambahan biar mirip foto, tapi tetap texture utama dari jpg)
+    var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 100);
+    var rootMat = three.MeshBasicMaterial.fromMap({"color": 0x111111});
+    for(int i=0;i<3;i++){
+      var torus = three.Mesh(rootGeo, rootMat);
+      torus.rotation.x = i * 1.2;
+      torus.rotation.y = i * 0.8;
+      scene.add(torus);
+    }
 
     animate();
     setState(() => inited = true);
   }
 
   void animate() {
-    if (!mounted) return;
-    globe.rotation.y += 0.01;
+    if (!mounted || globe == null) return;
+    globe!.rotation.y += 0.008;
     renderer.render(scene, camera);
     flutterGl.updateTexture(renderer.getContext());
     Future.delayed(const Duration(milliseconds: 16), animate);
@@ -155,25 +178,29 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
   @override
   Widget build(BuildContext context) {
     double w = MediaQuery.of(context).size.width;
-    Widget bg = bgFile != null ? Image.file(bgFile!, fit: BoxFit.cover) : Image.asset('assets/images/bg.jpg', fit: BoxFit.cover);
+    Widget bgWidget = bgFile != null ? Image.file(bgFile!, fit: BoxFit.cover) : Image.asset('assets/images/bg.jpg', fit: BoxFit.cover);
     return Scaffold(
       body: Stack(children: [
-        Positioned.fill(child: bg),
-        // GLOBE three_js + flutter_gl - learn by doing
+        Positioned.fill(child: bgWidget),
+        // GLOBE - tidak transparan, pakai babe_gold.jpg
         Positioned(
           top: 40,
           left: w / 2 - 150,
           child: Container(
             width: 300,
             height: 300,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(150), border: Border.all(color: Colors.amber, width: 2)),
+            decoration: BoxDecoration(
+              color: Color(0xFFEEEEEE), // background solid tidak transparan
+              borderRadius: BorderRadius.circular(150), 
+              border: Border.all(color: Colors.amber, width: 2)
+            ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(150),
               child: inited ? Texture(textureId: flutterGl.textureId!) : const Center(child: CircularProgressIndicator(color: Colors.amber)),
             ),
           ),
         ),
-        // Tulisan BABE.INFO di bawah globe - tidak ketutup (fix)
+        // Tulisan di bawah globe - tidak ketutup
         Positioned(
           top: 360,
           left: 0,
@@ -185,7 +212,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)),
-              child: const Text("GLOBE BABE.INFO - TOUCHABLE", style: TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
+              child: const Text("GLOBE BABE.INFO - TEXTURE babe_gold.jpg", style: TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
             )
           ]),
         ),
