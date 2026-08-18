@@ -16,6 +16,8 @@ jobs:
           flutter-version: '3.29.3'
           channel: stable
       - run: flutter pub get
+      - run: flutter pub deps | grep three_js
+      - run: ls ~/.pub-cache/hosted/pub.dev | grep three
       - name: Install CMake
         run: |
           export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
