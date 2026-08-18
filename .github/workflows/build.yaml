@@ -19,7 +19,6 @@ jobs:
         run: |
           export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" --sdk_root=$ANDROID_SDK_ROOT
-          ls $ANDROID_SDK_ROOT/cmake/
       - name: PATCH flutter_gl + flutter_angle
         run: |
           FLUTTER_GL=$(find ~/.pub-cache/hosted/pub.dev -type d -name "flutter_gl-*" | head -n 1)
@@ -56,6 +55,8 @@ jobs:
           ANGLE=$(find ~/.pub-cache/hosted/pub.dev -type d -name "flutter_angle-*" | head -n 1)
           sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/build.gradle
           sed -i 's/3\.31/3.22.1/g' $ANGLE/android/build.gradle
+          sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt
+          sed -i 's/3\.31/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt
 
       - name: Build APK Direct (bukan zip)
         run: flutter build apk --release
@@ -66,8 +67,7 @@ jobs:
         with:
           tag_name: v3d-${{ github.run_number }}
           name: BABE.INFO 3D Globe ${{ github.run_number }}
-          body: |
-            FIX CMAKE + JVM + MATERIAL
+          body: FIX CMAKE + JVM + MATERIAL - Globe emas BABE.INFO
           files: build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
