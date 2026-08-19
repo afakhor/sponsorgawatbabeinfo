@@ -49,7 +49,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
     super.initState();
     flutterGl = FlutterGlPlugin();
     cekIzin();
-    
+
     // Inisialisasi OpenGL setelah kerangka UI siap
     WidgetsBinding.instance.addPostFrameCallback((_) {
       initGlobe();
@@ -87,7 +87,9 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       "antialias": true,
       "alpha": false,
     });
-    renderer.setSize(renderWidth, renderHeight, false);
+    
+    // FIX: Mengubah renderWidth dan renderHeight menjadi double (.toDouble())
+    renderer.setSize(renderWidth.toDouble(), renderHeight.toDouble(), false);
     renderer.setClearColor(three.Color(0xEEEEEE), 1);
 
     // Pencahayaan untuk Efek Emas Mengkilap
@@ -108,7 +110,8 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       tex.flipY = false;
     }
 
-    var mat = three.MeshStandardMaterial.fromMap({
+    // FIX: Menggunakan konstruktor dasar MeshStandardMaterial untuk fleksibilitas
+    var mat = three.MeshStandardMaterial({
       "map": tex,
       "metalness": 0.75,
       "roughness": 0.28,
@@ -120,7 +123,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
 
     // Akar Hitam 3D
     var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 80);
-    var rootMat = three.MeshBasicMaterial.fromMap({"color": 0x111111});
+    var rootMat = three.MeshBasicMaterial({"color": 0x111111});
     for (int i = 0; i < 3; i++) {
       var torus = three.Mesh(rootGeo, rootMat);
       torus.rotation.x = i * 1.2;
