@@ -14,7 +14,7 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 
-    // FIX 1: Memaksa versi Kotlin & Stdlib ke 1.9.22 untuk SEMUA subproject (termasuk flutter_gl)
+    // Memaksa versi Kotlin 1.9.22 ke seluruh plugin/library
     configurations.all {
         resolutionStrategy.eachDependency {
             if (requested.group == "org.jetbrains.kotlin") {
@@ -23,13 +23,15 @@ subprojects {
         }
     }
 
+    // Auto-inject Namespace untuk plugin lama (flutter_gl, flutter_angle, dll)
     afterEvaluate {
-        // FIX 2: Inject Namespace untuk plugin lama (seperti flutter_gl) jika belum set namespace
-        if (project.plugins.hasPlugin("com.android.library") || project.plugins.hasPlugin("com.android.application")) {
-            val androidExt = project.extensions.findByType(com.android.build.gradle.BaseExtension::class.java)
-            if (androidExt != null && androidExt.namespace == null) {
-                val cleanName = project.name.replace("-", "_").replace(".", "_")
-                androidExt.namespace = "com.example.$cleanName"
+        if (project.plugins.hasPlugin("com.android.library")) {
+            val androidExt = project.extensions.findByName("android")
+            if (androidExt is com.android.build.gradle.BaseExtension) {
+                if (androidExt.namespace == null) {
+                    val cleanName = project.name.replace("-", "_").replace(".", "_")
+                    androidExt.namespace = "com.plugin.$cleanName"
+                }
             }
         }
     }
