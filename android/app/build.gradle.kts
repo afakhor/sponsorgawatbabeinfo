@@ -17,7 +17,6 @@ android {
     compileSdk = 35
     ndkVersion = "25.1.8937393"
 
-    // Fix Duplicate libc++_shared.so (Penting untuk FlutterGL, Angle & FFmpeg)
     packaging {
         resources {
             excludes += "META-INF/*"
@@ -30,15 +29,17 @@ android {
         }
     }
 
+    // --- PERUBAHAN DI SINI (Ubah 1.8 ke 17) ---
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions { 
-        jvmTarget = "1.8" 
+        jvmTarget = "17" 
     }
+    // ------------------------------------------
 
     defaultConfig {
         applicationId = "com.babe.info"
@@ -71,7 +72,5 @@ flutter {
 dependencies {
     implementation("com.google.android.material:material:1.9.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
-    
-    // Menyediakan AAR secara langsung dari file tree jika resolution dari pub-cache tidak terdeteksi
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
 }
