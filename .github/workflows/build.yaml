@@ -61,8 +61,13 @@ jobs:
             find $GL -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3.31.4/3.22.1/g' {} +
           fi
 
-      - name: Make Gradle Executable
-        run: chmod +x android/gradlew
+      - name: Ensure Gradle Wrapper Exists & Executable
+        run: |
+          if [ ! -f android/gradlew ]; then
+            echo "gradlew tidak ditemukan, generate via flutter..."
+            flutter build apk --config-only
+          fi
+          chmod +x android/gradlew
 
       - name: Build APK Release Direct via Gradle
         run: |
