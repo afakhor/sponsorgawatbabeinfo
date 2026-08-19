@@ -14,7 +14,7 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 
-    // Memaksa versi Kotlin 1.9.22 ke seluruh plugin/library
+    // Paksa versi Kotlin ke 1.9.22
     configurations.all {
         resolutionStrategy.eachDependency {
             if (requested.group == "org.jetbrains.kotlin") {
@@ -23,7 +23,7 @@ subprojects {
         }
     }
 
-    // Auto-inject Namespace untuk plugin lama (flutter_gl, flutter_angle, dll)
+    // Auto-inject Namespace untuk plugin lama
     afterEvaluate {
         if (project.plugins.hasPlugin("com.android.library")) {
             val androidExt = project.extensions.findByName("android")
