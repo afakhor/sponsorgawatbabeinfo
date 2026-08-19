@@ -9,14 +9,21 @@ android {
     compileSdk = 35
     ndkVersion = "25.1.8937393"
 
-    // FIX DUPLICATE libc++_shared.so (Sangat penting untuk FlutterGL & FFmpeg)
+    // Fix Duplicate libc++_shared.so (Penting untuk FlutterGL, Angle & FFmpeg)
     packaging {
+        resources {
+            excludes += "META-INF/*"
+        }
         jniLibs {
-            pickFirsts += listOf("**/libc++_shared.so")
+            pickFirsts += listOf(
+                "**/libc++_shared.so",
+                "**/libjShared.so"
+            )
         }
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
@@ -27,12 +34,11 @@ android {
 
     defaultConfig {
         applicationId = "com.babe.info"
-        minSdk = 24             // Minimal 24 untuk FFmpeg Kit & FlutterGL
+        minSdk = 24
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // Filter ABI agar APK Native C++ terfokus pada arsitektur target
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
         }
@@ -56,4 +62,5 @@ flutter {
 
 dependencies {
     implementation("com.google.android.material:material:1.9.0")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }
