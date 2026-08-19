@@ -86,7 +86,11 @@ jobs:
             - Full Texture Support (`babe_gold.jpg`)
             - Hybrid Web3D + FFmpeg Video Generator
           files: build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
-          token: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   deploy-web:
     runs-on: ubuntu-latest
