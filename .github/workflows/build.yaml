@@ -63,6 +63,18 @@ jobs:
             find $GL -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3.31.4/3.22.1/g' {} +
           fi
 
+      - name: Copy Flutter GL AAR Dependencies
+        run: |
+          mkdir -p android/app/libs
+          mkdir -p android/app/libs/aars
+          
+          echo "Mencari file AAR milik flutter_gl di pub-cache..."
+          find $HOME/.pub-cache /opt/hostedtoolcache -name "*.aar" -exec cp {} android/app/libs/ \; 2>/dev/null || true
+          find $HOME/.pub-cache /opt/hostedtoolcache -name "*.aar" -exec cp {} android/app/libs/aars/ \; 2>/dev/null || true
+          
+          echo "File AAR yang berhasil disalin:"
+          ls -la android/app/libs/
+
       - name: Ensure Gradle Wrapper Exists & Executable
         run: |
           if [ ! -f android/gradlew ]; then
@@ -75,7 +87,6 @@ jobs:
         run: |
           cd android
           ./gradlew assembleRelease --warning-mode none
-
 
       - name: Rename APK
         run: |
