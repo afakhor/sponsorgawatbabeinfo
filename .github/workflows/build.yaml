@@ -44,20 +44,22 @@ jobs:
           mkdir -p ~/.gradle
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" > ~/.gradle/gradle.properties
 
-      - name: PATCH flutter_angle & flutter_gl CMake
+      - name: PATCH flutter_angle & flutter_gl (CMake & Kotlin Version)
         run: |
           PUB_DIR=/home/runner/.pub-cache/hosted/pub.dev
           
-          # Patch flutter_angle
+          # Patch CMake versi flutter_angle
           ANGLE=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_angle-*" | head -n 1)
           if [ -n "$ANGLE" ] && [ -d "$ANGLE" ]; then
             find $ANGLE -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3.31.4/3.22.1/g' {} +
             find $ANGLE -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3\.31/3.22.1/g' {} +
           fi
 
-          # Patch flutter_gl jika ada
+          # Patch CMake & Kotlin version (1.3.61 -> 1.9.22) milik flutter_gl
           GL=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_gl-*" | head -n 1)
           if [ -n "$GL" ] && [ -d "$GL" ]; then
+            echo "Patching flutter_gl in $GL"
+            find $GL -type f -name "build.gradle" -exec sed -i 's/1.3.61/1.9.22/g' {} +
             find $GL -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3.31.4/3.22.1/g' {} +
           fi
 
