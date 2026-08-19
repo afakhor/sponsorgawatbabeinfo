@@ -1,30 +1,117 @@
-name: VERBOSE FULL
-on: [push]
+name: BABE.INFO Learn three_js anti blink
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
         with:
-          flutter-version: '3.29.3'
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
           channel: stable
+          cache: true
 
-      - name: VERBOSE BUILD
+      - name: Clean Old Lock
+        run: rm -f pubspec.lock
+
+      - name: Flutter Pub Get
+        run: flutter pub get
+
+      - name: Install CMake 3.22.1
         run: |
-          set -x
-          rm -f pubspec.lock
-          flutter clean
-          flutter pub get
-          flutter build apk --release -v 2>&1 | tee build.log
-          echo "=== TAIL ERROR ==="
-          tail -n 300 build.log
-          ls -lh build/ || true
-          ls -lh build/app/outputs/flutter-apk/ || true
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" --sdk_root=$ANDROID_SDK_ROOT
 
-      - name: Upload full log
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Fix NDK to 28.2.13676358
+        run: |
+          echo "Fixing NDK version..."
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/ndkVersion = ".*"/ndkVersion = "28.2.13676358"/g' android/app/build.gradle.kts || true
+            if ! grep -q "ndkVersion" android/app/build.gradle.kts; then
+              sed -i '/android {/a \    ndkVersion = "28.2.13676358"' android/app/build.gradle.kts
+            fi
+          fi
+          if [ -f android/app/build.gradle ]; then
+            sed -i 's/ndkVersion ".*"/ndkVersion "28.2.13676358"/g' android/app/build.gradle || true
+            sed -i 's/ndkVersion = ".*"/ndkVersion = "28.2.13676358"/g' android/app/build.gradle || true
+          fi
+
+      - name: PATCH flutter_angle CMake 3.31 -> 3.22.1
+        run: |
+          PUB_DIR=/home/runner/.pub-cache/hosted/pub.dev
+          ANGLE=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_angle-*" | head -n 1)
+          echo "ANGLE DIR: $ANGLE"
+          if [ -n "$ANGLE" ] && [ -d "$ANGLE" ]; then
+            sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/build.gradle || true
+            sed -i 's/3\.31/3.22.1/g' $ANGLE/android/build.gradle || true
+            if [ -f "$ANGLE/android/src/main/cpp/CMakeLists.txt" ]; then
+              sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt || true
+              sed -i 's/3\.31/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt || true
+            fi
+          else
+            echo "flutter_angle not found, skip patch"
+          fi
+
+      - name: Build APK Release
+        run: flutter build apk --release -v
+
+      - name: Rename APK
+        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
+
+      - name: Release APK
+        uses: softprops/action-gh-release@v2
         with:
-          name: build-log-full
-          path: build.log
+          tag_name: v3d-${{ github.run_number }}
+          name: BABE.INFO 3D Globe AntiBlink v${{ github.run_number }}
+          body: |
+            ### BABE.INFO 3D Globe Anti-Blink Build #${{ github.run_number }}
+            - Fixed GPU FlutterGL Flickering Issue via Ticker & RepaintBoundary
+            - Full Texture Support (`babe_gold.jpg`)
+            - Hybrid Web3D + FFmpeg Video Generator
+          files: build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-web:
+    runs-on: ubuntu-latest
+    needs: build-apk
+    permissions:
+      contents: write
+      pages: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build Web Static Site
+        run: |
+          mkdir -p _site/assets/images
+          if [ -f web/babe.html ]; then
+            cp web/babe.html _site/babe.html
+            cp web/babe.html _site/index.html
+          fi
+          if [ -d assets/images ]; then
+            cp -r assets/images/* _site/assets/images/ 2>/dev/null || true
+          fi
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          publish_branch: gh-pages
