@@ -39,19 +39,10 @@ jobs:
           export ANDROID_SDK_ROOT=$ANDROID_HOME
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" --sdk_root=$ANDROID_SDK_ROOT
 
-      - name: Fix NDK to 28.2.13676358
+      - name: Configure Gradle Memory
         run: |
-          echo "Fixing NDK version..."
-          if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/ndkVersion = ".*"/ndkVersion = "28.2.13676358"/g' android/app/build.gradle.kts || true
-            if ! grep -q "ndkVersion" android/app/build.gradle.kts; then
-              sed -i '/android {/a \    ndkVersion = "28.2.13676358"' android/app/build.gradle.kts
-            fi
-          fi
-          if [ -f android/app/build.gradle ]; then
-            sed -i 's/ndkVersion ".*"/ndkVersion "28.2.13676358"/g' android/app/build.gradle || true
-            sed -i 's/ndkVersion = ".*"/ndkVersion = "28.2.13676358"/g' android/app/build.gradle || true
-          fi
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" > ~/.gradle/gradle.properties
 
       - name: PATCH flutter_angle CMake 3.31 -> 3.22.1
         run: |
