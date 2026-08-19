@@ -1,4 +1,4 @@
-name: BABE.INFO Learn three_js
+name: BABE.INFO Learn three_js anti blink
 on:
   push:
     branches: [ main ]
@@ -11,102 +11,73 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.29.3'
           channel: stable
-      - run: flutter pub get
-      - name: Install CMake
+
+      - name: Clean old lock
+        run: rm -f pubspec.lock
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Install CMake 3.22.1
         run: |
           export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" --sdk_root=$ANDROID_SDK_ROOT
 
-      - name: PATCH flutter_gl + flutter_angle FIX AAR
+      - name: Fix NDK to 28.2.13676358
         run: |
-          FLUTTER_GL=$(find ~/.pub-cache/hosted/pub.dev -type d -name "flutter_gl-*" | head -n 1)
-          AAR_FILE=$(find $FLUTTER_GL -name "*.aar" | head -n 1)
-          echo "Found AAR: $AAR_FILE"
-          mkdir -p /tmp/aar_extract $FLUTTER_GL/android/libs
-          if [ -f "$AAR_FILE" ]; then
-            unzip -o "$AAR_FILE" -d /tmp/aar_extract
-            cp /tmp/aar_extract/classes.jar $FLUTTER_GL/android/libs/ || true
-            cp -r /tmp/aar_extract/res $FLUTTER_GL/android/src/main/ 2>/dev/null || true
-            cp -r /tmp/aar_extract/jni $FLUTTER_GL/android/src/main/ 2>/dev/null || true
-            mkdir -p $FLUTTER_GL/android/src/main/jniLibs
-            cp -r /tmp/aar_extract/jni/* $FLUTTER_GL/android/src/main/jniLibs/ 2>/dev/null || true
+          echo "Fixing NDK version..."
+          # untuk build.gradle.kts
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/ndkVersion = ".*"/ndkVersion = "28.2.13676358"/g' android/app/build.gradle.kts || true
+            if ! grep -q "ndkVersion" android/app/build.gradle.kts; then
+              sed -i '/android {/a \    ndkVersion = "28.2.13676358"' android/app/build.gradle.kts
+            fi
+            cat android/app/build.gradle.kts | grep -n ndkVersion
           fi
-          cat > $FLUTTER_GL/android/build.gradle <<'EOF'
-          group 'com.wasabeef.flutter_gl'
-          version '1.0-SNAPSHOT'
-          buildscript {
-              ext.kotlin_version = '1.9.22'
-              repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-              }
-          }
-          rootProject.allprojects { repositories { google(); mavenCentral() } }
-          apply plugin: 'com.android.library'
-          apply plugin: 'kotlin-android'
-          android {
-              namespace "com.wasabeef.flutter_gl"
-              compileSdk 35
-              ndkVersion "26.1.10909125"
-              compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
-              kotlinOptions { jvmTarget = "1.8" }
-              defaultConfig { minSdk 24 }
-              lint { checkReleaseBuilds false; abortOnError false }
-          }
-          dependencies {
-              implementation fileTree(dir: 'libs', include: ['*.jar'])
-              implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
-          }
-          EOF
-          echo '<manifest xmlns:android="http://schemas.android.com/apk/res/android"></manifest>' > $FLUTTER_GL/android/src/main/AndroidManifest.xml
-          ANGLE=$(find ~/.pub-cache/hosted/pub.dev -type d -name "flutter_angle-*" | head -n 1)
-          sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/build.gradle
-          sed -i 's/3\.31/3.22.1/g' $ANGLE/android/build.gradle
-          sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt
-          sed -i 's/3\.31/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt
+          # untuk build.gradle
+          if [ -f android/app/build.gradle ]; then
+            sed -i 's/ndkVersion ".*"/ndkVersion "28.2.13676358"/g' android/app/build.gradle || true
+            sed -i 's/ndkVersion = ".*"/ndkVersion = "28.2.13676358"/g' android/app/build.gradle || true
+          fi
 
-      # === INI YANG KAMU TANYA - TARUH DISINI ===
-      - name: Build APK Release VERBOSE + Simpan Log
+      - name: PATCH flutter_angle CMake 3.31 -> 3.22.1
         run: |
-          flutter doctor -v
-          flutter build apk --release -v 2>&1 | tee build-verbose.log
-          echo "--- CEK AAR & SO ---" | tee -a build-verbose.log
-          find ~/.pub-cache -name "*.so" | grep flutter_gl | tee -a build-verbose.log || echo "so tidak ketemu" | tee -a build-verbose.log
-          unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -E "libflutter_gl|libangle|babe_gold" | tee -a build-verbose.log || echo "lib di apk tidak ketemu" | tee -a build-verbose.log
+          PUB_DIR=/home/runner/.pub-cache/hosted/pub.dev
+          ANGLE=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_angle-*" | head -n 1)
+          echo "ANGLE DIR: $ANGLE"
+          if [ -n "$ANGLE" ] && [ -d "$ANGLE" ]; then
+            sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/build.gradle || true
+            sed -i 's/3\.31/3.22.1/g' $ANGLE/android/build.gradle || true
+            if [ -f "$ANGLE/android/src/main/cpp/CMakeLists.txt" ]; then
+              sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt || true
+              sed -i 's/3\.31/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt || true
+            fi
+          else
+            echo "flutter_angle not found, skip patch"
+          fi
 
-      - name: Upload Log Biar Bisa Dibaca
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: build-log-verbose
-          path: build-verbose.log
+      - name: Build APK Release
+        run: flutter build apk --release -v
 
-      - name: Build APK Profile (Anti Blink Checker)
-        run: flutter build apk --profile -v 2>&1 | tee profile.log
+      - name: Rename APK
+        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
 
-      - name: Upload Profile APK + Log
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: profile-apk-anti-blink
-          path: |
-            build/app/outputs/flutter-apk/app-profile.apk
-            profile.log
-
-      - run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
-      
       - name: Release APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v3d-${{ github.run_number }}
-          name: BABE.INFO 3D Globe ${{ github.run_number }}
-          body: APK + Web 3D siap share WhatsApp - texture babe_gold.jpg
-          files: build/app/outputs/flutter-apk/BABE-INFO-threejs-globe.apk
+          name: BABE.INFO 3D Globe AntiBlink ${{ github.run_number }}
+          body: |
+            APK anti blink three_js 0.2.7
+            - texture babe_gold.jpg
+            - Firebase + Hive init
+            - audio_waveforms OFF (biang blink)
+          files: build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
           token: ${{ secrets.GITHUB_TOKEN }}
 
   deploy-web:
@@ -116,14 +87,13 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Build web simple (bukan flutter web biar ringan)
+      - name: Build web simple
         run: |
           mkdir -p _site/assets/images
-          cp web/babe.html _site/
-          cp assets/images/babe_gold.jpg _site/assets/images/
+          cp web/babe.html _site/ || echo "no babe.html"
+          cp assets/images/babe_gold.jpg _site/assets/images/ 2>/dev/null || true
           cp assets/images/bg.jpg _site/assets/images/ 2>/dev/null || true
-          cp web/babe.html _site/index.html
-          echo "<!-- BABE.INFO Globe 3D -->" > _site/README.md
+          cp web/babe.html _site/index.html 2>/dev/null || true
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v3
         with:
