@@ -3,12 +3,13 @@ plugins {
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
+
 android {
-    namespace = "com.example.babe_info_fixed"
+    namespace = "com.babe.info"
     compileSdk = 35
     ndkVersion = "25.1.8937393"
 
-    // FIX DUPLICATE libc++_shared.so
+    // FIX DUPLICATE libc++_shared.so (Sangat penting untuk FlutterGL & FFmpeg)
     packaging {
         jniLibs {
             pickFirsts += listOf("**/libc++_shared.so")
@@ -19,14 +20,24 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
-    kotlinOptions { jvmTarget = "1.8" }
+
+    kotlinOptions { 
+        jvmTarget = "1.8" 
+    }
+
     defaultConfig {
-        applicationId = "com.example.babe_info_fixed"
-        minSdk = 24
+        applicationId = "com.babe.info"
+        minSdk = 24             // Minimal 24 untuk FFmpeg Kit & FlutterGL
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Filter ABI agar APK Native C++ terfokus pada arsitektur target
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+        }
     }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -38,7 +49,11 @@ android {
         }
     }
 }
-flutter { source = "../.." }
+
+flutter { 
+    source = "../.." 
+}
+
 dependencies {
     implementation("com.google.android.material:material:1.9.0")
 }
