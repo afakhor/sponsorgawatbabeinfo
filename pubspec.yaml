@@ -30,7 +30,5 @@ dependency_overrides:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/babe_gold.jpg
-    - assets/images/bg.jpg
     - assets/images/
     - web/babe.html
