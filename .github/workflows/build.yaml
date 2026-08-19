@@ -44,22 +44,27 @@ jobs:
           mkdir -p ~/.gradle
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" > ~/.gradle/gradle.properties
 
-      - name: PATCH Plugins (Manifest AGP 8 Fix, CMake & Kotlin Version)
+      - name: PATCH Plugins (Manifest, CMake, Kotlin & JVM Target Fix)
         run: |
           PUB_DIR=/home/runner/.pub-cache/hosted/pub.dev
           
-          # 1. Hapus atribut package="..." di seluruh AndroidManifest.xml plugin pub-cache (Fix AGP 8.0+)
+          # 1. Hapus atribut package="..." di seluruh AndroidManifest.xml plugin (Fix AGP 8+)
           echo "Clearing usang package attributes from all plugin manifests..."
           find $PUB_DIR -type f -name "AndroidManifest.xml" -exec sed -i -E 's/package="[^"]*"//g' {} +
 
-          # 2. Patch CMake versi flutter_angle
+          # 2. Fix Inconsistent JVM Target (1.8 vs 17) pada seluruh plugin gradle
+          echo "Enforcing Java 17 / JVM Target 17 on pub-cache plugins..."
+          find $PUB_DIR -type f -name "build.gradle" -exec sed -i 's/1.8/17/g' {} +
+          find $PUB_DIR -type f -name "build.gradle" -exec sed -i 's/VERSION_1_8/VERSION_17/g' {} +
+
+          # 3. Patch CMake versi flutter_angle
           ANGLE=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_angle-*" | head -n 1)
           if [ -n "$ANGLE" ] && [ -d "$ANGLE" ]; then
             find $ANGLE -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3.31.4/3.22.1/g' {} +
             find $ANGLE -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3\.31/3.22.1/g' {} +
           fi
 
-          # 3. Patch CMake & Kotlin version (1.3.61 -> 1.9.22) milik flutter_gl
+          # 4. Patch CMake & Kotlin version (1.3.61 -> 1.9.22) milik flutter_gl
           GL=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_gl-*" | head -n 1)
           if [ -n "$GL" ] && [ -d "$GL" ]; then
             echo "Patching flutter_gl in $GL"
