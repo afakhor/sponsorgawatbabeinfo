@@ -4,6 +4,14 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+repositories {
+    google()
+    mavenCentral()
+    flatDir {
+        dirs("libs", "libs/aars")
+    }
+}
+
 android {
     namespace = "com.babe.info"
     compileSdk = 35
@@ -63,4 +71,7 @@ flutter {
 dependencies {
     implementation("com.google.android.material:material:1.9.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    
+    // Menyediakan AAR secara langsung dari file tree jika resolution dari pub-cache tidak terdeteksi
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
 }
