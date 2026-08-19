@@ -4,14 +4,10 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        
-        // PENTING: Mendaftarkan folder AAR bawaan dari flutter_gl agar tiga file AAR (threeegl, dll.) dapat ditemukan
         flatDir {
             dirs(
-                "libs",
-                "libs/aars",
-                "${rootProject.projectDir}/../.pub-cache/hosted/pub.dev/flutter_gl-0.7.1/android/libs",
-                "${rootProject.projectDir}/../.pub-cache/hosted/pub.dev/flutter_gl-0.7.1/android/libs/aars"
+                "${rootProject.projectDir}/app/libs",
+                "${rootProject.projectDir}/app/libs/aars"
             )
         }
     }
@@ -24,16 +20,17 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 
-    // Memaksa pencarian AAR di level subproject/plugin
     repositories {
         google()
         mavenCentral()
         flatDir {
-            dirs("libs", "libs/aars")
+            dirs(
+                "${rootProject.projectDir}/app/libs",
+                "${rootProject.projectDir}/app/libs/aars"
+            )
         }
     }
 
-    // Paksa versi Kotlin ke 1.9.22
     configurations.all {
         resolutionStrategy.eachDependency {
             if (requested.group == "org.jetbrains.kotlin") {
@@ -42,7 +39,18 @@ subprojects {
         }
     }
 
-    // Auto-inject Namespace untuk plugin lama
+    // Paksa seluruh Java & Kotlin tasks subproject memakai JVM Target 17
+    tasks.withType<JavaCompile>().configureEach {
+        sourceCompatibility = JavaVersion.VERSION_17.toString()
+        targetCompatibility = JavaVersion.VERSION_17.toString()
+    }
+
+    tasks.withType<KotlinCompile>().configureEach {
+        kotlinOptions {
+            jvmTarget = "17"
+        }
+    }
+
     afterEvaluate {
         if (project.plugins.hasPlugin("com.android.library")) {
             val androidExt = project.extensions.findByName("android")
@@ -51,6 +59,8 @@ subprojects {
                     val cleanName = project.name.replace("-", "_").replace(".", "_")
                     androidExt.namespace = "com.plugin.$cleanName"
                 }
+                androidExt.compileOptions.sourceCompatibility = JavaVersion.VERSION_17
+                androidExt.compileOptions.targetCompatibility = JavaVersion.VERSION_17
             }
         }
     }
