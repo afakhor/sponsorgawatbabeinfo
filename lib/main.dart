@@ -50,7 +50,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
     flutterGl = FlutterGlPlugin();
     cekIzin();
 
-    // Inisialisasi OpenGL setelah kerangka UI siap
     WidgetsBinding.instance.addPostFrameCallback((_) {
       initGlobe();
     });
@@ -88,11 +87,10 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       "alpha": false,
     });
     
-    // FIX: Mengubah renderWidth dan renderHeight menjadi double (.toDouble())
     renderer.setSize(renderWidth.toDouble(), renderHeight.toDouble(), false);
     renderer.setClearColor(three.Color(0xEEEEEE), 1);
 
-    // Pencahayaan untuk Efek Emas Mengkilap
+    // Pencahayaan
     var light = three.DirectionalLight(0xffffff, 1.2);
     light.position.setValues(5, 3, 5);
     scene.add(light);
@@ -110,12 +108,11 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       tex.flipY = false;
     }
 
-    // FIX: Menggunakan konstruktor dasar MeshStandardMaterial untuk fleksibilitas
-    var mat = three.MeshStandardMaterial({
-      "map": tex,
-      "metalness": 0.75,
-      "roughness": 0.28,
-    });
+    // FIX: Menggunakan cascade operator (..) untuk assign properti secara langsung
+    var mat = three.MeshStandardMaterial()
+      ..map = tex
+      ..metalness = 0.75
+      ..roughness = 0.28;
 
     globe = three.Mesh(geo, mat);
     globe!.position.y = 0.3;
@@ -123,7 +120,10 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
 
     // Akar Hitam 3D
     var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 80);
-    var rootMat = three.MeshBasicMaterial({"color": 0x111111});
+    // FIX: Set warna material langsung tanpa Map<String, dynamic>
+    var rootMat = three.MeshBasicMaterial()
+      ..color = three.Color(0x111111);
+
     for (int i = 0; i < 3; i++) {
       var torus = three.Mesh(rootGeo, rootMat);
       torus.rotation.x = i * 1.2;
@@ -138,7 +138,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
     }
   }
 
-  // Menggunakan Ticker agar terbebas dari blink / frame dropped
   void startAnimation() {
     _ticker?.dispose();
     _ticker = createTicker((elapsed) {
@@ -216,10 +215,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
     return Scaffold(
       body: Stack(
         children: [
-          // Background Image
           Positioned.fill(child: bgWidget),
-
-          // Render Globe 3D di Atas Background
           Positioned(
             top: 40,
             left: w / 2 - 150,
@@ -239,8 +235,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
               ),
             ),
           ),
-
-          // Identitas Brand BABE.INFO
           Positioned(
             top: 360,
             left: 0,
@@ -258,8 +252,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
               ],
             ),
           ),
-
-          // Control Panel / Bottom Sheet
           SafeArea(
             child: Align(
               alignment: Alignment.bottomCenter,
