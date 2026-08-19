@@ -1,4 +1,4 @@
-name: BABE.INFO Learn three_js anti blink
+name: BABE.INFO VERBOSE
 on:
   push:
     branches: [ main ]
@@ -17,85 +17,95 @@ jobs:
           flutter-version: '3.29.3'
           channel: stable
 
-      - name: Clean old lock
-        run: rm -f pubspec.lock
+      - name: ENV Check VERBOSE
+        run: |
+          flutter --version
+          flutter doctor -v
+          ls -R assets/
+          cat pubspec.yaml
+          cat lib/main.dart | head -n 100
 
-      - name: Flutter pub get
-        run: flutter pub get
+      - name: Clean
+        run: |
+          rm -f pubspec.lock
+          flutter clean
+          flutter pub get -v
 
       - name: Install CMake 3.22.1
         run: |
           export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" --sdk_root=$ANDROID_SDK_ROOT
+          cmake --version
 
-      - name: Fix NDK to 28.2.13676358
+      - name: Fix NDK VERBOSE
         run: |
-          echo "Fixing NDK version..."
-          # untuk build.gradle.kts
-          if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/ndkVersion = ".*"/ndkVersion = "28.2.13676358"/g' android/app/build.gradle.kts || true
-            if ! grep -q "ndkVersion" android/app/build.gradle.kts; then
-              sed -i '/android {/a \    ndkVersion = "28.2.13676358"' android/app/build.gradle.kts
-            fi
-            cat android/app/build.gradle.kts | grep -n ndkVersion
+          cat android/app/build.gradle.kts | grep -n ndkVersion || echo "ndkVersion NOT FOUND"
+          sed -i 's/ndkVersion = ".*"/ndkVersion = "28.2.13676358"/g' android/app/build.gradle.kts || true
+          if ! grep -q "ndkVersion" android/app/build.gradle.kts; then
+            sed -i '/android {/a \    ndkVersion = "28.2.13676358"' android/app/build.gradle.kts
           fi
-          # untuk build.gradle
-          if [ -f android/app/build.gradle ]; then
-            sed -i 's/ndkVersion ".*"/ndkVersion "28.2.13676358"/g' android/app/build.gradle || true
-            sed -i 's/ndkVersion = ".*"/ndkVersion = "28.2.13676358"/g' android/app/build.gradle || true
-          fi
+          echo "=== AFTER FIX ==="
+          cat android/app/build.gradle.kts | grep -n ndkVersion -A2 -B2
+          ls /usr/local/lib/android/sdk/ndk/
 
-      - name: PATCH flutter_angle CMake 3.31 -> 3.22.1
+      - name: PATCH flutter_angle VERBOSE
         run: |
           PUB_DIR=/home/runner/.pub-cache/hosted/pub.dev
           ANGLE=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_angle-*" | head -n 1)
-          echo "ANGLE DIR: $ANGLE"
-          if [ -n "$ANGLE" ] && [ -d "$ANGLE" ]; then
-            sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/build.gradle || true
-            sed -i 's/3\.31/3.22.1/g' $ANGLE/android/build.gradle || true
-            if [ -f "$ANGLE/android/src/main/cpp/CMakeLists.txt" ]; then
-              sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt || true
-              sed -i 's/3\.31/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt || true
-            fi
-          else
-            echo "flutter_angle not found, skip patch"
+          echo "ANGLE: $ANGLE"
+          cat $ANGLE/android/build.gradle | grep cmake -i -n || true
+          sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/build.gradle
+          sed -i 's/3\.31/3.22.1/g' $ANGLE/android/build.gradle
+          cat $ANGLE/android/build.gradle | grep cmake -i -n || true
+          if [ -f "$ANGLE/android/src/main/cpp/CMakeLists.txt" ]; then
+            cat $ANGLE/android/src/main/cpp/CMakeLists.txt | head -n 20
+            sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt
+            sed -i 's/3\.31/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt
+            cat $ANGLE/android/src/main/cpp/CMakeLists.txt | head -n 20
           fi
 
-      - name: Build APK Release
-        run: flutter build apk --release -v
+      - name: Build APK VERBOSE
+        run: |
+          flutter build apk --release -v 2>&1 | tee build.log
+          echo "=== BUILD LOG TAIL ==="
+          tail -n 200 build.log
 
-      - name: Rename APK
-        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
+      - name: List outputs
+        run: |
+          ls -lh build/app/outputs/flutter-apk/
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-verbose.apk || true
+
+      - name: Upload log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
 
       - name: Release APK
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v3d-${{ github.run_number }}
-          name: BABE.INFO 3D Globe AntiBlink ${{ github.run_number }}
-          body: |
-            APK anti blink three_js 0.2.7
-            - texture babe_gold.jpg
-            - Firebase + Hive init
-            - audio_waveforms OFF (biang blink)
-          files: build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
+          name: VERBOSE ${{ github.run_number }}
+          body: Build verbose log terlampir
+          files: build/app/outputs/flutter-apk/BABE-INFO-verbose.apk
           token: ${{ secrets.GITHUB_TOKEN }}
 
   deploy-web:
     runs-on: ubuntu-latest
     needs: build-apk
+    if: always()
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Build web simple
-        run: |
+      - run: |
           mkdir -p _site/assets/images
-          cp web/babe.html _site/ || echo "no babe.html"
-          cp assets/images/babe_gold.jpg _site/assets/images/ 2>/dev/null || true
-          cp assets/images/bg.jpg _site/assets/images/ 2>/dev/null || true
-          cp web/babe.html _site/index.html 2>/dev/null || true
-      - name: Deploy to gh-pages
-        uses: peaceiris/actions-gh-pages@v3
+          cp web/babe.html _site/ || true
+          cp assets/images/* _site/assets/images/ || true
+          cp web/babe.html _site/index.html || true
+      - uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./_site
