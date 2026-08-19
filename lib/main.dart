@@ -1,26 +1,33 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:three_js/three_js.dart' as three;
-import 'package:flutter_gl/flutter_gl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:audio_waveforms/audio_waveforms.dart';
-import 'package:device_info_plus/device_info_plus.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
-void main() => runApp(const MyApp());
+// BIANG BLINK - JANGAN AKTIFKAN DULU
+// import 'package:audio_waveforms/audio_waveforms.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized(); // WAJIB
+  await Firebase.initializeApp();
+  await Hive.initFlutter();
+  runApp(const MyApp());
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
-  Widget build(BuildContext c) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData.dark(),
-        home: const GlobeLearnPage(),
-      );
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(),
+      home: const GlobeLearnPage(),
+    );
+  }
 }
 
 class GlobeLearnPage extends StatefulWidget {
@@ -30,148 +37,97 @@ class GlobeLearnPage extends StatefulWidget {
 }
 
 class _GlobeLearnPageState extends State<GlobeLearnPage> {
-  late FlutterGlPlugin flutterGl;
-  late three.WebGLRenderer renderer;
-  late three.Scene scene;
-  late three.PerspectiveCamera camera;
-  three.Mesh? globe;
-  bool inited = false;
-
+  late three.ThreeJS threeJs;
   File? audioFile, bgFile, outVideo;
-  final player = PlayerController();
-  double total = 180, s = 0, e = 60;
-  bool perm = false, load = false;
+  bool loading = false;
 
   @override
   void initState() {
+    threeJs = three.ThreeJS(
+      onSetupComplete: () {
+        if (mounted) setState(() {});
+      },
+      setup: setup,
+    );
     super.initState();
-    flutterGl = FlutterGlPlugin();
-    cekIzin();
-    initGlobe();
   }
 
-  Future<void> cekIzin() async {
-    final inf = await DeviceInfoPlugin().androidInfo;
-    var st = inf.version.sdkInt >= 33 ? await Permission.audio.request() : await Permission.storage.request();
-    if (st.isGranted) setState(() => perm = true);
+  @override
+  void dispose() {
+    threeJs.dispose();
+    super.dispose();
   }
 
-  Future<void> initGlobe() async {
-    await flutterGl.initialize(options: {
-      "antialias": true,
-      "alpha": false,
-      "width": 600,
-      "height": 600,
-      "dpr": 1.0
-    });
-    await flutterGl.prepareContext();
+  Future<void> setup() async {
+    threeJs.scene = three.Scene();
+    threeJs.scene.background = three.Color(0xEEEEEE);
+    threeJs.camera = three.PerspectiveCamera(45, threeJs.width / threeJs.height, 0.1, 1000);
+    threeJs.camera.position.z = 2.8;
 
-    scene = three.Scene();
-    // FIX background tidak transparan - pakai abu-abu solid seperti foto
-    scene.background = three.Color(0xEEEEEE);
-
-    camera = three.PerspectiveCamera(45, 1, 0.1, 1000);
-    camera.position.z = 2.8;
-
-    renderer = three.WebGLRenderer({
-      "gl": flutterGl.gl,
-      "antialias": true,
-      "alpha": false,
-    });
-    renderer.setSize(600, 600, false);
-    renderer.setClearColor(three.Color(0xEEEEEE), 1);
-
-    // LIGHT - biar emas mengkilap
     var light = three.DirectionalLight(0xffffff, 1.2);
     light.position.setValues(5, 3, 5);
-    scene.add(light);
-    scene.add(three.AmbientLight(0xffffff, 0.8));
-    var pointLight = three.PointLight(0xFFD700, 0.8, 10);
-    pointLight.position.setValues(-3, -2, 3);
-    scene.add(pointLight);
+    threeJs.scene.add(light);
+    threeJs.scene.add(three.AmbientLight(0xffffff, 0.8));
 
-    // FIX TEXTURE pakai babe_gold.jpg - tidak transparan
     var geo = three.SphereGeometry(1, 128, 128);
-    
-    // Load texture dari assets/images/babe_gold.jpg
-var tex = await three.TextureLoader().fromAsset("assets/images/babe_gold.jpg");
-var texture = tex!;
-texture.wrapS = three.RepeatWrapping;
-texture.wrapT = three.RepeatWrapping;
-texture.flipY = false;
-
+    // API three_js 0.2.7 FINAL - TANPA loadAsync
+    var tex = await three.TextureLoader().fromAsset("assets/images/babe_gold.jpg");
+    if (tex == null) return;
     var mat = three.MeshStandardMaterial.fromMap({
-      "map": texture,
+      "map": tex,
       "metalness": 0.75,
       "roughness": 0.28,
     });
+    var globe = three.Mesh(geo, mat);
+    globe.position.y = 0.3;
+    threeJs.scene.add(globe);
 
-    globe = three.Mesh(geo, mat);
-    globe!.position.y = 0.3; // naik ke atas biar tidak nutupin BABE.INFO
-    scene.add(globe!);
-
-    // AKAR HITAM 3D melilit (tambahan biar mirip foto, tapi tetap texture utama dari jpg)
-    var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 100);
-    var rootMat = three.MeshBasicMaterial.fromMap({"color": 0x111111});
-    for(int i=0;i<3;i++){
-      var torus = three.Mesh(rootGeo, rootMat);
-      torus.rotation.x = i * 1.2;
-      torus.rotation.y = i * 0.8;
-      scene.add(torus);
-    }
-
-    animate();
-    setState(() => inited = true);
-  }
-
-  void animate() {
-    if (!mounted || globe == null) return;
-    globe!.rotation.y += 0.008;
-    renderer.render(scene, camera);
-    flutterGl.updateTexture(renderer.getContext());
-    Future.delayed(const Duration(milliseconds: 16), animate);
+    threeJs.addAnimationEvent((dt) {
+      globe.rotation.y += 0.008;
+    });
   }
 
   Future<void> pickAudio() async {
     var r = await FilePicker.platform.pickFiles(type: FileType.audio);
-    if (r == null) return;
-    File f = File(r.files.single.path!);
-    await player.preparePlayer(path: f.path, shouldExtractWaveform: true, noOfSamples: 200);
-    final d = await player.getDuration(DurationType.max);
-    setState(() {
-      audioFile = f;
-      total = (d / 1000).toDouble();
-      s = 0;
-      e = total > 60 ? 60 : total;
-    });
+    if (r != null && r.files.single.path != null) {
+      setState(() => audioFile = File(r.files.single.path!));
+    }
   }
 
   Future<void> pickBg() async {
     var r = await FilePicker.platform.pickFiles(type: FileType.image);
-    if (r == null) return;
-    setState(() => bgFile = File(r.files.single.path!));
+    if (r != null && r.files.single.path != null) {
+      setState(() => bgFile = File(r.files.single.path!));
+    }
   }
 
   Future<void> buatMp4() async {
-    if (audioFile == null) { pickAudio(); return; }
-    setState(() => load = true);
+    if (audioFile == null) return;
+    setState(() => loading = true);
     final dir = await getTemporaryDirectory();
     String trim = "${dir.path}/trim.m4a";
     String out = "${dir.path}/BABE-INFO-${DateTime.now().millisecondsSinceEpoch}.mp4";
-    await FFmpegKit.execute("-y -ss $s -t ${e - s} -i \"${audioFile!.path}\" -c:a aac \"$trim\"");
-    String bgPath = "";
-    if (bgFile != null) bgPath = bgFile!.path;
-    else {
+
+    await FFmpegKit.execute("-y -i \"${audioFile!.path}\" -c:a aac \"$trim\"");
+
+    String bgPath = bgFile?.path ?? "";
+    if (bgPath.isEmpty) {
       final data = await DefaultAssetBundle.of(context).load('assets/images/bg.jpg');
       File f = File('${dir.path}/bg.jpg');
       await f.writeAsBytes(data.buffer.asUint8List());
       bgPath = f.path;
     }
-    await FFmpegKit.execute("-y -loop 1 -i \"$bgPath\" -i \"$trim\" -c:v libx264 -tune stillimage -c:a aac -pix_fmt yuv420p -shortest -t ${e - s} \"$out\"").then((st) async {
-      if ((await st.getReturnCode())!.isValueSuccess()) {
-        setState(() { outVideo = File(out); load = false; });
+
+    await FFmpegKit.execute(
+            "-y -loop 1 -i \"$bgPath\" -i \"$trim\" -c:v libx264 -tune stillimage -c:a aac -pix_fmt yuv420p -shortest \"$out\"")
+        .then((s) async {
+      if ((await s.getReturnCode())!.isValueSuccess()) {
+        setState(() {
+          outVideo = File(out);
+          loading = false;
+        });
       } else {
-        setState(() => load = false);
+        setState(() => loading = false);
       }
     });
   }
@@ -179,77 +135,88 @@ texture.flipY = false;
   @override
   Widget build(BuildContext context) {
     double w = MediaQuery.of(context).size.width;
-    Widget bgWidget = bgFile != null ? Image.file(bgFile!, fit: BoxFit.cover) : Image.asset('assets/images/bg.jpg', fit: BoxFit.cover);
     return Scaffold(
-      body: Stack(children: [
-        Positioned.fill(child: bgWidget),
-        // GLOBE - tidak transparan, pakai babe_gold.jpg
-        Positioned(
-          top: 40,
-          left: w / 2 - 150,
-          child: Container(
-            width: 300,
-            height: 300,
-            decoration: BoxDecoration(
-              color: Color(0xFFEEEEEE), // background solid tidak transparan
-              borderRadius: BorderRadius.circular(150), 
-              border: Border.all(color: Colors.amber, width: 2)
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(150),
-              child: inited ? Texture(textureId: flutterGl.textureId!) : const Center(child: CircularProgressIndicator(color: Colors.amber)),
-            ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: bgFile != null
+                ? Image.file(bgFile!, fit: BoxFit.cover)
+                : Image.asset('assets/images/bg.jpg', fit: BoxFit.cover),
           ),
-        ),
-        // Tulisan di bawah globe - tidak ketutup
-        Positioned(
-          top: 360,
-          left: 0,
-          right: 0,
-          child: Column(children: [
-            const Text("BABE.INFO", style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Colors.amber, letterSpacing: 2)),
-            const Text("HeruWingchun", style: TextStyle(fontSize: 14, color: Colors.white70)),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)),
-              child: const Text("GLOBE BABE.INFO - TEXTURE babe_gold.jpg", style: TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
-            )
-          ]),
-        ),
-        SafeArea(
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.amber)),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  if (audioFile != null)
-                    AudioFileWaveforms(size: Size(w - 48, 60), playerController: player, waveformType: WaveformType.long, playerWaveStyle: const PlayerWaveStyle(fixedWaveColor: Colors.white24, liveWaveColor: Colors.amber)),
-                  if (audioFile != null)
-                    RangeSlider(min: 0, max: total, values: RangeValues(s, e), activeColor: Colors.amber, onChanged: (v) { if (v.end - v.start <= 60) setState(() { s = v.start; e = v.end; }); }),
-                  Row(children: [
-                    Expanded(child: ElevatedButton.icon(onPressed: pickAudio, icon: const Icon(Icons.music_note), label: Text(audioFile == null ? "AMBIL MUSIK" : "GANTI", style: const TextStyle(fontSize: 11)), style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black))),
-                    const SizedBox(width: 6),
-                    Expanded(child: ElevatedButton.icon(onPressed: pickBg, icon: const Icon(Icons.image), label: const Text("BG", style: TextStyle(fontSize: 11)), style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black))),
-                  ]),
-                  SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: load ? null : buatMp4, icon: const Icon(Icons.video_file), label: Text(load ? "RENDER..." : "BUAT MP4", style: const TextStyle(fontSize: 11)), style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent, foregroundColor: Colors.black))),
-                  if (outVideo != null)
-                    ElevatedButton.icon(onPressed: () => Share.shareXFiles([XFile(outVideo!.path)], text: "BABE.INFO Globe three_js: https://afakhor.github.io/sponsorgawatbabeinfo/"), icon: const Icon(Icons.share), label: const Text("SHARE WA", style: TextStyle(fontSize: 11)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white)),
-                ]),
+          // GLOBE ANTI BLINK
+          Positioned(
+            top: 40,
+            left: w / 2 - 150,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEEEEEE),
+                borderRadius: BorderRadius.circular(150),
+                border: Border.all(color: Colors.amber, width: 2),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(150),
+                child: threeJs.build(),
               ),
             ),
           ),
-        )
-      ]),
+          Positioned(
+            top: 360,
+            left: 0,
+            right: 0,
+            child: Column(
+              children: const [
+                Text("BABE.INFO", style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Colors.amber)),
+                Text("HeruWingchun three_js 0.2.7 anti blink", style: TextStyle(color: Colors.white70, fontSize: 11)),
+              ],
+            ),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.amber),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: ElevatedButton.icon(onPressed: pickAudio, icon: const Icon(Icons.music_note), label: Text(audioFile == null ? "AMBIL MUSIK" : "GANTI"))),
+                          const SizedBox(width: 6),
+                          Expanded(child: ElevatedButton.icon(onPressed: pickBg, icon: const Icon(Icons.image), label: const Text("BG"))),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: loading ? null : buatMp4,
+                          icon: const Icon(Icons.video_file),
+                          label: Text(loading ? "RENDER..." : "BUAT MP4"),
+                        ),
+                      ),
+                      if (outVideo != null)
+                        ElevatedButton.icon(
+                          onPressed: () => Share.shareXFiles([XFile(outVideo!.path)], text: "BABE.INFO https://afakhor.github.io/sponsorgawatbabeinfo/"),
+                          icon: const Icon(Icons.share),
+                          label: const Text("SHARE WA"),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
-  }
-
-  @override
-  void dispose() {
-    flutterGl.dispose();
-    super.dispose();
   }
 }
