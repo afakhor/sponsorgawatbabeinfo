@@ -93,11 +93,12 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     // FIX TEXTURE pakai babe_gold.jpg - tidak transparan
     var geo = three.SphereGeometry(1, 128, 128);
     
-    // Load texture dari assets/babe_gold.jpg
-    var texture = await three.TextureLoader().fromAsset("assets/babe_gold.jpg");
-    texture.wrapS = three.RepeatWrapping;
-    texture.wrapT = three.RepeatWrapping;
-    texture.flipY = false;
+    // Load texture dari assets/images/babe_gold.jpg
+var tex = await three.TextureLoader().fromAsset("assets/images/babe_gold.jpg");
+var texture = tex!;
+texture.wrapS = three.RepeatWrapping;
+texture.wrapT = three.RepeatWrapping;
+texture.flipY = false;
     
     var mat = three.MeshStandardMaterial.fromMap({
       "map": texture,
