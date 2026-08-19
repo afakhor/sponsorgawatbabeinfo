@@ -44,27 +44,35 @@ jobs:
           mkdir -p ~/.gradle
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" > ~/.gradle/gradle.properties
 
-      - name: PATCH flutter_angle CMake 3.31 -> 3.22.1
+      - name: PATCH flutter_angle & flutter_gl CMake
         run: |
           PUB_DIR=/home/runner/.pub-cache/hosted/pub.dev
+          
+          # Patch flutter_angle
           ANGLE=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_angle-*" | head -n 1)
-          echo "ANGLE DIR: $ANGLE"
           if [ -n "$ANGLE" ] && [ -d "$ANGLE" ]; then
-            sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/build.gradle || true
-            sed -i 's/3\.31/3.22.1/g' $ANGLE/android/build.gradle || true
-            if [ -f "$ANGLE/android/src/main/cpp/CMakeLists.txt" ]; then
-              sed -i 's/3.31.4/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt || true
-              sed -i 's/3\.31/3.22.1/g' $ANGLE/android/src/main/cpp/CMakeLists.txt || true
-            fi
-          else
-            echo "flutter_angle not found, skip patch"
+            find $ANGLE -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3.31.4/3.22.1/g' {} +
+            find $ANGLE -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3\.31/3.22.1/g' {} +
           fi
 
-      - name: Build APK Release
-        run: flutter build apk --release -v
+          # Patch flutter_gl jika ada
+          GL=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_gl-*" | head -n 1)
+          if [ -n "$GL" ] && [ -d "$GL" ]; then
+            find $GL -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3.31.4/3.22.1/g' {} +
+          fi
+
+      - name: Make Gradle Executable
+        run: chmod +x android/gradlew
+
+      - name: Build APK Release Direct via Gradle
+        run: |
+          cd android
+          ./gradlew assembleRelease --stacktrace --info
 
       - name: Rename APK
-        run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
+        run: |
+          mkdir -p build/app/outputs/flutter-apk/
+          mv android/app/build/outputs/apk/release/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
 
       - name: Release APK
         uses: softprops/action-gh-release@v2
