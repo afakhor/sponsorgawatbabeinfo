@@ -4,6 +4,16 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        
+        // PENTING: Mendaftarkan folder AAR bawaan dari flutter_gl agar tiga file AAR (threeegl, dll.) dapat ditemukan
+        flatDir {
+            dirs(
+                "libs",
+                "libs/aars",
+                "${rootProject.projectDir}/../.pub-cache/hosted/pub.dev/flutter_gl-0.7.1/android/libs",
+                "${rootProject.projectDir}/../.pub-cache/hosted/pub.dev/flutter_gl-0.7.1/android/libs/aars"
+            )
+        }
     }
 }
 
@@ -13,6 +23,15 @@ rootProject.layout.buildDirectory.value(newBuildDir)
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
+
+    // Memaksa pencarian AAR di level subproject/plugin
+    repositories {
+        google()
+        mavenCentral()
+        flatDir {
+            dirs("libs", "libs/aars")
+        }
+    }
 
     // Paksa versi Kotlin ke 1.9.22
     configurations.all {
