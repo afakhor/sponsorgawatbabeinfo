@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>BABE.INFO HERU WINGCHUN - Globe 3D Interaktif</title>
 
 <!-- Preview Link WhatsApp & Sosial Media -->
@@ -14,28 +14,39 @@
 <meta name="twitter:card" content="summary_large_image">
 
 <style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{background:#EEEEEE;overflow:hidden;font-family:sans-serif;touch-action:none}
-  canvas{display:block}
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; touch-action: none; background: transparent; }
+  canvas { display: block; width: 100%; height: 100%; }
 
-  /* Watermark Top Left - Emas Luxurious 16px */
+  /* Watermark Top Left - Emas Luxurious */
   #watermark {
     position: absolute;
     top: 16px;
     left: 16px;
-    background: rgba(0, 0, 0, 0.4);
-    padding: 6px 12px;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 215, 0, 0.5);
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 215, 0, 0.6);
     color: #FFD700;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 900;
     letter-spacing: 1.5px;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.9);
     z-index: 10;
+    user-select: none;
+    pointer-events: none;
   }
 </style>
-<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 </head>
 <body>
 
@@ -43,17 +54,17 @@
 
 <script type="module">
 import * as THREE from 'three';
-import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xEEEEEE);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 0.3, 2.8);
+camera.position.set(0, 0, 2.8);
 
-const renderer = new THREE.WebGLRenderer({antialias: true, alpha: false});
+// Ubah alpha: true agar background transparan dan bisa dipadu dengan latar belakang aplikasi
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
@@ -65,46 +76,52 @@ controls.minDistance = 1.5;
 controls.maxDistance = 6;
 controls.autoRotate = true;
 controls.autoRotateSpeed = 1.2;
+controls.enableZoom = false; // Mencegah zoom tidak sengaja saat interaksi mobile
 
 // Pencahayaan Emas
-scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.5); 
+scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.8); 
 dirLight.position.set(5, 3, 5); 
 scene.add(dirLight);
 
-const pointLight = new THREE.PointLight(0xFFD700, 1, 10); 
+const pointLight = new THREE.PointLight(0xFFD700, 1.2, 10); 
 pointLight.position.set(-3, -2, 3); 
 scene.add(pointLight);
 
-// Geometri & Material Emas Default (Mencegah Globe Hilang)
+// Geometri & Material Emas Default
 const geo = new THREE.SphereGeometry(1, 128, 128);
 const mat = new THREE.MeshStandardMaterial({
   color: 0xFFD700,
-  metalness: 0.75,
-  roughness: 0.28
+  metalness: 0.8,
+  roughness: 0.25
 });
 
 const globe = new THREE.Mesh(geo, mat);
-globe.position.y = 0.3;
+globe.position.y = 0.1;
 scene.add(globe);
 
-// Akar Hitam Melilit
-const rootMat = new THREE.MeshBasicMaterial({color: 0x111111});
-for(let i = 0; i < 3; i++){
-  const torus = new THREE.Mesh(new THREE.TorusGeometry(1.06, 0.025, 12, 150), rootMat);
+// Cincin / Akar Melilit
+const rootMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+for(let i = 0; i < 3; i++) {
+  const torus = new THREE.Mesh(new THREE.TorusGeometry(1.06, 0.02, 12, 150), rootMat);
   torus.rotation.x = i * 1.2; 
   torus.rotation.y = i * 0.8 + 0.5; 
-  torus.position.y = 0.3;
+  torus.position.y = 0.1;
   scene.add(torus);
 }
 
-// Coba muat tekstur dari beberapa kemungkinan lokasi file di GitHub Pages
+// Pemuatan Tekstur dengan beberapa fallback URL
 const loader = new THREE.TextureLoader();
-const texturePaths = ['./babe_gold.jpg', './assets/images/babe_gold.jpg'];
+const texturePaths = [
+  './babe_gold.jpg',
+  './assets/images/babe_gold.jpg',
+  'https://afakhor.github.io/sponsorgawatbabeinfo/babe_gold.jpg'
+];
 
 function tryLoadTexture(index) {
   if (index >= texturePaths.length) return;
-  
+
   loader.load(texturePaths[index], (tex) => {
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
