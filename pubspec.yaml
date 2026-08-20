@@ -18,9 +18,9 @@ dependencies:
   device_info_plus: ^9.1.1
   url_launcher: ^6.2.5
   # HAPUS INI BIANG BLINK & LOADING:
-  # flutter_gl: ^0.0.21
-  # flutter_angle: ^0.2.8
-  # audio_waveforms: ^1.1.0
+  flutter_gl: ^0.0.21
+  flutter_angle: ^0.2.8
+  audio_waveforms: ^1.1.0
   # webview_flutter: ^4.7.0
 
 flutter:
