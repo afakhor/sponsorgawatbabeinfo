@@ -60,7 +60,13 @@ jobs:
       - name: Rename APK
         if: success()
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk
+          echo "Cari APK..."
+          find . -type f -name "*.apk" | head -n 20
+          APK=$(find . -type f -name "*.apk" | grep -i release | head -n 1)
+          echo "APK ditemukan: $APK"
+          mkdir -p build/app/outputs/flutter-apk/
+          cp "$APK" build/app/outputs/flutter-apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk
+          ls -lh build/app/outputs/flutter-apk/
 
       - name: Upload APK
         if: success()
@@ -75,7 +81,7 @@ jobs:
         with:
           tag_name: v3d-${{ github.run_number }}
           name: FIXED v${{ github.run_number }}
-          body: Package com.example.sponsorbabeinfogawat - flutter_angle CMake fixed
+          body: Package com.example.sponsorbabeinfogawat - build dir fixed
           files: build/app/outputs/flutter-apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
