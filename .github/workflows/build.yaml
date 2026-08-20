@@ -1,4 +1,4 @@
-name: BABE.INFO sponsorbabeinfogawat FIX FINAL
+name: BABE.INFO sponsorbabeinfogawat FIX FINAL + GH PAGES
 
 on:
   push:
@@ -25,12 +25,10 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Install CMake & NDK (Wajib untuk flutter_angle)
+      - name: Install CMake & NDK
         run: |
           export ANDROID_SDK_ROOT=$ANDROID_HOME
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393" --sdk_root=$ANDROID_SDK_ROOT
-          echo "CMAKE OK"
-          cmake --version || $ANDROID_HOME/cmake/3.22.1/bin/cmake --version
 
       - name: Clean & Get
         run: |
@@ -38,50 +36,91 @@ jobs:
           rm -f pubspec.lock
           flutter pub get
 
-      - name: PATCH CMake Version flutter_angle
+      - name: PATCH CMake flutter_angle
         run: |
           PUB_DIR=$HOME/.pub-cache/hosted/pub.dev
           ANGLE=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_angle-*" | head -n 1)
           if [ -d "$ANGLE" ]; then
-            echo "Patching $ANGLE"
             find $ANGLE -type f \( -name "CMakeLists.txt" -o -name "build.gradle" \) -exec sed -i 's/3\.31/3.22.1/g; s/3\.31\.4/3.22.1/g' {} +
           fi
 
       - name: Build APK Release
         run: flutter build apk --release -v 2>&1 | tee build.log
 
-      - name: Upload Log (selalu upload biar kelihatan error)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
-
       - name: Rename APK
         if: success()
         run: |
-          echo "Cari APK..."
-          find . -type f -name "*.apk" | head -n 20
           APK=$(find . -type f -name "*.apk" | grep -i release | head -n 1)
-          echo "APK ditemukan: $APK"
+          echo "APK: $APK"
           mkdir -p build/app/outputs/flutter-apk/
           cp "$APK" build/app/outputs/flutter-apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk
-          ls -lh build/app/outputs/flutter-apk/
+          cp "$APK" ./BABE-INFO-sponsorbabeinfogawat-FIXED.apk
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: apk-fixed
           path: build/app/outputs/flutter-apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk
 
-      - name: Release
+      - name: Release APK
         if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v3d-${{ github.run_number }}
-          name: FIXED v${{ github.run_number }}
-          body: Package com.example.sponsorbabeinfogawat - build dir fixed
+          name: BABE.INFO v${{ github.run_number }} - FIXED
+          body: |
+            Package: com.example.sponsorbabeinfogawat
+            - Globe emas anti loading
+            - Download APK di bawah
+            - Web: https://username.github.io/repo-name/
           files: build/app/outputs/flutter-apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-web:
+    runs-on: ubuntu-latest
+    needs: build-apk
+    permissions:
+      contents: write
+      pages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download APK artifact untuk Web
+        uses: actions/download-artifact@v4
+        with:
+          name: apk-fixed
+          path: ./apk/
+
+      - name: Build Web + babe.html
+        run: |
+          mkdir -p _site/assets/images
+          mkdir -p _site/apk
+
+          # Copy babe.html jadi index.html
+          if [ -f web/babe.html ]; then
+            cp web/babe.html _site/index.html
+            cp web/babe.html _site/babe.html
+          elif [ -f babe.html ]; then
+            cp babe.html _site/index.html
+          else
+            echo "<h1>BABE.INFO</h1><a href='apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk'>DOWNLOAD APK</a>" > _site/index.html
+          fi
+
+          # Copy images
+          cp -r assets/images/* _site/assets/images/ 2>/dev/null || true
+          cp -r web/assets/* _site/assets/ 2>/dev/null || true
+
+          # Copy APK ke web biar bisa download dari GH Pages
+          cp apk/*.apk _site/apk/ 2>/dev/null || true
+          cp *.apk _site/ 2>/dev/null || true
+
+          ls -R _site
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          publish_branch: gh-pages
