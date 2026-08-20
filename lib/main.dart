@@ -72,31 +72,53 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
   }
 
   Future<void> initGlobe() async {
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 600));
 
     try {
-      double dpr = MediaQuery.of(context).devicePixelRatio;
-      int renderWidth = (300 * dpr).toInt();
-      int renderHeight = (300 * dpr).toInt();
+      if (!mounted) return;
 
-      await flutterGl.initialize(options: {
+      double dpr = MediaQuery.of(context).devicePixelRatio;
+      int renderWidth = (280 * dpr).toInt();
+      int renderHeight = (280 * dpr).toInt();
+
+      // 1. Inisialisasi Plugin GL
+      Map<String, dynamic> options = {
         "antialias": true,
         "alpha": true,
         "width": renderWidth,
         "height": renderHeight,
         "dpr": dpr,
         "preserveDrawingBuffer": true,
-      });
+      };
 
-      await flutterGl.prepareContext();
+      await flutterGl.initialize(options: options);
 
-      if (flutterGl.textureId == null) return;
+      // 2. Siapkan Context GL dengan Retry Validasi
+      int retryCount = 0;
+      while (flutterGl.gl == null && retryCount < 10) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        await flutterGl.prepareContext();
+        retryCount++;
+      }
 
+      if (flutterGl.textureId == null) {
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+
+      if (flutterGl.textureId == null) {
+        debugPrint("Texture ID GL masih null, mengulang inisialisasi...");
+        if (mounted && !inited) {
+          Future.delayed(const Duration(milliseconds: 500), () => initGlobe());
+        }
+        return;
+      }
+
+      // 3. Buat Scene & Camera
       scene = three.Scene();
-
       camera = three.PerspectiveCamera(45, 1, 0.1, 1000);
       camera.position.z = 2.8;
 
+      // 4. Inisialisasi Renderer
       renderer = three.WebGLRenderer({
         "gl": flutterGl.gl,
         "antialias": true,
@@ -107,14 +129,17 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       renderer.setSize(renderWidth.toDouble(), renderHeight.toDouble(), false);
       renderer.setClearColor(three.Color(0x000000), 0);
 
+      // 5. Pencahayaan Emas
       var light = three.DirectionalLight(0xffffff, 1.2);
       light.position.setValues(5, 3, 5);
       scene.add(light);
       scene.add(three.AmbientLight(0xffffff, 0.8));
+
       var pointLight = three.PointLight(0xFFD700, 0.8, 10);
       pointLight.position.setValues(-3, -2, 3);
       scene.add(pointLight);
 
+      // 6. Geometri & Material Emas
       var geo = three.SphereGeometry(1, 64, 64);
       var mat = three.MeshStandardMaterial()
         ..color = three.Color(0xFFD700)
@@ -125,6 +150,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       globe!.position.y = 0.3;
       scene.add(globe!);
 
+      // 7. Akar Hitam 3D
       var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 80);
       var rootMat = three.MeshBasicMaterial()..color = three.Color(0x111111);
 
@@ -136,15 +162,22 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         scene.add(torus);
       }
 
+      // 8. Set State & Jalankan Animasi
       if (mounted) {
-        setState(() => inited = true);
+        setState(() {
+          inited = true;
+        });
         startAnimation();
       }
 
+      // Load Tekstur Emas
       loadTextureSafe(mat);
 
     } catch (e) {
       debugPrint("Init Globe Error: $e");
+      if (mounted && !inited) {
+        Future.delayed(const Duration(seconds: 1), () => initGlobe());
+      }
     }
   }
 
@@ -228,13 +261,11 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       String trimPath = "${dir.path}/trim_${DateTime.now().millisecondsSinceEpoch}.m4a";
       String outputPath = "${dir.path}/BABE-INFO-${DateTime.now().millisecondsSinceEpoch}.mp4";
 
-      // 1. Potong Audio Cepat
       double durasi = e - s;
       if (durasi <= 0) durasi = 10;
 
       await FFmpegKit.execute("-y -ss $s -t $durasi -i \"${audioFile!.path}\" -c:a aac \"$trimPath\"");
 
-      // 2. Siapkan File Background
       String bgPath = "";
       if (bgFile != null) {
         bgPath = bgFile!.path;
@@ -245,7 +276,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         bgPath = f.path;
       }
 
-      // 3. Render MP4 Ringan & Cepat (Anti Freeze)
       String cmd = "-y -loop 1 -i \"$bgPath\" -i \"$trimPath\" -c:v libx264 -preset ultrafast -tune stillimage -c:a aac -b:a 128k -pix_fmt yuv420p -shortest -t $durasi \"$outputPath\"";
 
       FFmpegKit.execute(cmd).then((session) async {
@@ -261,7 +291,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
               return;
             }
           }
-          // Jika gagal/batal
           setState(() => load = false);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Gagal memproses video, silakan coba lagi.")),
@@ -289,7 +318,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       body: Stack(
         children: [
           Positioned.fill(child: bgWidget),
-          
+
           // WATERMARK TOP LEFT - LUXURIOUS GOLD 16PX
           SafeArea(
             child: Positioned(
@@ -412,7 +441,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                           ),
                         ),
                       ),
-                      // TOMBOL SHARE WA DENGAN AMAN
                       if (outVideo != null) ...[
                         const SizedBox(height: 8),
                         SizedBox(
