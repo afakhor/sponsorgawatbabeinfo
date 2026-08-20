@@ -158,23 +158,22 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
   }
 
   Future<void> loadTextureSafe(three.MeshStandardMaterial mat) async {
-    try {
-      final ByteData data = await rootBundle.load('assets/images/babe_gold.jpg');
-      final Uint8List bytes = data.buffer.asUint8List();
-      
-      final loader = three.TextureLoader();
-      var tex = await loader.fromList(bytes);
-      if (tex != null && mounted) {
-        tex.wrapS = three.RepeatWrapping;
-        tex.wrapT = three.RepeatWrapping;
-        tex.flipY = false;
-        mat.map = tex;
-        mat.needsUpdate = true;
-      }
-    } catch (e) {
-      debugPrint("Gagal memuat tekstur babe_gold.jpg (menggunakan material emas): $e");
+  try {
+    final loader = three.TextureLoader();
+    // Menggunakan fromAsset langsung sesuai API three_js
+    var tex = await loader.fromAsset('assets/images/babe_gold.jpg');
+    
+    if (tex != null && mounted) {
+      tex.wrapS = three.RepeatWrapping;
+      tex.wrapT = three.RepeatWrapping;
+      tex.flipY = false;
+      mat.map = tex;
+      mat.needsUpdate = true;
     }
+  } catch (e) {
+    debugPrint("Asset babe_gold.jpg gagal dimuat. Error: $e");
   }
+}
 
   void startAnimation() {
     _ticker?.stop();
