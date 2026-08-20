@@ -51,97 +51,117 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
     cekIzin();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      initGlobe();
+      if (mounted) {
+        initGlobe();
+      }
     });
   }
 
   Future<void> cekIzin() async {
-    final inf = await DeviceInfoPlugin().androidInfo;
-    var st = inf.version.sdkInt >= 33 ? await Permission.audio.request() : await Permission.storage.request();
-    if (st.isGranted) setState(() => perm = true);
+    try {
+      final inf = await DeviceInfoPlugin().androidInfo;
+      var st = inf.version.sdkInt >= 33 
+          ? await Permission.audio.request() 
+          : await Permission.storage.request();
+      if (st.isGranted && mounted) {
+        setState(() => perm = true);
+      }
+    } catch (_) {
+      // Fallback aman jika gagal baca info perangkat
+    }
   }
 
   Future<void> initGlobe() async {
-    double dpr = MediaQuery.of(context).devicePixelRatio;
-    int renderWidth = (300 * dpr).toInt();
-    int renderHeight = (300 * dpr).toInt();
+    try {
+      double dpr = MediaQuery.of(context).devicePixelRatio;
+      int renderWidth = (300 * dpr).toInt();
+      int renderHeight = (300 * dpr).toInt();
 
-    await flutterGl.initialize(options: {
-      "antialias": true,
-      "alpha": false,
-      "width": renderWidth,
-      "height": renderHeight,
-      "dpr": dpr
-    });
-    await flutterGl.prepareContext();
+      await flutterGl.initialize(options: {
+        "antialias": true,
+        "alpha": false,
+        "width": renderWidth,
+        "height": renderHeight,
+        "dpr": dpr,
+        "preserveDrawingBuffer": true, // PREVENT BLINKING/FLICKER
+      });
+      await flutterGl.prepareContext();
 
-    scene = three.Scene();
-    scene.background = three.Color(0xEEEEEE);
+      scene = three.Scene();
+      scene.background = three.Color(0xEEEEEE);
 
-    camera = three.PerspectiveCamera(45, 1, 0.1, 1000);
-    camera.position.z = 2.8;
+      camera = three.PerspectiveCamera(45, 1, 0.1, 1000);
+      camera.position.z = 2.8;
 
-    renderer = three.WebGLRenderer({
-      "gl": flutterGl.gl,
-      "antialias": true,
-      "alpha": false,
-    });
-    
-    renderer.setSize(renderWidth.toDouble(), renderHeight.toDouble(), false);
-    renderer.setClearColor(three.Color(0xEEEEEE), 1);
+      renderer = three.WebGLRenderer({
+        "gl": flutterGl.gl,
+        "antialias": true,
+        "alpha": false,
+        "preserveDrawingBuffer": true, // PREVENT BLINKING/FLICKER
+      });
 
-    // Pencahayaan
-    var light = three.DirectionalLight(0xffffff, 1.2);
-    light.position.setValues(5, 3, 5);
-    scene.add(light);
-    scene.add(three.AmbientLight(0xffffff, 0.8));
-    var pointLight = three.PointLight(0xFFD700, 0.8, 10);
-    pointLight.position.setValues(-3, -2, 3);
-    scene.add(pointLight);
+      renderer.setSize(renderWidth.toDouble(), renderHeight.toDouble(), false);
+      renderer.setClearColor(three.Color(0xEEEEEE), 1);
 
-    // Geometri & Tekstur
-    var geo = three.SphereGeometry(1, 64, 64);
-    var tex = await three.TextureLoader().fromAsset("assets/images/babe_gold.jpg");
-    if (tex != null) {
-      tex.wrapS = three.RepeatWrapping;
-      tex.wrapT = three.RepeatWrapping;
-      tex.flipY = false;
-    }
+      // Pencahayaan
+      var light = three.DirectionalLight(0xffffff, 1.2);
+      light.position.setValues(5, 3, 5);
+      scene.add(light);
+      scene.add(three.AmbientLight(0xffffff, 0.8));
+      var pointLight = three.PointLight(0xFFD700, 0.8, 10);
+      pointLight.position.setValues(-3, -2, 3);
+      scene.add(pointLight);
 
-    // FIX: Menggunakan cascade operator (..) untuk assign properti secara langsung
-    var mat = three.MeshStandardMaterial()
-      ..map = tex
-      ..metalness = 0.75
-      ..roughness = 0.28;
+      // Geometri & Tekstur
+      var geo = three.SphereGeometry(1, 64, 64);
+      three.Texture? tex;
+      try {
+        tex = await three.TextureLoader().fromAsset("assets/images/babe_gold.jpg");
+        if (tex != null) {
+          tex.wrapS = three.RepeatWrapping;
+          tex.wrapT = three.RepeatWrapping;
+          tex.flipY = false;
+        }
+      } catch (_) {
+        // Fallback jika aset belum termuat sempurna
+      }
 
-    globe = three.Mesh(geo, mat);
-    globe!.position.y = 0.3;
-    scene.add(globe!);
+      var mat = three.MeshStandardMaterial()
+        ..map = tex
+        ..metalness = 0.75
+        ..roughness = 0.28;
 
-    // Akar Hitam 3D
-    var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 80);
-    // FIX: Set warna material langsung tanpa Map<String, dynamic>
-    var rootMat = three.MeshBasicMaterial()
-      ..color = three.Color(0x111111);
+      globe = three.Mesh(geo, mat);
+      globe!.position.y = 0.3;
+      scene.add(globe!);
 
-    for (int i = 0; i < 3; i++) {
-      var torus = three.Mesh(rootGeo, rootMat);
-      torus.rotation.x = i * 1.2;
-      torus.rotation.y = i * 0.8;
-      torus.position.y = 0.3;
-      scene.add(torus);
-    }
+      // Akar Hitam 3D
+      var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 80);
+      var rootMat = three.MeshBasicMaterial()
+        ..color = three.Color(0x111111);
 
-    if (mounted) {
-      setState(() => inited = true);
-      startAnimation();
+      for (int i = 0; i < 3; i++) {
+        var torus = three.Mesh(rootGeo, rootMat);
+        torus.rotation.x = i * 1.2;
+        torus.rotation.y = i * 0.8;
+        torus.position.y = 0.3;
+        scene.add(torus);
+      }
+
+      if (mounted) {
+        setState(() => inited = true);
+        startAnimation();
+      }
+    } catch (e) {
+      debugPrint("OpenGL Init Warning: $e");
     }
   }
 
   void startAnimation() {
+    _ticker?.stop();
     _ticker?.dispose();
     _ticker = createTicker((elapsed) {
-      if (!mounted || globe == null) return;
+      if (!mounted || globe == null || !inited) return;
       globe!.rotation.y += 0.008;
       renderer.render(scene, camera);
       flutterGl.updateTexture(renderer.getContext());
@@ -150,23 +170,35 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
   }
 
   Future<void> pickAudio() async {
-    var r = await FilePicker.platform.pickFiles(type: FileType.audio);
-    if (r == null) return;
-    File f = File(r.files.single.path!);
-    await player.preparePlayer(path: f.path, shouldExtractWaveform: true, noOfSamples: 200);
-    final d = await player.getDuration(DurationType.max);
-    setState(() {
-      audioFile = f;
-      total = (d / 1000).toDouble();
-      s = 0;
-      e = total > 60 ? 60 : total;
-    });
+    try {
+      var r = await FilePicker.platform.pickFiles(type: FileType.audio);
+      if (r == null || r.files.single.path == null) return;
+      File f = File(r.files.single.path!);
+      await player.preparePlayer(path: f.path, shouldExtractWaveform: true, noOfSamples: 200);
+      final d = await player.getDuration(DurationType.max);
+      if (mounted) {
+        setState(() {
+          audioFile = f;
+          total = (d / 1000).toDouble();
+          s = 0;
+          e = total > 60 ? 60 : total;
+        });
+      }
+    } catch (e) {
+      debugPrint("Audio Pick Error: $e");
+    }
   }
 
   Future<void> pickBg() async {
-    var r = await FilePicker.platform.pickFiles(type: FileType.image);
-    if (r == null) return;
-    setState(() => bgFile = File(r.files.single.path!));
+    try {
+      var r = await FilePicker.platform.pickFiles(type: FileType.image);
+      if (r == null || r.files.single.path == null) return;
+      if (mounted) {
+        setState(() => bgFile = File(r.files.single.path!));
+      }
+    } catch (e) {
+      debugPrint("BG Pick Error: $e");
+    }
   }
 
   Future<void> buatMp4() async {
@@ -175,34 +207,41 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       return;
     }
     setState(() => load = true);
-    final dir = await getTemporaryDirectory();
-    String trim = "${dir.path}/trim.m4a";
-    String out = "${dir.path}/BABE-INFO-${DateTime.now().millisecondsSinceEpoch}.mp4";
+    try {
+      final dir = await getTemporaryDirectory();
+      String trim = "${dir.path}/trim.m4a";
+      String out = "${dir.path}/BABE-INFO-${DateTime.now().millisecondsSinceEpoch}.mp4";
 
-    await FFmpegKit.execute("-y -ss $s -t ${e - s} -i \"${audioFile!.path}\" -c:a aac \"$trim\"");
+      await FFmpegKit.execute("-y -ss $s -t ${e - s} -i \"${audioFile!.path}\" -c:a aac \"$trim\"");
 
-    String bgPath = "";
-    if (bgFile != null) {
-      bgPath = bgFile!.path;
-    } else {
-      final data = await DefaultAssetBundle.of(context).load('assets/images/bg.jpg');
-      File f = File('${dir.path}/bg.jpg');
-      await f.writeAsBytes(data.buffer.asUint8List());
-      bgPath = f.path;
-    }
-
-    await FFmpegKit.execute(
-      "-y -loop 1 -i \"$bgPath\" -i \"$trim\" -c:v libx264 -tune stillimage -c:a aac -pix_fmt yuv420p -shortest -t ${e - s} \"$out\""
-    ).then((st) async {
-      if ((await st.getReturnCode())!.isValueSuccess()) {
-        setState(() {
-          outVideo = File(out);
-          load = false;
-        });
+      String bgPath = "";
+      if (bgFile != null) {
+        bgPath = bgFile!.path;
       } else {
-        setState(() => load = false);
+        final data = await DefaultAssetBundle.of(context).load('assets/images/bg.jpg');
+        File f = File('${dir.path}/bg.jpg');
+        await f.writeAsBytes(data.buffer.asUint8List());
+        bgPath = f.path;
       }
-    });
+
+      var st = await FFmpegKit.execute(
+        "-y -loop 1 -i \"$bgPath\" -i \"$trim\" -c:v libx264 -tune stillimage -c:a aac -pix_fmt yuv420p -shortest -t ${e - s} \"$out\""
+      );
+
+      var returnCode = await st.getReturnCode();
+      if (mounted) {
+        if (returnCode != null && returnCode.isValueSuccess()) {
+          setState(() {
+            outVideo = File(out);
+            load = false;
+          });
+        } else {
+          setState(() => load = false);
+        }
+      }
+    } catch (e) {
+      if (mounted) setState(() => load = false);
+    }
   }
 
   @override
@@ -210,7 +249,11 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
     double w = MediaQuery.of(context).size.width;
     Widget bgWidget = bgFile != null 
         ? Image.file(bgFile!, fit: BoxFit.cover) 
-        : Image.asset('assets/images/bg.jpg', fit: BoxFit.cover);
+        : Image.asset(
+            'assets/images/bg.jpg', 
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Container(color: Colors.black),
+          );
 
     return Scaffold(
       body: Stack(
@@ -229,7 +272,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(150),
-                child: inited
+                child: inited && flutterGl.textureId != null
                     ? RepaintBoundary(child: Texture(textureId: flutterGl.textureId!))
                     : const Center(child: CircularProgressIndicator(color: Colors.amber)),
               ),
@@ -277,8 +320,8 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                       if (audioFile != null)
                         RangeSlider(
                           min: 0,
-                          max: total,
-                          values: RangeValues(s, e),
+                          max: total > 0 ? total : 1,
+                          values: RangeValues(s.clamp(0, total), e.clamp(s, total)),
                           activeColor: Colors.amber,
                           onChanged: (v) {
                             if (v.end - v.start <= 60) {
@@ -341,9 +384,13 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
 
   @override
   void dispose() {
+    _ticker?.stop();
     _ticker?.dispose();
     player.dispose();
-    flutterGl.dispose();
+    try {
+      renderer.dispose();
+      flutterGl.dispose();
+    } catch (_) {}
     super.dispose();
   }
 }
