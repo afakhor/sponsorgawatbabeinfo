@@ -71,7 +71,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
   }
 
   Future<void> initGlobe() async {
-    // FIX 1: Beri waktu jeda 300ms agar EGL Native Surface benar-benar siap
+    // Jeda 300ms memastikan Native EGL Surface Android sudah siap 100%
     await Future.delayed(const Duration(milliseconds: 300));
 
     try {
@@ -120,7 +120,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       pointLight.position.setValues(-3, -2, 3);
       scene.add(pointLight);
 
-      // Geometri & Material Emas Standar
+      // Geometri & Material Emas Standar (Fallback jika tekstur telat)
       var geo = three.SphereGeometry(1, 64, 64);
       var mat = three.MeshStandardMaterial()
         ..color = three.Color(0xFFD700)
@@ -131,7 +131,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       globe!.position.y = 0.3;
       scene.add(globe!);
 
-      // Akar Hitam 3D
+      // Akar Hitam 3D (Root Rings)
       var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 80);
       var rootMat = three.MeshBasicMaterial()..color = three.Color(0x111111);
 
@@ -143,13 +143,13 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         scene.add(torus);
       }
 
-      // FIX 2: Langsung aktifkan tampilan UI begitu Geometri 3D siap di memori EGL
+      // Langsung munculkan globe ke UI & jalankan animasi tanpa menunggu eksekusi file gambar
       if (mounted) {
         setState(() => inited = true);
         startAnimation();
       }
 
-      // FIX 3: Muat tekstur via ByteData secara aman tanpa memblokir siklus utama
+      // Muat tekstur secara terpisah dan aman
       loadTextureSafe(mat);
 
     } catch (e) {
@@ -172,7 +172,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         mat.needsUpdate = true;
       }
     } catch (e) {
-      debugPrint("Asset babe_gold.jpg tidak ditemukan/gagal dimuat. Menggunakan warna Emas default. Error: $e");
+      debugPrint("Gagal memuat tekstur babe_gold.jpg (menggunakan material emas): $e");
     }
   }
 
