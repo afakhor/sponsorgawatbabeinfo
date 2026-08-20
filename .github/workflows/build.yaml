@@ -39,12 +39,14 @@ jobs:
           export ANDROID_SDK_ROOT=$ANDROID_HOME
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" --sdk_root=$ANDROID_SDK_ROOT
 
-      - name: Configure Gradle Memory
+      - name: Configure Gradle Properties & Memory
         run: |
           mkdir -p ~/.gradle
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" > ~/.gradle/gradle.properties
+          
+          # Mencegah peringatan AGP & compileSdk 35
+          echo "android.suppressUnsupportedCompileSdk=35" >> android/gradle.properties
 
-      # --- PERUBAHAN DI STEP PATCH (Menyasar $PUB_DIR dan folder android) ---
       - name: PATCH Plugins & App (Manifest, CMake, Kotlin & JVM Target Fix)
         run: |
           PUB_DIR=/home/runner/.pub-cache/hosted/pub.dev
@@ -53,7 +55,7 @@ jobs:
           echo "Clearing usang package attributes from all plugin manifests..."
           find $PUB_DIR -type f -name "AndroidManifest.xml" -exec sed -i -E 's/package="[^"]*"//g' {} +
 
-          # 2. Fix JVM Target secara spesifik di pub-cache & project android tanpa merusak versi dependency Kotlin
+          # 2. Enforce JVM Target 17 secara konsisten di seluruh Gradle & App
           echo "Enforcing Java 17 target across all gradle files..."
           find $PUB_DIR android -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -exec sed -i 's/jvmTarget = "1.8"/jvmTarget = "17"/g' {} +
           find $PUB_DIR android -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -exec sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" {} +
@@ -73,24 +75,18 @@ jobs:
             find $GL -type f -name "build.gradle" -exec sed -i 's/1.3.61/1.9.22/g' {} +
             find $GL -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3.31.4/3.22.1/g' {} +
           fi
-      # -----------------------------------------------------------------------
 
-      - name: Copy Flutter GL AAR Dependencies (Clean Duplicates)
+      - name: Copy Flutter GL AAR Dependencies
         run: |
           mkdir -p android/app/libs
           mkdir -p android/app/libs/aars
           
-          echo "Mencari file AAR milik flutter_gl di pub-cache..."
+          echo "Mencari dan menyalin seluruh file AAR milik flutter_gl..."
           find $HOME/.pub-cache /opt/hostedtoolcache -name "*.aar" -exec cp {} android/app/libs/ \; 2>/dev/null || true
           find $HOME/.pub-cache /opt/hostedtoolcache -name "*.aar" -exec cp {} android/app/libs/aars/ \; 2>/dev/null || true
           
-          # HAPUS threeegl.aar jika sudah ada subproject :threeegl: untuk mencegah Duplicate Class Error
-          rm -f android/app/libs/threeegl.aar
-          rm -f android/app/libs/aars/threeegl.aar
-          
-          echo "File AAR tersisa setelah pembersihan ganda:"
+          echo "File AAR yang tersedia di libs:"
           ls -la android/app/libs/
-
 
       - name: Ensure Gradle Wrapper Exists & Executable
         run: |
