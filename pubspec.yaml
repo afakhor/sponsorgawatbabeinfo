@@ -1,30 +1,18 @@
-name: sponsorgawatbabeinfo
-description: BABE.INFO - Globe Fixed Learn three_js anti blink
-publish_to: 'none'
-version: 1.0.0+1
+name: sponsorbabeinfogawat
 environment:
   sdk: '>=3.7.0 <4.0.0'
-  flutter: '>=3.22.0'
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.2
   three_js: ^0.1.7
   file_picker: ^8.1.0
   ffmpeg_kit_flutter_new_audio: ^1.0.0
   path_provider: ^2.1.2
   permission_handler: ^11.3.1
   share_plus: ^10.0.3
-  device_info_plus: ^9.1.1
-  url_launcher: ^6.2.5
-  # HAPUS INI BIANG BLINK & LOADING:
-  flutter_gl: ^0.0.21
-  flutter_angle: ^0.2.8
   audio_waveforms: ^1.1.0
-  # webview_flutter: ^4.7.0
-
+  device_info_plus: ^9.1.1
 flutter:
-  uses-material-design: true
   assets:
     - assets/images/babe_gold.jpg
     - assets/images/bg.jpg
