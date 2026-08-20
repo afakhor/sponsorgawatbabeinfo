@@ -53,8 +53,16 @@ android {
 
     buildTypes {
         release {
+            // Matikan shrink/minify jika tidak memerlukan obfuscation berat
             isMinifyEnabled = false
             isShrinkResources = false
+            
+            // Hubungkan ProGuard Rules
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            
             signingConfig = signingConfigs.getByName("debug")
             ndk {
                 debugSymbolLevel = "FULL"
