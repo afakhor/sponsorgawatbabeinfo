@@ -1,4 +1,4 @@
-name: BABE.INFO sponsorbabeinfogawat FIX FINAL + GH PAGES
+name: BABE.INFO sponsorbabeinfogawat FINAL FIX
 
 on:
   push:
@@ -12,49 +12,85 @@ jobs:
       contents: write
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - uses: subosito/flutter-action@v2
+      - name: Setup Flutter 3.29.0
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.29.0'
           channel: stable
           cache: true
 
-      - name: Install CMake & NDK
+      - name: Install CMake 3.22.1 & NDK 25.1 (WAJIB flutter_angle)
         run: |
           export ANDROID_SDK_ROOT=$ANDROID_HOME
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393" --sdk_root=$ANDROID_SDK_ROOT
+          echo "SDK OK"
+          ls $ANDROID_HOME/cmake/
 
-      - name: Clean & Get
+      - name: Clean & Pub Get
         run: |
           flutter clean
           rm -f pubspec.lock
           flutter pub get
 
-      - name: PATCH CMake flutter_angle
+      - name: PATCH ALL - CMake & compileSdk & AGP
         run: |
           PUB_DIR=$HOME/.pub-cache/hosted/pub.dev
+          # 1. Patch flutter_angle CMake 3.31 -> 3.22.1
           ANGLE=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_angle-*" | head -n 1)
           if [ -d "$ANGLE" ]; then
-            find $ANGLE -type f \( -name "CMakeLists.txt" -o -name "build.gradle" \) -exec sed -i 's/3\.31/3.22.1/g; s/3\.31\.4/3.22.1/g' {} +
+            echo "Patching $ANGLE"
+            find $ANGLE -type f \( -name "CMakeLists.txt" -o -name "build.gradle" \) -exec sed -i 's/3\.31\.4/3.22.1/g; s/3\.31/3.22.1/g' {} +
           fi
+          # 2. Force compileSdk 34 biar gak lStar error
+          find $PUB_DIR -type f -name "build.gradle" -exec sed -i -E 's/compileSdkVersion 3[0-9]/compileSdkVersion 34/g; s/compileSdk 3[0-9]/compileSdk 34/g' {} + 2>/dev/null || true
+          # 3. Patch app build.gradle.kts juga
+          sed -i -E 's/compileSdk = 3[0-9]/compileSdk = 34/g; s/targetSdk = 3[0-9]/targetSdk = 34/g' android/app/build.gradle.kts || true
+          sed -i -E 's/compileSdkVersion 3[0-9]/compileSdkVersion 34/g' android/app/build.gradle || true
 
-      - name: Build APK Release
-        run: flutter build apk --release -v 2>&1 | tee build.log
+      - name: Build APK Release (log full)
+        run: |
+          flutter build apk --release -v 2>&1 | tee build.log
+          echo "=== BUILD SELESAI ==="
+          ls -R build/ | grep -i apk || echo "belum ada apk di build/"
+          find . -name "*.apk" | head -20
 
-      - name: Rename APK
+      - name: Upload Build Log (WAJIB CEK KALAU FAILED)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.run_number }}
+          path: build.log
+
+      - name: Find & Rename APK - ANTI GAGAL
         if: success()
         run: |
-          APK=$(find . -type f -name "*.apk" | grep -i release | head -n 1)
-          echo "APK: $APK"
+          set -e
+          echo "Mencari APK..."
+          # Cari di semua tempat
+          APK=$(find . -type f -name "*.apk" | grep -E "release|app-" | head -n 1)
+          if [ -z "$APK" ]; then
+            APK=$(find . -type f -name "*.apk" | head -n 1)
+          fi
+          if [ -z "$APK" ]; then
+            echo "❌ APK TIDAK DITEMUKAN, build gagal!"
+            echo "Cek build.log di Artifacts"
+            exit 1
+          fi
+          echo "✅ APK DITEMUKAN: $APK"
+          ls -lh "$APK"
           mkdir -p build/app/outputs/flutter-apk/
           cp "$APK" build/app/outputs/flutter-apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk
           cp "$APK" ./BABE-INFO-sponsorbabeinfogawat-FIXED.apk
+          ls -lh build/app/outputs/flutter-apk/
 
       - name: Upload APK Artifact
         if: success()
@@ -68,12 +104,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v3d-${{ github.run_number }}
-          name: BABE.INFO v${{ github.run_number }} - FIXED
+          name: BABE.INFO FIXED v${{ github.run_number }}
           body: |
             Package: com.example.sponsorbabeinfogawat
-            - Globe emas anti loading
-            - Download APK di bawah
-            - Web: https://username.github.io/repo-name/
+            - FIX CMake flutter_angle
+            - compileSdk 34 anti lStar
+            - Globe anti blink
           files: build/app/outputs/flutter-apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -81,45 +117,24 @@ jobs:
   deploy-web:
     runs-on: ubuntu-latest
     needs: build-apk
+    if: success()
     permissions:
       contents: write
       pages: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Download APK artifact untuk Web
-        uses: actions/download-artifact@v4
-        with:
-          name: apk-fixed
-          path: ./apk/
-
-      - name: Build Web + babe.html
+      - name: Build Web
         run: |
           mkdir -p _site/assets/images
-          mkdir -p _site/apk
-
-          # Copy babe.html jadi index.html
           if [ -f web/babe.html ]; then
             cp web/babe.html _site/index.html
             cp web/babe.html _site/babe.html
           elif [ -f babe.html ]; then
             cp babe.html _site/index.html
-          else
-            echo "<h1>BABE.INFO</h1><a href='apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk'>DOWNLOAD APK</a>" > _site/index.html
           fi
-
-          # Copy images
           cp -r assets/images/* _site/assets/images/ 2>/dev/null || true
-          cp -r web/assets/* _site/assets/ 2>/dev/null || true
-
-          # Copy APK ke web biar bisa download dari GH Pages
-          cp apk/*.apk _site/apk/ 2>/dev/null || true
-          cp *.apk _site/ 2>/dev/null || true
-
           ls -R _site
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./_site
