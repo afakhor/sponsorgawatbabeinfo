@@ -107,7 +107,7 @@ jobs:
           cd android
           ./gradlew assembleRelease --warning-mode none
 
-     - name: Rename APK
+      - name: Rename APK
         run: |
           mkdir -p build/app/outputs/flutter-apk/
           
