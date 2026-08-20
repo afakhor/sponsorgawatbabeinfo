@@ -5,6 +5,7 @@ import 'package:three_js/three_js.dart' as three;
 import 'package:flutter_gl/flutter_gl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
@@ -80,7 +81,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
 
       await flutterGl.initialize(options: {
         "antialias": true,
-        "alpha": true, // FIX: Izinkan Alpha agar transparan
+        "alpha": true,
         "width": renderWidth,
         "height": renderHeight,
         "dpr": dpr,
@@ -92,7 +93,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       if (flutterGl.textureId == null) return;
 
       scene = three.Scene();
-      // FIX: Hapus scene.background agar tidak menutup gambar background belakang
 
       camera = three.PerspectiveCamera(45, 1, 0.1, 1000);
       camera.position.z = 2.8;
@@ -100,14 +100,13 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       renderer = three.WebGLRenderer({
         "gl": flutterGl.gl,
         "antialias": true,
-        "alpha": true, // FIX: Izinkan alpha transparan pada WebGL
+        "alpha": true,
         "preserveDrawingBuffer": true,
       });
 
       renderer.setSize(renderWidth.toDouble(), renderHeight.toDouble(), false);
-      renderer.setClearColor(three.Color(0x000000), 0); // FIX: Set background WebGL transparan total
+      renderer.setClearColor(three.Color(0x000000), 0);
 
-      // Lighting
       var light = three.DirectionalLight(0xffffff, 1.2);
       light.position.setValues(5, 3, 5);
       scene.add(light);
@@ -116,7 +115,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       pointLight.position.setValues(-3, -2, 3);
       scene.add(pointLight);
 
-      // Geometri & Material Emas Default
       var geo = three.SphereGeometry(1, 64, 64);
       var mat = three.MeshStandardMaterial()
         ..color = three.Color(0xFFD700)
@@ -127,7 +125,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       globe!.position.y = 0.3;
       scene.add(globe!);
 
-      // Akar Hitam 3D
       var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 80);
       var rootMat = three.MeshBasicMaterial()..color = three.Color(0x111111);
 
@@ -192,6 +189,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
           total = (d / 1000).toDouble();
           s = 0;
           e = total > 60 ? 60 : total;
+          outVideo = null;
         });
       }
     } catch (e) {
@@ -204,7 +202,10 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       var r = await FilePicker.platform.pickFiles(type: FileType.image);
       if (r == null || r.files.single.path == null) return;
       if (mounted) {
-        setState(() => bgFile = File(r.files.single.path!));
+        setState(() {
+          bgFile = File(r.files.single.path!);
+          outVideo = null;
+        });
       }
     } catch (e) {
       debugPrint("BG Pick Error: $e");
@@ -216,26 +217,24 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       pickAudio();
       return;
     }
+
     setState(() {
       load = true;
-      outVideo = null; // Reset video sebelumnya
+      outVideo = null;
     });
 
     try {
-      final dir = await getApplicationDocumentsDirectory(); // FIX: Gunakan Documents Directory agar aman di Android
-      String trim = "${dir.path}/trim_${DateTime.now().millisecondsSinceEpoch}.m4a";
-      String out = "${dir.path}/BABE-INFO-${DateTime.now().millisecondsSinceEpoch}.mp4";
+      final dir = await getTemporaryDirectory();
+      String trimPath = "${dir.path}/trim_${DateTime.now().millisecondsSinceEpoch}.m4a";
+      String outputPath = "${dir.path}/BABE-INFO-${DateTime.now().millisecondsSinceEpoch}.mp4";
 
-      // 1. Potong Audio
-      var session1 = await FFmpegKit.execute("-y -ss $s -t ${e - s} -i \"${audioFile!.path}\" -c:a aac \"$trim\"");
-      var code1 = await session1.getReturnCode();
+      // 1. Potong Audio Cepat
+      double durasi = e - s;
+      if (durasi <= 0) durasi = 10;
 
-      if (code1 == null || !code1.isValueSuccess()) {
-        if (mounted) setState(() => load = false);
-        return;
-      }
+      await FFmpegKit.execute("-y -ss $s -t $durasi -i \"${audioFile!.path}\" -c:a aac \"$trimPath\"");
 
-      // 2. Siapkan Gambar BG
+      // 2. Siapkan File Background
       String bgPath = "";
       if (bgFile != null) {
         bgPath = bgFile!.path;
@@ -246,23 +245,30 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         bgPath = f.path;
       }
 
-      // 3. Render MP4
-      var session2 = await FFmpegKit.execute(
-        "-y -loop 1 -i \"$bgPath\" -i \"$trim\" -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -shortest -t ${e - s} \"$out\""
-      );
+      // 3. Render MP4 Ringan & Cepat (Anti Freeze)
+      String cmd = "-y -loop 1 -i \"$bgPath\" -i \"$trimPath\" -c:v libx264 -preset ultrafast -tune stillimage -c:a aac -b:a 128k -pix_fmt yuv420p -shortest -t $durasi \"$outputPath\"";
 
-      var code2 = await session2.getReturnCode();
-
-      if (mounted) {
-        if (code2 != null && code2.isValueSuccess()) {
-          setState(() {
-            outVideo = File(out);
-            load = false;
-          });
-        } else {
+      FFmpegKit.execute(cmd).then((session) async {
+        final returnCode = await session.getReturnCode();
+        if (mounted) {
+          if (ReturnCode.isSuccess(returnCode)) {
+            File resFile = File(outputPath);
+            if (await resFile.exists()) {
+              setState(() {
+                outVideo = resFile;
+                load = false;
+              });
+              return;
+            }
+          }
+          // Jika gagal/batal
           setState(() => load = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Gagal memproses video, silakan coba lagi.")),
+          );
         }
-      }
+      });
+
     } catch (e) {
       if (mounted) setState(() => load = false);
     }
@@ -316,7 +322,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
             ),
           ),
 
-          // GLOBE CONTAINER - TRANSPARENT BACKGROUND
+          // GLOBE CONTAINER
           Positioned(
             top: 70,
             left: w / 2 - 150,
@@ -324,7 +330,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
               width: 300,
               height: 300,
               decoration: BoxDecoration(
-                color: Colors.transparent, // FIX: Transparent Container
+                color: Colors.transparent,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.amber, width: 2),
               ),
@@ -396,13 +402,19 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           onPressed: load ? null : buatMp4,
-                          icon: const Icon(Icons.video_file),
-                          label: Text(load ? "SEDANG MERENDER..." : "BUAT MP4", style: const TextStyle(fontSize: 11)),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent, foregroundColor: Colors.black),
+                          icon: load 
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                              : const Icon(Icons.video_file),
+                          label: Text(load ? "SEDANG MERENDER MP4..." : "BUAT MP4", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: load ? Colors.grey : Colors.greenAccent, 
+                            foregroundColor: Colors.black
+                          ),
                         ),
                       ),
+                      // TOMBOL SHARE WA DENGAN AMAN
                       if (outVideo != null) ...[
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
@@ -413,7 +425,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                               );
                             },
                             icon: const Icon(Icons.share),
-                            label: const Text("SHARE KE WA STATUS", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                            label: const Text("SHARE KE WA STATUS", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                             style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
                           ),
                         ),
