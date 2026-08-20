@@ -47,7 +47,7 @@ jobs:
           # Mencegah peringatan AGP & compileSdk 35
           echo "android.suppressUnsupportedCompileSdk=35" >> android/gradle.properties
 
-      - name: PATCH Plugins & App (Manifest, CMake, Kotlin & JVM Target Fix)
+            - name: PATCH Plugins & App (Manifest, CMake, Kotlin, JVM Target & CompileSDK Fix)
         run: |
           PUB_DIR=/home/runner/.pub-cache/hosted/pub.dev
           
@@ -55,26 +55,32 @@ jobs:
           echo "Clearing usang package attributes from all plugin manifests..."
           find $PUB_DIR -type f -name "AndroidManifest.xml" -exec sed -i -E 's/package="[^"]*"//g' {} +
 
-          # 2. Enforce JVM Target 17 secara konsisten di seluruh Gradle & App
+          # 2. FIX lStar Error: Force compileSdkVersion / compileSdk ke 34 di seluruh plugin
+          echo "Forcing compileSdkVersion to 34 for all plugins..."
+          find $PUB_DIR -type f -name "build.gradle" -exec sed -i -E 's/compileSdkVersion [0-9]+/compileSdkVersion 34/g' {} +
+          find $PUB_DIR -type f -name "build.gradle" -exec sed -i -E 's/compileSdk [0-9]+/compileSdk 34/g' {} +
+
+          # 3. Enforce JVM Target 17 secara konsisten di seluruh Gradle & App
           echo "Enforcing Java 17 target across all gradle files..."
           find $PUB_DIR android -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -exec sed -i 's/jvmTarget = "1.8"/jvmTarget = "17"/g' {} +
           find $PUB_DIR android -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -exec sed -i "s/jvmTarget = '1.8'/jvmTarget = '17'/g" {} +
           find $PUB_DIR android -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -exec sed -i 's/JavaVersion.VERSION_1_8/JavaVersion.VERSION_17/g' {} +
 
-          # 3. Patch CMake versi flutter_angle
+          # 4. Patch CMake versi flutter_angle
           ANGLE=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_angle-*" | head -n 1)
           if [ -n "$ANGLE" ] && [ -d "$ANGLE" ]; then
             find $ANGLE -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3.31.4/3.22.1/g' {} +
             find $ANGLE -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3\.31/3.22.1/g' {} +
           fi
 
-          # 4. Patch CMake & Kotlin version (1.3.61 -> 1.9.22) milik flutter_gl
+          # 5. Patch CMake & Kotlin version (1.3.61 -> 1.9.22) milik flutter_gl
           GL=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_gl-*" | head -n 1)
           if [ -n "$GL" ] && [ -d "$GL" ]; then
             echo "Patching flutter_gl in $GL"
             find $GL -type f -name "build.gradle" -exec sed -i 's/1.3.61/1.9.22/g' {} +
             find $GL -type f \( -name "build.gradle" -o -name "CMakeLists.txt" \) -exec sed -i 's/3.31.4/3.22.1/g' {} +
           fi
+
 
       - name: Copy Flutter GL AAR Dependencies
         run: |
