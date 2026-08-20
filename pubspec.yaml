@@ -1,7 +1,6 @@
 name: sponsorbabeinfogawat
 environment:
   sdk: '>=3.7.0 <4.0.0'
-name: sponsorbabeinfogawat
 dependencies:
   flutter:
     sdk: flutter
