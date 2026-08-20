@@ -107,10 +107,21 @@ jobs:
           cd android
           ./gradlew assembleRelease --warning-mode none
 
-      - name: Rename APK
+            - name: Rename APK
         run: |
           mkdir -p build/app/outputs/flutter-apk/
-          mv android/app/build/outputs/apk/release/app-release.apk build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
+          
+          # Cari file APK release hasil build secara dinamis
+          APK_PATH=$(find android/app/build/outputs/apk/release/ -name "*.apk" | head -n 1)
+          
+          if [ -f "$APK_PATH" ]; then
+            echo "Menemukan APK di: $APK_PATH"
+            cp "$APK_PATH" build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
+          else
+            echo "APK tidak ditemukan di folder android, mencari di folder build root..."
+            find build/ -name "*.apk"
+            exit 1
+          fi
 
       - name: Release APK
         uses: softprops/action-gh-release@v2
