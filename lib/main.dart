@@ -322,7 +322,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                     border: Border.all(color: Colors.amber),
                   ),
                   child: Column(
-                    mainAxisSize: MinAxisSize.min,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       if (audioFile != null)
                         AudioFileWaveforms(
