@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
 import 'package:three_js/three_js.dart' as three;
 import 'package:flutter_gl/flutter_gl.dart';
 import 'package:file_picker/file_picker.dart';
@@ -61,17 +60,17 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
   Future<void> cekIzin() async {
     try {
       final inf = await DeviceInfoPlugin().androidInfo;
-      var st = inf.version.sdkInt >= 33 
-          ? await Permission.audio.request() 
-          : await Permission.storage.request();
-      if (st.isGranted && mounted) {
-        setState(() => perm = true);
+      if (inf.version.sdkInt >= 33) {
+        await Permission.audio.request();
+        await Permission.photos.request();
+      } else {
+        await Permission.storage.request();
       }
+      if (mounted) setState(() => perm = true);
     } catch (_) {}
   }
 
   Future<void> initGlobe() async {
-    // Jeda 300ms memastikan Native EGL Surface Android sudah siap 100%
     await Future.delayed(const Duration(milliseconds: 300));
 
     try {
@@ -81,7 +80,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
 
       await flutterGl.initialize(options: {
         "antialias": true,
-        "alpha": false,
+        "alpha": true, // FIX: Izinkan Alpha agar transparan
         "width": renderWidth,
         "height": renderHeight,
         "dpr": dpr,
@@ -90,13 +89,10 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
 
       await flutterGl.prepareContext();
 
-      if (flutterGl.textureId == null) {
-        debugPrint("EGL Texture ID gagal didapatkan!");
-        return;
-      }
+      if (flutterGl.textureId == null) return;
 
       scene = three.Scene();
-      scene.background = three.Color(0xEEEEEE);
+      // FIX: Hapus scene.background agar tidak menutup gambar background belakang
 
       camera = three.PerspectiveCamera(45, 1, 0.1, 1000);
       camera.position.z = 2.8;
@@ -104,14 +100,14 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       renderer = three.WebGLRenderer({
         "gl": flutterGl.gl,
         "antialias": true,
-        "alpha": false,
+        "alpha": true, // FIX: Izinkan alpha transparan pada WebGL
         "preserveDrawingBuffer": true,
       });
 
       renderer.setSize(renderWidth.toDouble(), renderHeight.toDouble(), false);
-      renderer.setClearColor(three.Color(0xEEEEEE), 1);
+      renderer.setClearColor(three.Color(0x000000), 0); // FIX: Set background WebGL transparan total
 
-      // Setup Lighting
+      // Lighting
       var light = three.DirectionalLight(0xffffff, 1.2);
       light.position.setValues(5, 3, 5);
       scene.add(light);
@@ -120,7 +116,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       pointLight.position.setValues(-3, -2, 3);
       scene.add(pointLight);
 
-      // Geometri & Material Emas Standar (Fallback jika tekstur telat)
+      // Geometri & Material Emas Default
       var geo = three.SphereGeometry(1, 64, 64);
       var mat = three.MeshStandardMaterial()
         ..color = three.Color(0xFFD700)
@@ -131,7 +127,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       globe!.position.y = 0.3;
       scene.add(globe!);
 
-      // Akar Hitam 3D (Root Rings)
+      // Akar Hitam 3D
       var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 80);
       var rootMat = three.MeshBasicMaterial()..color = three.Color(0x111111);
 
@@ -143,37 +139,33 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         scene.add(torus);
       }
 
-      // Langsung munculkan globe ke UI & jalankan animasi tanpa menunggu eksekusi file gambar
       if (mounted) {
         setState(() => inited = true);
         startAnimation();
       }
 
-      // Muat tekstur secara terpisah dan aman
       loadTextureSafe(mat);
 
     } catch (e) {
-      debugPrint("Init Globe Fatal Error: $e");
+      debugPrint("Init Globe Error: $e");
     }
   }
 
   Future<void> loadTextureSafe(three.MeshStandardMaterial mat) async {
-  try {
-    final loader = three.TextureLoader();
-    // Menggunakan fromAsset langsung sesuai API three_js
-    var tex = await loader.fromAsset('assets/images/babe_gold.jpg');
-    
-    if (tex != null && mounted) {
-      tex.wrapS = three.RepeatWrapping;
-      tex.wrapT = three.RepeatWrapping;
-      tex.flipY = false;
-      mat.map = tex;
-      mat.needsUpdate = true;
+    try {
+      final loader = three.TextureLoader();
+      var tex = await loader.fromAsset('assets/images/babe_gold.jpg');
+      if (tex != null && mounted) {
+        tex.wrapS = three.RepeatWrapping;
+        tex.wrapT = three.RepeatWrapping;
+        tex.flipY = false;
+        mat.map = tex;
+        mat.needsUpdate = true;
+      }
+    } catch (e) {
+      debugPrint("Asset babe_gold.jpg gagal dimuat: $e");
     }
-  } catch (e) {
-    debugPrint("Asset babe_gold.jpg gagal dimuat. Error: $e");
   }
-}
 
   void startAnimation() {
     _ticker?.stop();
@@ -224,14 +216,26 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       pickAudio();
       return;
     }
-    setState(() => load = true);
+    setState(() {
+      load = true;
+      outVideo = null; // Reset video sebelumnya
+    });
+
     try {
-      final dir = await getTemporaryDirectory();
-      String trim = "${dir.path}/trim.m4a";
+      final dir = await getApplicationDocumentsDirectory(); // FIX: Gunakan Documents Directory agar aman di Android
+      String trim = "${dir.path}/trim_${DateTime.now().millisecondsSinceEpoch}.m4a";
       String out = "${dir.path}/BABE-INFO-${DateTime.now().millisecondsSinceEpoch}.mp4";
 
-      await FFmpegKit.execute("-y -ss $s -t ${e - s} -i \"${audioFile!.path}\" -c:a aac \"$trim\"");
+      // 1. Potong Audio
+      var session1 = await FFmpegKit.execute("-y -ss $s -t ${e - s} -i \"${audioFile!.path}\" -c:a aac \"$trim\"");
+      var code1 = await session1.getReturnCode();
 
+      if (code1 == null || !code1.isValueSuccess()) {
+        if (mounted) setState(() => load = false);
+        return;
+      }
+
+      // 2. Siapkan Gambar BG
       String bgPath = "";
       if (bgFile != null) {
         bgPath = bgFile!.path;
@@ -242,13 +246,15 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         bgPath = f.path;
       }
 
-      var st = await FFmpegKit.execute(
-        "-y -loop 1 -i \"$bgPath\" -i \"$trim\" -c:v libx264 -tune stillimage -c:a aac -pix_fmt yuv420p -shortest -t ${e - s} \"$out\""
+      // 3. Render MP4
+      var session2 = await FFmpegKit.execute(
+        "-y -loop 1 -i \"$bgPath\" -i \"$trim\" -c:v libx264 -tune stillimage -c:a aac -b:a 192k -pix_fmt yuv420p -shortest -t ${e - s} \"$out\""
       );
 
-      var returnCode = await st.getReturnCode();
+      var code2 = await session2.getReturnCode();
+
       if (mounted) {
-        if (returnCode != null && returnCode.isValueSuccess()) {
+        if (code2 != null && code2.isValueSuccess()) {
           setState(() {
             outVideo = File(out);
             load = false;
@@ -310,6 +316,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
             ),
           ),
 
+          // GLOBE CONTAINER - TRANSPARENT BACKGROUND
           Positioned(
             top: 70,
             left: w / 2 - 150,
@@ -317,12 +324,11 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
               width: 300,
               height: 300,
               decoration: BoxDecoration(
-                color: const Color(0xFFEEEEEE),
-                borderRadius: BorderRadius.circular(150),
+                color: Colors.transparent, // FIX: Transparent Container
+                shape: BoxShape.circle,
                 border: Border.all(color: Colors.amber, width: 2),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(150),
+              child: ClipOval(
                 child: inited && flutterGl.textureId != null
                     ? RepaintBoundary(child: Texture(textureId: flutterGl.textureId!))
                     : const Center(child: CircularProgressIndicator(color: Colors.amber)),
@@ -385,26 +391,33 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                           ),
                         ],
                       ),
+                      const SizedBox(height: 6),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           onPressed: load ? null : buatMp4,
                           icon: const Icon(Icons.video_file),
-                          label: Text(load ? "RENDER..." : "BUAT MP4", style: const TextStyle(fontSize: 11)),
+                          label: Text(load ? "SEDANG MERENDER..." : "BUAT MP4", style: const TextStyle(fontSize: 11)),
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.greenAccent, foregroundColor: Colors.black),
                         ),
                       ),
-                      if (outVideo != null)
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            Share.shareXFiles(
-                              [XFile(outVideo!.path)],
-                            );
-                          },
-                          icon: const Icon(Icons.share),
-                          label: const Text("SHARE KE WA STATUS", style: TextStyle(fontSize: 11)),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                      if (outVideo != null) ...[
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Share.shareXFiles(
+                                [XFile(outVideo!.path)],
+                                text: 'BABE.INFO HERU WINGCHUN',
+                              );
+                            },
+                            icon: const Icon(Icons.share),
+                            label: const Text("SHARE KE WA STATUS", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                          ),
                         ),
+                      ]
                     ],
                   ),
                 ),
