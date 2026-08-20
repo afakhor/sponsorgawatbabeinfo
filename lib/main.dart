@@ -1,5 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:three_js/three_js.dart' as three;
+import 'package:flutter_gl/flutter_gl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
@@ -8,7 +11,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 
 void main() => runApp(const MyApp());
 
@@ -32,8 +34,15 @@ class GlobeLearnPage extends StatefulWidget {
   State<GlobeLearnPage> createState() => _GlobeLearnPageState();
 }
 
-class _GlobeLearnPageState extends State<GlobeLearnPage> {
-  late final WebViewController _webViewController;
+class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProviderStateMixin {
+  late FlutterGlPlugin flutterGl;
+  three.WebGLRenderer? renderer;
+  late three.Scene scene;
+  late three.PerspectiveCamera camera;
+  three.Mesh? globe;
+  
+  bool inited = false;
+  Ticker? _ticker;
 
   File? audioFile, bgFile, outVideo;
   final player = PlayerController();
@@ -43,15 +52,15 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
   @override
   void initState() {
     super.initState();
+    flutterGl = FlutterGlPlugin();
     cekIzin();
-    _initWebView();
-  }
 
-  void _initWebView() {
-    _webViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0x00000000)) // Transparan
-      ..loadFlutterAsset('assets/web/babe.html');
+    // Beri jeda kecil agar context UI terpasang sempurna sebelum GL diinisialisasi
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) initGlobe();
+      });
+    });
   }
 
   Future<void> cekIzin() async {
@@ -65,6 +74,137 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
       }
       if (mounted) setState(() => perm = true);
     } catch (_) {}
+  }
+
+  Future<void> initGlobe() async {
+    try {
+      if (!mounted || inited) return;
+
+      // Gunakan ukuran fixed integer pixel agar tidak terjadi kegagalan buffer di Android
+      int renderWidth = 512;
+      int renderHeight = 512;
+
+      Map<String, dynamic> options = {
+        "antialias": true,
+        "alpha": true,
+        "width": renderWidth,
+        "height": renderHeight,
+        "dpr": 1.0,
+        "preserveDrawingBuffer": true,
+      };
+
+      await flutterGl.initialize(options: options);
+      await flutterGl.prepareContext();
+
+      if (flutterGl.gl == null || flutterGl.textureId == null) {
+        debugPrint("GL Context/Texture ID belum siap, mencoba ulang...");
+        if (mounted) {
+          Future.delayed(const Duration(milliseconds: 500), () => initGlobe());
+        }
+        return;
+      }
+
+      // 1. Buat Scene & Camera
+      scene = three.Scene();
+      camera = three.PerspectiveCamera(45, 1, 0.1, 1000);
+      camera.position.z = 2.8;
+
+      // 2. Inisialisasi WebGL Renderer
+      renderer = three.WebGLRenderer({
+        "gl": flutterGl.gl,
+        "antialias": true,
+        "alpha": true,
+        "preserveDrawingBuffer": true,
+      });
+
+      renderer!.setSize(renderWidth.toDouble(), renderHeight.toDouble(), false);
+      renderer!.setClearColor(three.Color(0x000000), 0);
+
+      // 3. Pencahayaan Emas
+      var dirLight = three.DirectionalLight(0xffffff, 1.2);
+      dirLight.position.setValues(5, 3, 5);
+      scene.add(dirLight);
+
+      scene.add(three.AmbientLight(0xffffff, 0.8));
+
+      var pointLight = three.PointLight(0xFFD700, 0.8, 10);
+      pointLight.position.setValues(-3, -2, 3);
+      scene.add(pointLight);
+
+      // 4. Geometri & Material Emas Default (Warna emas langsung muncul meski tekstur belum keload)
+      var geo = three.SphereGeometry(1, 64, 64);
+      var mat = three.MeshStandardMaterial()
+        ..color = three.Color(0xFFD700)
+        ..metalness = 0.8
+        ..roughness = 0.25;
+
+      globe = three.Mesh(geo, mat);
+      globe!.position.y = 0.1;
+      scene.add(globe!);
+
+      // 5. Cincin Hitam 3D
+      var rootGeo = three.TorusGeometry(1.05, 0.02, 12, 100);
+      var rootMat = three.MeshBasicMaterial()..color = three.Color(0x111111);
+
+      for (int i = 0; i < 3; i++) {
+        var torus = three.Mesh(rootGeo, rootMat);
+        torus.rotation.x = i * 1.2;
+        torus.rotation.y = i * 0.8;
+        torus.position.y = 0.1;
+        scene.add(torus);
+      }
+
+      // 6. Tandai inited SEBELUM ticker jalan
+      if (mounted) {
+        setState(() {
+          inited = true;
+        });
+        startAnimation();
+      }
+
+      // 7. Muat Tekstur Emas secara Asinkron
+      loadTextureSafe(mat);
+
+    } catch (e) {
+      debugPrint("Error initGlobe: $e");
+      if (mounted && !inited) {
+        Future.delayed(const Duration(seconds: 1), () => initGlobe());
+      }
+    }
+  }
+
+  Future<void> loadTextureSafe(three.MeshStandardMaterial mat) async {
+    try {
+      final loader = three.TextureLoader();
+      var tex = await loader.fromAsset('assets/images/babe_gold.jpg');
+      if (tex != null && mounted) {
+        tex.wrapS = three.RepeatWrapping;
+        tex.wrapT = three.RepeatWrapping;
+        tex.flipY = false;
+        mat.map = tex;
+        mat.needsUpdate = true;
+      }
+    } catch (e) {
+      debugPrint("Gagal muat tekstur: $e");
+    }
+  }
+
+  void startAnimation() {
+    _ticker?.stop();
+    _ticker?.dispose();
+    _ticker = createTicker((elapsed) {
+      if (!mounted || globe == null || renderer == null || !inited) return;
+      
+      // Rotasi Globe
+      globe!.rotation.y += 0.008;
+      
+      // Render Frame
+      renderer!.render(scene, camera);
+      
+      // Push frame ke Texture Flutter Native
+      flutterGl.updateTexture(renderer!.getContext());
+    });
+    _ticker!.start();
   }
 
   Future<void> pickAudio() async {
@@ -115,7 +255,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     });
 
     try {
-      // Gunakan getApplicationDocumentsDirectory agar tidak terkendala permission Android 11+
       final appDir = await getApplicationDocumentsDirectory();
       final timeStamp = DateTime.now().millisecondsSinceEpoch;
 
@@ -128,7 +267,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
       double durasi = e - s;
       if (durasi <= 0) durasi = 5;
 
-      // 1. Potong Audio
       var trimSession = await FFmpegKit.execute(
         "-y -ss $s -t $durasi -i \"${tempAudioInput.path}\" -c:a aac \"$trimAudioPath\""
       );
@@ -144,7 +282,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
         return;
       }
 
-      // 2. Siapkan Background Image
       String bgPath = "";
       if (bgFile != null) {
         File tempBgInput = File("${appDir.path}/in_bg_$timeStamp.jpg");
@@ -157,7 +294,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
         bgPath = f.path;
       }
 
-      // 3. Render Video MP4
       String cmd = "-y -loop 1 -i \"$bgPath\" -i \"$trimAudioPath\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a copy -shortest -t $durasi \"$outputPath\"";
 
       var videoSession = await FFmpegKit.execute(cmd);
@@ -242,7 +378,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
             ),
           ),
 
-          // GLOBE CONTAINER (WEBVIEW 3D THREE.JS)
+          // GLOBE CONTAINER (FLUTTER GL TEXTURE)
           Positioned(
             top: MediaQuery.of(context).padding.top + 60,
             left: w / 2 - 140,
@@ -255,7 +391,9 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
                 border: Border.all(color: Colors.amber, width: 2),
               ),
               child: ClipOval(
-                child: WebViewWidget(controller: _webViewController),
+                child: inited && flutterGl.textureId != null
+                    ? Texture(textureId: flutterGl.textureId!)
+                    : const Center(child: CircularProgressIndicator(color: Colors.amber)),
               ),
             ),
           ),
@@ -373,7 +511,13 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
 
   @override
   void dispose() {
+    _ticker?.stop();
+    _ticker?.dispose();
     player.dispose();
+    try {
+      renderer?.dispose();
+      flutterGl.dispose();
+    } catch (_) {}
     super.dispose();
   }
 }
