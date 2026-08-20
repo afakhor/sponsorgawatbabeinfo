@@ -72,6 +72,9 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
   }
 
   Future<void> initGlobe() async {
+    // 1. Beri jeda 100ms agar Native Surface EGL benar-benar siap di APK Release
+    await Future.delayed(const Duration(milliseconds: 100));
+
     try {
       double dpr = MediaQuery.of(context).devicePixelRatio;
       int renderWidth = (300 * dpr).toInt();
@@ -83,9 +86,16 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         "width": renderWidth,
         "height": renderHeight,
         "dpr": dpr,
-        "preserveDrawingBuffer": true, // PREVENT BLINKING/FLICKER
+        "preserveDrawingBuffer": true,
       });
+      
       await flutterGl.prepareContext();
+
+      // Pastikan Texture ID valid sebelum merender UI
+      if (flutterGl.textureId == null) {
+        debugPrint("EGL Texture ID gagal didapatkan!");
+        return;
+      }
 
       scene = three.Scene();
       scene.background = three.Color(0xEEEEEE);
@@ -97,13 +107,13 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         "gl": flutterGl.gl,
         "antialias": true,
         "alpha": false,
-        "preserveDrawingBuffer": true, // PREVENT BLINKING/FLICKER
+        "preserveDrawingBuffer": true,
       });
 
       renderer.setSize(renderWidth.toDouble(), renderHeight.toDouble(), false);
       renderer.setClearColor(three.Color(0xEEEEEE), 1);
 
-      // Pencahayaan
+      // Setup Lighting
       var light = three.DirectionalLight(0xffffff, 1.2);
       light.position.setValues(5, 3, 5);
       scene.add(light);
@@ -112,22 +122,12 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       pointLight.position.setValues(-3, -2, 3);
       scene.add(pointLight);
 
-      // Geometri & Tekstur
+      // Geometri & Material Safety
       var geo = three.SphereGeometry(1, 64, 64);
-      three.Texture? tex;
-      try {
-        tex = await three.TextureLoader().fromAsset("assets/images/babe_gold.jpg");
-        if (tex != null) {
-          tex.wrapS = three.RepeatWrapping;
-          tex.wrapT = three.RepeatWrapping;
-          tex.flipY = false;
-        }
-      } catch (_) {
-        // Fallback jika aset belum termuat sempurna
-      }
-
+      
+      // Buat material standar dulu (Fallback warna Emas jika tekstur gagal/delay)
       var mat = three.MeshStandardMaterial()
-        ..map = tex
+        ..color = three.Color(0xFFD700) // Warna dasar emas
         ..metalness = 0.75
         ..roughness = 0.28;
 
@@ -152,8 +152,22 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         setState(() => inited = true);
         startAnimation();
       }
+
+      // Load tekstur secara terpisah tanpa memblokir rendering utama
+      three.TextureLoader().fromAsset("assets/images/babe_gold.jpg").then((tex) {
+        if (tex != null && mounted) {
+          tex.wrapS = three.RepeatWrapping;
+          tex.wrapT = three.RepeatWrapping;
+          tex.flipY = false;
+          mat.map = tex;
+          mat.needsUpdate = true; // Sinyalkan Three.js untuk update tekstur
+        }
+      }).catchError((err) {
+        debugPrint("Texture load bypass: $err");
+      });
+
     } catch (e) {
-      debugPrint("OpenGL Init Warning: $e");
+      debugPrint("Init Globe Fatal Error: $e");
     }
   }
 
@@ -308,7 +322,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                     border: Border.all(color: Colors.amber),
                   ),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisSize: MinAxisSize.min,
                     children: [
                       if (audioFile != null)
                         AudioFileWaveforms(
