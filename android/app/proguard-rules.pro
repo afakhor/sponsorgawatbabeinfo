@@ -1,3 +1,6 @@
+# App Native Package Protection
+-keep class com.example.sponsorbabeinfogawat.** { *; }
+
 # Flutter Native Wrapper Protection
 -keep class io.flutter.app.** { *; }
 -keep class io.flutter.plugin.** { *; }
