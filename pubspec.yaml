@@ -28,7 +28,7 @@ dependency_overrides:
   flutter_lints: ^3.0.0
 
 flutter:
-  uses-material-design: true
   assets:
-    - assets/images/
+    - assets/images/babe_gold.jpg
+    - assets/images/bg.jpg
     - web/babe.html
