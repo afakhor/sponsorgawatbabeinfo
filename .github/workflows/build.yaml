@@ -47,7 +47,7 @@ jobs:
           # Mencegah peringatan AGP & compileSdk 35
           echo "android.suppressUnsupportedCompileSdk=35" >> android/gradle.properties
 
-            - name: PATCH Plugins & App (Manifest, CMake, Kotlin, JVM Target & CompileSDK Fix)
+      - name: PATCH Plugins & App (Manifest, CMake, Kotlin, JVM Target & CompileSDK Fix)
         run: |
           PUB_DIR=/home/runner/.pub-cache/hosted/pub.dev
           
