@@ -29,7 +29,6 @@ android {
         }
     }
 
-    // --- PERUBAHAN DI SINI (Ubah 1.8 ke 17) ---
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
@@ -39,7 +38,6 @@ android {
     kotlinOptions { 
         jvmTarget = "17" 
     }
-    // ------------------------------------------
 
     defaultConfig {
         applicationId = "com.babe.info"
@@ -72,5 +70,4 @@ flutter {
 dependencies {
     implementation("com.google.android.material:material:1.9.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar", "*.aar"))))
 }
