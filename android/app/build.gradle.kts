@@ -13,19 +13,27 @@ repositories {
 }
 
 android {
-    namespace = "com.babe.info"
+    namespace = "com.example.sponsorbabeinfogawat"
     compileSdk = 35
     ndkVersion = "25.1.8937393"
 
     packaging {
         resources {
-            excludes += "META-INF/*"
+            excludes += listOf(
+                "META-INF/*",
+                "META-INF/licenses/*",
+                "**/LICENSE*"
+            )
         }
         jniLibs {
             pickFirsts += listOf(
                 "**/libc++_shared.so",
-                "**/libjShared.so"
+                "**/libjShared.so",
+                "**/libangle.so",
+                "**/libEGL.so",
+                "**/libGLESv2.so"
             )
+            useLegacyPackaging = true
         }
     }
 
@@ -40,7 +48,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.babe.info"
+        applicationId = "com.example.sponsorbabeinfogawat"
         minSdk = 24
         targetSdk = 35
         versionCode = flutter.versionCode
@@ -56,13 +64,13 @@ android {
             // Matikan shrink/minify jika tidak memerlukan obfuscation berat
             isMinifyEnabled = false
             isShrinkResources = false
-            
+
             // Hubungkan ProGuard Rules
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            
+
             signingConfig = signingConfigs.getByName("debug")
             ndk {
                 debugSymbolLevel = "FULL"
