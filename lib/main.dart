@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:three_js/three_js.dart' as three;
 import 'package:flutter_gl/flutter_gl.dart';
 import 'package:file_picker/file_picker.dart';
@@ -66,14 +67,12 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       if (st.isGranted && mounted) {
         setState(() => perm = true);
       }
-    } catch (_) {
-      // Fallback aman jika gagal baca info perangkat
-    }
+    } catch (_) {}
   }
 
   Future<void> initGlobe() async {
-    // 1. Beri jeda 100ms agar Native Surface EGL benar-benar siap di APK Release
-    await Future.delayed(const Duration(milliseconds: 100));
+    // FIX 1: Beri waktu jeda 300ms agar EGL Native Surface benar-benar siap
+    await Future.delayed(const Duration(milliseconds: 300));
 
     try {
       double dpr = MediaQuery.of(context).devicePixelRatio;
@@ -88,10 +87,9 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         "dpr": dpr,
         "preserveDrawingBuffer": true,
       });
-      
+
       await flutterGl.prepareContext();
 
-      // Pastikan Texture ID valid sebelum merender UI
       if (flutterGl.textureId == null) {
         debugPrint("EGL Texture ID gagal didapatkan!");
         return;
@@ -122,12 +120,10 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       pointLight.position.setValues(-3, -2, 3);
       scene.add(pointLight);
 
-      // Geometri & Material Safety
+      // Geometri & Material Emas Standar
       var geo = three.SphereGeometry(1, 64, 64);
-      
-      // Buat material standar dulu (Fallback warna Emas jika tekstur gagal/delay)
       var mat = three.MeshStandardMaterial()
-        ..color = three.Color(0xFFD700) // Warna dasar emas
+        ..color = three.Color(0xFFD700)
         ..metalness = 0.75
         ..roughness = 0.28;
 
@@ -137,8 +133,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
 
       // Akar Hitam 3D
       var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 80);
-      var rootMat = three.MeshBasicMaterial()
-        ..color = three.Color(0x111111);
+      var rootMat = three.MeshBasicMaterial()..color = three.Color(0x111111);
 
       for (int i = 0; i < 3; i++) {
         var torus = three.Mesh(rootGeo, rootMat);
@@ -148,26 +143,36 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         scene.add(torus);
       }
 
+      // FIX 2: Langsung aktifkan tampilan UI begitu Geometri 3D siap di memori EGL
       if (mounted) {
         setState(() => inited = true);
         startAnimation();
       }
 
-      // Load tekstur secara terpisah tanpa memblokir rendering utama
-      three.TextureLoader().fromAsset("assets/images/babe_gold.jpg").then((tex) {
-        if (tex != null && mounted) {
-          tex.wrapS = three.RepeatWrapping;
-          tex.wrapT = three.RepeatWrapping;
-          tex.flipY = false;
-          mat.map = tex;
-          mat.needsUpdate = true; // Sinyalkan Three.js untuk update tekstur
-        }
-      }).catchError((err) {
-        debugPrint("Texture load bypass: $err");
-      });
+      // FIX 3: Muat tekstur via ByteData secara aman tanpa memblokir siklus utama
+      loadTextureSafe(mat);
 
     } catch (e) {
       debugPrint("Init Globe Fatal Error: $e");
+    }
+  }
+
+  Future<void> loadTextureSafe(three.MeshStandardMaterial mat) async {
+    try {
+      final ByteData data = await rootBundle.load('assets/images/babe_gold.jpg');
+      final Uint8List bytes = data.buffer.asUint8List();
+      
+      final loader = three.TextureLoader();
+      var tex = await loader.fromList(bytes);
+      if (tex != null && mounted) {
+        tex.wrapS = three.RepeatWrapping;
+        tex.wrapT = three.RepeatWrapping;
+        tex.flipY = false;
+        mat.map = tex;
+        mat.needsUpdate = true;
+      }
+    } catch (e) {
+      debugPrint("Asset babe_gold.jpg tidak ditemukan/gagal dimuat. Menggunakan warna Emas default. Error: $e");
     }
   }
 
@@ -273,8 +278,41 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       body: Stack(
         children: [
           Positioned.fill(child: bgWidget),
+          
+          // WATERMARK TOP LEFT - LUXURIOUS GOLD 16PX
+          SafeArea(
+            child: Positioned(
+              top: 12,
+              left: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5), width: 1),
+                ),
+                child: const Text(
+                  "BABE.INFO HERU WINGCHUN",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFFFFD700),
+                    letterSpacing: 1.5,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 4,
+                        color: Colors.black,
+                        offset: Offset(1, 1),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
           Positioned(
-            top: 40,
+            top: 70,
             left: w / 2 - 150,
             child: Container(
               width: 300,
@@ -292,23 +330,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
               ),
             ),
           ),
-          Positioned(
-            top: 360,
-            left: 0,
-            right: 0,
-            child: Column(
-              children: [
-                const Text("BABE.INFO", style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Colors.amber, letterSpacing: 2)),
-                const Text("HeruWingchun", style: TextStyle(fontSize: 14, color: Colors.white70)),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)),
-                  child: const Text("GLOBE BABE.INFO - TEXTURE babe_gold.jpg", style: TextStyle(fontSize: 10, color: Colors.black, fontWeight: FontWeight.bold)),
-                )
-              ],
-            ),
-          ),
+
           SafeArea(
             child: Align(
               alignment: Alignment.bottomCenter,
@@ -378,7 +400,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                           onPressed: () {
                             Share.shareXFiles(
                               [XFile(outVideo!.path)],
-                              text: "Mainkan Globe 3D Interaktif BABE.INFO di sini:\nhttps://afakhor.github.io/sponsorgawatbabeinfo/babe.html",
                             );
                           },
                           icon: const Icon(Icons.share),
