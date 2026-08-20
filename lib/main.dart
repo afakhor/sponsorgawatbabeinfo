@@ -19,7 +19,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext c) => MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: ThemeData.dark(),
+        theme: ThemeData.dark().copyWith(
+          scaffoldBackgroundColor: Colors.transparent,
+        ),
         home: const GlobeLearnPage(),
       );
 }
@@ -72,8 +74,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
   }
 
   Future<void> initGlobe() async {
-    await Future.delayed(const Duration(milliseconds: 600));
-
     try {
       if (!mounted) return;
 
@@ -91,29 +91,25 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       };
 
       await flutterGl.initialize(options: options);
+      await Future.delayed(const Duration(milliseconds: 200));
 
-      int retryCount = 0;
-      while (flutterGl.gl == null && retryCount < 10) {
-        await Future.delayed(const Duration(milliseconds: 100));
-        await flutterGl.prepareContext();
-        retryCount++;
-      }
+      // Menyiapkan GL Context
+      await flutterGl.prepareContext();
 
-      if (flutterGl.textureId == null) {
-        await Future.delayed(const Duration(milliseconds: 300));
-      }
-
-      if (flutterGl.textureId == null) {
+      if (flutterGl.gl == null) {
+        debugPrint("GL Context null, mencoba ulang...");
         if (mounted && !inited) {
           Future.delayed(const Duration(milliseconds: 500), () => initGlobe());
         }
         return;
       }
 
+      // 3. Buat Scene & Camera
       scene = three.Scene();
       camera = three.PerspectiveCamera(45, 1, 0.1, 1000);
       camera.position.z = 2.8;
 
+      // 4. Inisialisasi Renderer
       renderer = three.WebGLRenderer({
         "gl": flutterGl.gl,
         "antialias": true,
@@ -124,6 +120,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       renderer.setSize(renderWidth.toDouble(), renderHeight.toDouble(), false);
       renderer.setClearColor(three.Color(0x000000), 0);
 
+      // 5. Pencahayaan Emas
       var light = three.DirectionalLight(0xffffff, 1.2);
       light.position.setValues(5, 3, 5);
       scene.add(light);
@@ -133,6 +130,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       pointLight.position.setValues(-3, -2, 3);
       scene.add(pointLight);
 
+      // 6. Geometri & Material Emas
       var geo = three.SphereGeometry(1, 64, 64);
       var mat = three.MeshStandardMaterial()
         ..color = three.Color(0xFFD700)
@@ -143,6 +141,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       globe!.position.y = 0.3;
       scene.add(globe!);
 
+      // 7. Cincin Hitam 3D
       var rootGeo = three.TorusGeometry(1.05, 0.02, 8, 80);
       var rootMat = three.MeshBasicMaterial()..color = three.Color(0x111111);
 
@@ -164,6 +163,7 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       loadTextureSafe(mat);
 
     } catch (e) {
+      debugPrint("Error initGlobe: $e");
       if (mounted && !inited) {
         Future.delayed(const Duration(seconds: 1), () => initGlobe());
       }
@@ -247,7 +247,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       final tempDir = await getTemporaryDirectory();
       final timeStamp = DateTime.now().millisecondsSinceEpoch;
 
-      // Copy file audio ke direktori lokal internal agar tidak kena batasan akses/izin file eksternal
       File tempAudioInput = File("${tempDir.path}/in_audio_$timeStamp.mp3");
       await tempAudioInput.writeAsBytes(await audioFile!.readAsBytes());
 
@@ -257,7 +256,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
       double durasi = e - s;
       if (durasi <= 0) durasi = 5;
 
-      // 1. Potong Audio
       var trimSession = await FFmpegKit.execute(
         "-y -ss $s -t $durasi -i \"${tempAudioInput.path}\" -c:a aac \"$trimAudioPath\""
       );
@@ -273,7 +271,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         return;
       }
 
-      // 2. Siapkan Gambar Background
       String bgPath = "";
       if (bgFile != null) {
         File tempBgInput = File("${tempDir.path}/in_bg_$timeStamp.jpg");
@@ -286,7 +283,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
         bgPath = f.path;
       }
 
-      // 3. Render Video MP4
       String cmd = "-y -loop 1 -i \"$bgPath\" -i \"$trimAudioPath\" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a copy -shortest -t $durasi \"$outputPath\"";
 
       var videoSession = await FFmpegKit.execute(cmd);
@@ -304,7 +300,6 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
           }
         }
 
-        // Jika Gagal
         setState(() => load = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Gagal memproses video, silakan coba lagi.")),
@@ -325,45 +320,47 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
   Widget build(BuildContext context) {
     double w = MediaQuery.of(context).size.width;
     Widget bgWidget = bgFile != null 
-        ? Image.file(bgFile!, fit: BoxFit.cover) 
+        ? Image.file(bgFile!, fit: BoxFit.cover, width: double.infinity, height: double.infinity) 
         : Image.asset(
             'assets/images/bg.jpg', 
             fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
             errorBuilder: (context, error, stackTrace) => Container(color: Colors.black),
           );
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
+          // Background Full Screen
           Positioned.fill(child: bgWidget),
 
-          // WATERMARK TOP LEFT - LUXURIOUS GOLD 16PX
-          SafeArea(
-            child: Positioned(
-              top: 12,
-              left: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5), width: 1),
-                ),
-                child: const Text(
-                  "BABE.INFO HERU WINGCHUN",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFFFFD700),
-                    letterSpacing: 1.5,
-                    shadows: [
-                      Shadow(
-                        blurRadius: 4,
-                        color: Colors.black,
-                        offset: Offset(1, 1),
-                      ),
-                    ],
-                  ),
+          // WATERMARK TOP LEFT - LUXURIOUS GOLD
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            left: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.6), width: 1),
+              ),
+              child: const Text(
+                "BABE.INFO HERU WINGCHUN",
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFFFFD700),
+                  letterSpacing: 1.2,
+                  shadows: [
+                    Shadow(
+                      blurRadius: 4,
+                      color: Colors.black,
+                      offset: Offset(1, 1),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -371,11 +368,11 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
 
           // GLOBE CONTAINER
           Positioned(
-            top: 70,
-            left: w / 2 - 150,
+            top: MediaQuery.of(context).padding.top + 60,
+            left: w / 2 - 140,
             child: Container(
-              width: 300,
-              height: 300,
+              width: 280,
+              height: 280,
               decoration: BoxDecoration(
                 color: Colors.transparent,
                 shape: BoxShape.circle,
@@ -383,12 +380,13 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
               ),
               child: ClipOval(
                 child: inited && flutterGl.textureId != null
-                    ? RepaintBoundary(child: Texture(textureId: flutterGl.textureId!))
+                    ? Texture(textureId: flutterGl.textureId!)
                     : const Center(child: CircularProgressIndicator(color: Colors.amber)),
               ),
             ),
           ),
 
+          // BOTTOM CONTROL PANEL
           SafeArea(
             child: Align(
               alignment: Alignment.bottomCenter,
@@ -397,9 +395,9 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
+                    color: Colors.black.withOpacity(0.85),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.amber),
+                    border: Border.all(color: Colors.amber.withOpacity(0.8)),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -409,7 +407,10 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                           size: Size(w - 48, 60),
                           playerController: player,
                           waveformType: WaveformType.long,
-                          playerWaveStyle: const PlayerWaveStyle(fixedWaveColor: Colors.white24, liveWaveColor: Colors.amber),
+                          playerWaveStyle: const PlayerWaveStyle(
+                            fixedWaveColor: Colors.white24, 
+                            liveWaveColor: Colors.amber
+                          ),
                         ),
                       if (audioFile != null)
                         RangeSlider(
@@ -430,7 +431,10 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                               onPressed: pickAudio,
                               icon: const Icon(Icons.music_note),
                               label: Text(audioFile == null ? "AMBIL MUSIK" : "GANTI", style: const TextStyle(fontSize: 11)),
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.white, 
+                                foregroundColor: Colors.black
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -439,7 +443,10 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                               onPressed: pickBg,
                               icon: const Icon(Icons.image),
                               label: const Text("BG", style: TextStyle(fontSize: 11)),
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.amber, 
+                                foregroundColor: Colors.black
+                              ),
                             ),
                           ),
                         ],
@@ -452,7 +459,10 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> with SingleTickerProvid
                           icon: load 
                               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
                               : const Icon(Icons.video_file),
-                          label: Text(load ? "SEDANG MERENDER MP4..." : "BUAT MP4", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          label: Text(
+                            load ? "SEDANG MERENDER MP4..." : "BUAT MP4", 
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)
+                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: load ? Colors.grey : Colors.greenAccent, 
                             foregroundColor: Colors.black
