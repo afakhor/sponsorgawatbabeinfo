@@ -75,7 +75,7 @@ jobs:
           fi
       # -----------------------------------------------------------------------
 
-      - name: Copy Flutter GL AAR Dependencies
+      - name: Copy Flutter GL AAR Dependencies (Clean Duplicates)
         run: |
           mkdir -p android/app/libs
           mkdir -p android/app/libs/aars
@@ -84,8 +84,13 @@ jobs:
           find $HOME/.pub-cache /opt/hostedtoolcache -name "*.aar" -exec cp {} android/app/libs/ \; 2>/dev/null || true
           find $HOME/.pub-cache /opt/hostedtoolcache -name "*.aar" -exec cp {} android/app/libs/aars/ \; 2>/dev/null || true
           
-          echo "File AAR yang berhasil disalin:"
+          # HAPUS threeegl.aar jika sudah ada subproject :threeegl: untuk mencegah Duplicate Class Error
+          rm -f android/app/libs/threeegl.aar
+          rm -f android/app/libs/aars/threeegl.aar
+          
+          echo "File AAR tersisa setelah pembersihan ganda:"
           ls -la android/app/libs/
+
 
       - name: Ensure Gradle Wrapper Exists & Executable
         run: |
