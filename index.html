@@ -3,87 +3,131 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>BABE.INFO - Globe 3D Emas</title>
-<!-- Ini yang bikin preview WhatsApp muncul gambar babe_gold.jpg -->
-<meta property="og:title" content="BABE.INFO - Globe Emas 3D Interaktif">
-<meta property="og:description" content="Putar globe BABE.INFO - Sentuh & geser untuk putar, cubit untuk zoom">
+<title>BABE.INFO HERU WINGCHUN - Globe 3D Interaktif</title>
+
+<!-- Preview Link WhatsApp & Sosial Media -->
+<meta property="og:title" content="BABE.INFO HERU WINGCHUN - Globe 3D Interaktif">
+<meta property="og:description" content="Putar globe 3D emas interaktif - Sentuh & geser untuk memutar">
 <meta property="og:image" content="https://afakhor.github.io/sponsorgawatbabeinfo/babe_gold.jpg">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://afakhor.github.io/sponsorgawatbabeinfo/babe.html">
 <meta name="twitter:card" content="summary_large_image">
+
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{background:#EEEEEE;overflow:hidden;font-family:sans-serif;touch-action:none}
   canvas{display:block}
-  #ui{position:absolute;bottom:0;width:100%;text-align:center;padding:15px;background:linear-gradient(transparent,rgba(0,0,0,0.8));color:#FFD700}
-  #ui h1{font-size:28px;font-weight:900;letter-spacing:3px;text-shadow:0 2px 10px #000}
-  #ui p{font-size:12px;color:#fff;margin-top:5px}
+
+  /* Watermark Top Left - Emas Luxurious 16px */
+  #watermark {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 215, 0, 0.5);
+    color: #FFD700;
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    z-index: 10;
+  }
 </style>
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
 </head>
 <body>
-<div id="ui">
-  <h1>BABE.INFO</h1>
-  <p>HeruWingchun - Geser untuk putar | Cubit untuk zoom | Globe emas babe_gold.jpg</p>
-</div>
+
+<div id="watermark">BABE.INFO HERU WINGCHUN</div>
+
 <script type="module">
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0xEEEEEE);
-const camera=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,100);
-camera.position.set(0,0.3,2.8);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xEEEEEE);
 
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
-renderer.setSize(innerWidth,innerHeight);
-renderer.setPixelRatio(devicePixelRatio);
-renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.outputColorSpace=THREE.SRGBColorSpace;
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 0.3, 2.8);
+
+const renderer = new THREE.WebGLRenderer({antialias: true, alpha: false});
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
-const controls=new OrbitControls(camera,renderer.domElement);
-controls.enableDamping=true;
-controls.dampingFactor=0.05;
-controls.minDistance=1.5;
-controls.maxDistance=6;
-controls.autoRotate=true;
-controls.autoRotateSpeed=1.2;
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.minDistance = 1.5;
+controls.maxDistance = 6;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 1.2;
 
-// LIGHT biar emas mengkilap
-scene.add(new THREE.AmbientLight(0xffffff,0.9));
-const dir=new THREE.DirectionalLight(0xffffff,1.5); dir.position.set(5,3,5); scene.add(dir);
-const point=new THREE.PointLight(0xFFD700,1,10); point.position.set(-3,-2,3); scene.add(point);
+// Pencahayaan Emas
+scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.5); 
+dirLight.position.set(5, 3, 5); 
+scene.add(dirLight);
 
-// GLOBE pakai babe_gold.jpg - TIDAK TRANSPARAN
-const loader=new THREE.TextureLoader();
-loader.load('./assets/images/babe_gold.jpg', (tex)=>{
-  tex.colorSpace=THREE.SRGBColorSpace;
-  tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
-  const mat=new THREE.MeshStandardMaterial({map:tex,metalness:0.75,roughness:0.28});
-  const globe=new THREE.Mesh(new THREE.SphereGeometry(1,128,128),mat);
-  globe.position.y=0.3;
-  scene.add(globe);
-  
-  // Akar hitam melilit
-  const rootMat=new THREE.MeshBasicMaterial({color:0x111111});
-  for(let i=0;i<3;i++){
-    const torus=new THREE.Mesh(new THREE.TorusGeometry(1.06,0.025,12,150),rootMat);
-    torus.rotation.x=i*1.2; torus.rotation.y=i*0.8+0.5; torus.position.y=0.3;
-    scene.add(torus);
-  }
-  
-  function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene,camera); }
-  animate();
-}, undefined, ()=>{
-  // fallback kalau texture gagal
-  const mat=new THREE.MeshStandardMaterial({color:0xFFD700,metalness:0.8,roughness:0.3});
-  scene.add(new THREE.Mesh(new THREE.SphereGeometry(1,64,64),mat));
+const pointLight = new THREE.PointLight(0xFFD700, 1, 10); 
+pointLight.position.set(-3, -2, 3); 
+scene.add(pointLight);
+
+// Geometri & Material Emas Default (Mencegah Globe Hilang)
+const geo = new THREE.SphereGeometry(1, 128, 128);
+const mat = new THREE.MeshStandardMaterial({
+  color: 0xFFD700,
+  metalness: 0.75,
+  roughness: 0.28
 });
 
-window.addEventListener('resize',()=>{
-  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
+const globe = new THREE.Mesh(geo, mat);
+globe.position.y = 0.3;
+scene.add(globe);
+
+// Akar Hitam Melilit
+const rootMat = new THREE.MeshBasicMaterial({color: 0x111111});
+for(let i = 0; i < 3; i++){
+  const torus = new THREE.Mesh(new THREE.TorusGeometry(1.06, 0.025, 12, 150), rootMat);
+  torus.rotation.x = i * 1.2; 
+  torus.rotation.y = i * 0.8 + 0.5; 
+  torus.position.y = 0.3;
+  scene.add(torus);
+}
+
+// Coba muat tekstur dari beberapa kemungkinan lokasi file di GitHub Pages
+const loader = new THREE.TextureLoader();
+const texturePaths = ['./babe_gold.jpg', './assets/images/babe_gold.jpg'];
+
+function tryLoadTexture(index) {
+  if (index >= texturePaths.length) return;
+  
+  loader.load(texturePaths[index], (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    mat.map = tex;
+    mat.needsUpdate = true;
+  }, undefined, () => {
+    tryLoadTexture(index + 1);
+  });
+}
+
+tryLoadTexture(0);
+
+function animate() { 
+  requestAnimationFrame(animate); 
+  controls.update(); 
+  renderer.render(scene, camera); 
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight; 
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });
 </script>
 </body>
