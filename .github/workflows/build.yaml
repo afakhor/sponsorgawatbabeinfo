@@ -1,4 +1,4 @@
-name: BABE.INFO AUTO ERROR FILTER
+name: BABE.INFO CMAKE 3.31.4 FIX
 
 on:
   push:
@@ -17,26 +17,34 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { flutter-version: '3.29.0', channel: stable }
 
-      - name: Install CMake
-        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393"
-
-      - name: Patch CMake
+      - name: Install CMake 3.31.4 & 3.22.1
         run: |
-          PUB=$HOME/.pub-cache/hosted/pub.dev
-          ANGLE=$(find $PUB -maxdepth 1 -type d -name "flutter_angle-*" | head -n1)
-          find $ANGLE -name "CMakeLists.txt" -exec sed -i 's/3\.31/3.22.1/g' {} + 2>/dev/null || true
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "cmake;3.31.4" "ndk;25.1.8937393" || \
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393"
+          ls $ANDROID_HOME/cmake/
 
-      - name: Build APK
+      - name: Clean & Get
         run: |
           flutter clean
           rm -f pubspec.lock
           flutter pub get
-          flutter build apk --release 2>&1 | tee build.log
-          
-          echo "========== FILTER ERROR PENTING ==========" 
-          cat build.log | grep -i "error:" | head -n 50
-          echo "========== END FILTER =========="
-          
+
+      - name: PATCH flutter_angle CMake 3.31.4 -> 3.22.1 (SETELAH pub get!)
+        run: |
+          PUB=$HOME/.pub-cache/hosted/pub.dev
+          ANGLE=$(find $PUB -maxdepth 1 -type d -name "flutter_angle-*" | head -n1)
+          echo "PATCHING $ANGLE"
+          if [ -d "$ANGLE" ]; then
+            # Ganti semua 3.31.4 jadi 3.22.1
+            find $ANGLE -type f -name "*.txt" -o -name "*.gradle" | xargs sed -i 's/3\.31\.4/3.22.1/g; s/3\.31/3.22.1/g' 2>/dev/null || true
+            grep -r "cmake" $ANGLE --include="*.gradle" --include="*.txt" | head -20
+          fi
+
+      - name: Build APK
+        run: |
+          flutter build apk --release -v 2>&1 | tee build.log
+          echo "=== FILTER ERROR ==="
+          cat build.log | grep -E "Error:|FAILURE|CXX1300|CMake" | head -20
           find build/ android/ -name "*.apk" -type f
 
       - name: Upload Log
@@ -46,20 +54,19 @@ jobs:
           name: build-log
           path: build.log
 
-      - name: Rename APK (saran kamu)
+      - name: Rename APK
         if: success()
         run: |
           mkdir -p build/app/outputs/flutter-apk/
           APK_PATH=$(find build/ android/ -type f -name "*.apk" | grep -i "release" | head -n 1)
           [ -z "$APK_PATH" ] && APK_PATH=$(find build/ android/ -type f -name "*.apk" | head -n 1)
-          
-          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
+          if [ -f "$APK_PATH" ]; then
             echo "Menemukan APK di: $APK_PATH"
             cp "$APK_PATH" build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
-            echo "Berhasil menyalin ke BABE-INFO-threejs-antiblink.apk"
+            cp "$APK_PATH"./BABE-INFO-threejs-antiblink.apk
           else
-            echo "APK Release tidak ditemukan di direktori manapun!"
-            echo "Lihat ERROR di atas 👆"
+            echo "APK tidak ketemu!"
+            tail -n 100 build.log
             exit 1
           fi
 
