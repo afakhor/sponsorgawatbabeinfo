@@ -93,7 +93,7 @@ class _GlobePageState extends State<GlobePage>{
     });
   }
 
-  void buildModel(){
+    void buildModel(){
     if(threeJs.scene==null) return;
     // clear
     if(globe!=null) threeJs.scene.remove(globe!);
@@ -106,16 +106,16 @@ class _GlobePageState extends State<GlobePage>{
     // GLOBE
     if(modelIdx==0){
       var geo=three.SphereGeometry(1,64,64);
-      var mat=three.MeshPhongMaterial()..color=three.Color(t.globe)..shininess=100;
+      var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble())..shininess=100;
       globe=three.Mesh(geo,mat); globe!.position.y=0.15; threeJs.scene.add(globe!);
       // GLOW ATMOSFER
       var glowGeo=three.SphereGeometry(1.18,32,32);
-      var glowMat=three.MeshBasicMaterial()..color=three.Color(t.accent)..transparent=true..opacity=0.18;
+      var glowMat=three.MeshBasicMaterial()..color=three.Color(t.accent.toDouble())..transparent=true..opacity=0.18;
       glow=three.Mesh(glowGeo,glowMat); glow!.position.y=0.15; threeJs.scene.add(glow!);
       // RING SATELIT
       var torusGeo=three.TorusGeometry(1.08,0.02,12,100);
       for(int i=0;i<3;i++){
-        var m=three.MeshBasicMaterial()..color=three.Color(t.accent)..transparent=true..opacity=0.6;
+        var m=three.MeshBasicMaterial()..color=three.Color(t.accent.toDouble())..transparent=true..opacity=0.6;
         var ring=three.Mesh(torusGeo,m.clone());
         ring.rotation.x=i*1.3; ring.rotation.y=i*0.7; ring.position.y=0.15;
         rings.add(ring); threeJs.scene.add(ring);
@@ -124,20 +124,20 @@ class _GlobePageState extends State<GlobePage>{
     }
     else if(modelIdx==1){ // KUBUS 3D
       var geo=three.BoxGeometry(1.4,1.4,1.4);
-      var mat=three.MeshPhongMaterial()..color=three.Color(t.globe);
+      var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble());
       cube=three.Mesh(geo,mat); cube!.position.y=0.15; threeJs.scene.add(cube!); globe=cube;
     }
     else if(modelIdx==2){ // CINCIN SATELIT BESAR
       var geo=three.SphereGeometry(0.8,32,32);
-      var mat=three.MeshPhongMaterial()..color=three.Color(t.globe);
+      var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble());
       globe=three.Mesh(geo,mat); globe!.position.y=0.15; threeJs.scene.add(globe!);
       var bigTorus=three.TorusGeometry(1.5,0.08,16,100);
-      var m=three.MeshBasicMaterial()..color=three.Color(t.accent);
+      var m=three.MeshBasicMaterial()..color=three.Color(t.accent.toDouble());
       var r=three.Mesh(bigTorus,m); r.rotation.x=1.2; r.position.y=0.15; rings.add(r); threeJs.scene.add(r);
     }
     else{
       var geo=three.SphereGeometry(1,32,32);
-      var mat=three.MeshPhongMaterial()..color=three.Color(t.globe);
+      var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble());
       globe=three.Mesh(geo,mat); globe!.position.y=0.15; threeJs.scene.add(globe!);
     }
   }
@@ -185,10 +185,26 @@ class _GlobePageState extends State<GlobePage>{
     setState(()=>bgFile=File(r.files.single.path!));
   }
 
-  Future<void> toggleRec() async{
+    Future<void> toggleRec() async{
     if(isRec){
-      var p=await recorder.stopRecorder();
-      if(p!=null){ File f=File(p); await player.preparePlayer(path:f.path,shouldExtractWaveform:true,noOfSamples:200); var d=await player.getDuration(DurationType.max); setState((){audioFile=f; total=(d/1000).toDouble(); s=0; e=total>60?60:total; isRec=false; status="Rekaman OK";}); }
+      var p = await recorder.stop(); // FIX: di 1.3.0 namanya stop(), bukan stopRecorder()
+      if(p!=null){
+        File f=File(p);
+        await player.preparePlayer(path:f.path,shouldExtractWaveform:true,noOfSamples:200);
+        await Future.delayed(Duration(milliseconds:400));
+        var d=await player.getDuration(DurationType.max);
+        setState((){
+          audioFile=f;
+          total=(d/1000).toDouble();
+          if(total<=0) total=180;
+          s=0;
+          e=total>60?60:total;
+          isRec=false;
+          status="Rekaman OK";
+        });
+      } else {
+        setState(()=>isRec=false);
+      }
     }else{
       var tmp=await getTemporaryDirectory();
       var path="${tmp.path}/rec_${DateTime.now().millisecondsSinceEpoch}.m4a";
