@@ -1,4 +1,4 @@
-name: BABE.INFO sponsorbabeinfogawat FINAL FIX
+name: BABE.INFO threejs-antiblink FINAL
 
 on:
   push:
@@ -28,89 +28,95 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Install CMake 3.22.1 & NDK 25.1 (WAJIB flutter_angle)
+      - name: Install CMake 3.22.1 & NDK 25 (wajib flutter_angle)
         run: |
           export ANDROID_SDK_ROOT=$ANDROID_HOME
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393" --sdk_root=$ANDROID_SDK_ROOT
-          echo "SDK OK"
+          echo "CMAKE & NDK OK"
           ls $ANDROID_HOME/cmake/
 
-      - name: Clean & Pub Get
+      - name: Clean & Get
         run: |
           flutter clean
           rm -f pubspec.lock
           flutter pub get
 
-      - name: PATCH ALL - CMake & compileSdk & AGP
+      - name: PATCH CMake & compileSdk (anti lStar & CMake 3.31)
         run: |
           PUB_DIR=$HOME/.pub-cache/hosted/pub.dev
-          # 1. Patch flutter_angle CMake 3.31 -> 3.22.1
           ANGLE=$(find $PUB_DIR -maxdepth 1 -type d -name "flutter_angle-*" | head -n 1)
           if [ -d "$ANGLE" ]; then
             echo "Patching $ANGLE"
             find $ANGLE -type f \( -name "CMakeLists.txt" -o -name "build.gradle" \) -exec sed -i 's/3\.31\.4/3.22.1/g; s/3\.31/3.22.1/g' {} +
           fi
-          # 2. Force compileSdk 34 biar gak lStar error
+          # anti lStar error
           find $PUB_DIR -type f -name "build.gradle" -exec sed -i -E 's/compileSdkVersion 3[0-9]/compileSdkVersion 34/g; s/compileSdk 3[0-9]/compileSdk 34/g' {} + 2>/dev/null || true
-          # 3. Patch app build.gradle.kts juga
-          sed -i -E 's/compileSdk = 3[0-9]/compileSdk = 34/g; s/targetSdk = 3[0-9]/targetSdk = 34/g' android/app/build.gradle.kts || true
-          sed -i -E 's/compileSdkVersion 3[0-9]/compileSdkVersion 34/g' android/app/build.gradle || true
+          sed -i -E 's/compileSdk = 3[0-9]/compileSdk = 34/g' android/app/build.gradle.kts 2>/dev/null || true
 
-      - name: Build APK Release (log full)
+      - name: Build APK Release
         run: |
           flutter build apk --release -v 2>&1 | tee build.log
-          echo "=== BUILD SELESAI ==="
-          ls -R build/ | grep -i apk || echo "belum ada apk di build/"
-          find . -name "*.apk" | head -20
+          echo "=== Cek hasil build ==="
+          find build/ android/ -type f -name "*.apk" 2>/dev/null | head -20
+          ls -lh build/app/outputs/flutter-apk/ 2>/dev/null || echo "folder apk belum ada"
 
-      - name: Upload Build Log (WAJIB CEK KALAU FAILED)
+      - name: Upload Build Log (selalu upload)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log-${{ github.run_number }}
           path: build.log
 
-      - name: Find & Rename APK - ANTI GAGAL
+      - name: Rename APK - SARAN KAMU VERSI FIX
         if: success()
         run: |
-          set -e
-          echo "Mencari APK..."
-          # Cari di semua tempat
-          APK=$(find . -type f -name "*.apk" | grep -E "release|app-" | head -n 1)
-          if [ -z "$APK" ]; then
-            APK=$(find . -type f -name "*.apk" | head -n 1)
+          mkdir -p build/app/outputs/flutter-apk/
+          
+          # Cari file APK release di folder android maupun folder build root Flutter
+          APK_PATH=$(find build/ android/ -type f -name "*.apk" | grep -i "release" | head -n 1)
+          
+          # Fallback kalau grep release gak ketemu, ambil apk manapun
+          if [ -z "$APK_PATH" ]; then
+            echo "Grep release gagal, coba cari APK apapun..."
+            APK_PATH=$(find build/ android/ -type f -name "*.apk" | head -n 1)
           fi
-          if [ -z "$APK" ]; then
-            echo "❌ APK TIDAK DITEMUKAN, build gagal!"
-            echo "Cek build.log di Artifacts"
+          
+          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
+            echo "✅ Menemukan APK di: $APK_PATH"
+            ls -lh "$APK_PATH"
+            cp "$APK_PATH" build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
+            cp "$APK_PATH" ./BABE-INFO-threejs-antiblink.apk
+            echo "✅ Berhasil menyalin ke BABE-INFO-threejs-antiblink.apk"
+            ls -lh build/app/outputs/flutter-apk/
+          else
+            echo "❌ APK Release tidak ditemukan di direktori manapun!"
+            echo "Isi build:"
+            find . -type f -name "*.apk" 2>/dev/null || echo "TIDAK ADA APK SAMA SEKALI - BUILD GAGAL, CEK build.log"
             exit 1
           fi
-          echo "✅ APK DITEMUKAN: $APK"
-          ls -lh "$APK"
-          mkdir -p build/app/outputs/flutter-apk/
-          cp "$APK" build/app/outputs/flutter-apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk
-          cp "$APK" ./BABE-INFO-sponsorbabeinfogawat-FIXED.apk
-          ls -lh build/app/outputs/flutter-apk/
 
       - name: Upload APK Artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: apk-fixed
-          path: build/app/outputs/flutter-apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk
+          name: apk-threejs-antiblink
+          path: |
+            build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
+            BABE-INFO-threejs-antiblink.apk
 
       - name: Release APK
         if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3d-${{ github.run_number }}
-          name: BABE.INFO FIXED v${{ github.run_number }}
+          tag_name: threejs-${{ github.run_number }}
+          name: BABE.INFO threejs antiblink v${{ github.run_number }}
           body: |
             Package: com.example.sponsorbabeinfogawat
-            - FIX CMake flutter_angle
-            - compileSdk 34 anti lStar
-            - Globe anti blink
-          files: build/app/outputs/flutter-apk/BABE-INFO-sponsorbabeinfogawat-FIXED.apk
+            - three_js 0.1.7 (flutter_angle)
+            - CMake 3.22.1 fix
+            - Anti loading terus
+            - Rename logic: find build/ android/
+          files: build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -123,18 +129,15 @@ jobs:
       pages: write
     steps:
       - uses: actions/checkout@v4
-      - name: Build Web
+      - name: Deploy babe.html to GH Pages
         run: |
           mkdir -p _site/assets/images
-          if [ -f web/babe.html ]; then
-            cp web/babe.html _site/index.html
-            cp web/babe.html _site/babe.html
-          elif [ -f babe.html ]; then
-            cp babe.html _site/index.html
-          fi
+          if [ -f web/babe.html ]; then cp web/babe.html _site/index.html; cp web/babe.html _site/babe.html
+          elif [ -f babe.html ]; then cp babe.html _site/index.html; fi
           cp -r assets/images/* _site/assets/images/ 2>/dev/null || true
           ls -R _site
-      - uses: peaceiris/actions-gh-pages@v4
+      - name: Deploy to Pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./_site
