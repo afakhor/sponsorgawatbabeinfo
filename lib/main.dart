@@ -42,9 +42,9 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
     threeJs.camera.position.z = 2.8;
     threeJs.scene.add(three.AmbientLight(0xffffff, 0.8));
     var dir = three.DirectionalLight(0xffffff, 1.2); dir.position.setValues(5,3,5); threeJs.scene.add(dir);
-    
+
     var geo = three.SphereGeometry(1, 64, 64);
-    var mat = three.MeshPhongMaterial(); // Phong lebih kompatibel dari Standard
+    var mat = three.MeshPhongMaterial();
     mat.color = three.Color(0xFFD700);
     globe = three.Mesh(geo, mat);
     globe!.position.y=0.1;
@@ -57,14 +57,23 @@ class _GlobeLearnPageState extends State<GlobeLearnPage> {
       t.rotation.x = i*1.2; t.rotation.y = i*0.8; t.position.y=0.1;
       threeJs.scene.add(t);
     }
-    // texture - coba load kalau ada
-    try{
-      final tex = await three.TextureLoader().loadAsync('assets/images/babe_gold.jpg', threeJs);
-      if(tex!=null){ mat.map = tex; mat.needsUpdate=true; }
-    }catch(e){ debugPrint("tex fail $e"); }
     
+    // === FIX DISINI BOS - loadAsync -> fromAsset ===
+    try{
+      final loader = three.TextureLoader();
+      final tex = await loader.fromAsset('assets/images/babe_gold.jpg');
+      if(tex != null){
+        mat.map = tex;
+        mat.needsUpdate = true;
+      }
+    }catch(e){ 
+      debugPrint("tex fail $e"); 
+    }
+
     inited=true;
-    threeJs.addAnimationEvent((dt){ globe?.rotation.y = (globe?.rotation.y ?? 0) + 0.008; });
+    threeJs.addAnimationEvent((dt){ 
+      if(globe != null) globe!.rotation.y += 0.008; 
+    });
   }
 
   Future<void> pickAudio() async {
