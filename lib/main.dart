@@ -60,10 +60,11 @@ class _GlobePageState extends State<GlobePage>{
   double speed=1.0,pitch=1.0;
   bool showParticles=true;
 
-    @override void initState(){
+      @override void initState(){
     super.initState();
-    // FIX FINAL three_js 0.1.7 - HAPUS setupSources
+    // FIX three_js 0.1.7 - WAJIB ADA setup + onSetupComplete
     threeJs=three.ThreeJS(
+      setup: (three.ThreeJS p) {}, // WAJIB ADA - kosongin aja
       onSetupComplete:(){ setup(); },
       settings: three.Settings(renderOptions:{"antialias":false,"alpha":true})
     );
