@@ -58,9 +58,23 @@ class _GlobePageState extends State<GlobePage> with SingleTickerProviderStateMix
     File f=File(out); await player.preparePlayer(path:f.path,shouldExtractWaveform:true,noOfSamples:100); var d=await player.getDuration(DurationType.max); setState((){audioFile=f; total=(d/1000).toDouble(); s=0; e=total; status="Musik Tone Created!";});
   }
 
-  Future<void> toggleRec() async{
-    if(isRec){ var p=await recorder.stop(); if(p!=null){ File f=File(p); await player.preparePlayer(path:f.path,shouldExtractWaveform:true,noOfSamples:200); var d=await player.getDuration(DurationType.max); setState((){audioFile=f; total=(d/1000).toDouble(); if(total<=0) total=10; s=0; e=total>60?60:total; isRec=false; status="Rekaman OK - Bisa buat video";}); } else { setState(()=>isRec=false); } }
-    else{ var tmp=await getTemporaryDirectory(); var path="${tmp.path}/rec_${DateTime.now().millisecondsSinceEpoch}.m4a"; await recorder.record(path: path); setState(()=>isRec=true; status="Recording..."); }
+    Future<void> toggleRec() async{
+    if(isRec){ 
+      var p=await recorder.stop(); 
+      if(p!=null){ 
+        File f=File(p); 
+        await player.preparePlayer(path:f.path,shouldExtractWaveform:true,noOfSamples:200); 
+        var d=await player.getDuration(DurationType.max); 
+        setState((){audioFile=f; total=(d/1000).toDouble(); if(total<=0) total=10; s=0; e=total>60?60:total; isRec=false; status="Rekaman OK - Bisa buat video";}); 
+      } else { 
+        setState(()=>isRec=false); 
+      } 
+    } else { 
+      var tmp=await getTemporaryDirectory(); 
+      var path="${tmp.path}/rec_${DateTime.now().millisecondsSinceEpoch}.m4a"; 
+      await recorder.record(path: path); 
+      setState((){ isRec=true; status="Recording..."; }); 
+    }
   }
 
   Future<void> buatVideo() async{
