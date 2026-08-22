@@ -60,16 +60,16 @@ class _GlobePageState extends State<GlobePage>{
   double speed=1.0,pitch=1.0;
   bool showParticles=true;
 
-  @override void initState(){
+    @override void initState(){
     super.initState();
-    // FIX three_js 0.1.7 constructor
+    // FIX FINAL three_js 0.1.7 - HAPUS setupSources
     threeJs=three.ThreeJS(
       onSetupComplete:(){ setup(); },
-      setupSources: (three.ThreeJS p){},
       settings: three.Settings(renderOptions:{"antialias":false,"alpha":true})
     );
     izin();
   }
+
   Future<void> izin() async{
     try{
       var i=await DeviceInfoPlugin().androidInfo;
