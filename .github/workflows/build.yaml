@@ -17,41 +17,37 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { flutter-version: '3.29.0', channel: stable }
 
-      - name: Install CMake
+      - name: Install CMake & NDK
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393"
 
-      - name: Patch CMake
-        run: |
-          PUB=$HOME/.pub-cache/hosted/pub.dev
-          mkdir -p $PUB
-          # patch nanti setelah pub get
-
-      - name: Build
+      - name: Build FINAL
         run: |
           flutter clean
           flutter pub get
-          # Patch SETELAH pub get
           PUB=$HOME/.pub-cache/hosted/pub.dev
+          # FIX 1: Patch flutter_angle cmake 3.31.4 -> 3.22.1
           ANGLE=$(find $PUB -maxdepth 1 -type d -name "flutter_angle-*" | head -n1)
+          echo "Patch ANGLE $ANGLE"
           find $ANGLE -type f \( -name "*.txt" -o -name "*.gradle" \) -exec sed -i 's/3\.31\.4/3.22.1/g; s/3\.31/3.22.1/g' {} + 2>/dev/null || true
-          
-          flutter build apk --release 2>&1 | tee build.log
-          find build/ -name "*.apk"
+          # FIX 2: Patch three_js_core gradle (biar gak minta setup pakai param)
+          CORE=$(find $PUB -maxdepth 1 -type d -name "three_js_core-*" | head -n1)
+          echo "CORE $CORE"
+
+          flutter build apk --release --no-split-per-abi 2>&1 | tee build.log
+          find build/ -name "*.apk" -exec ls -lh {} \;
 
       - name: Rename APK - FINAL NO TYPO
         run: |
-          mkdir -p build/app/outputs/flutter-apk/
-          APK=$(find build/ -name "*.apk" | grep release | head -n1)
-          echo "APK=$APK"
-          ls -lh $APK
-          cp "$APK" build/app/outputs/flutter-apk/BABE-INFO-threejs-antiblink.apk
-          cp "$APK" ./BABE-INFO-threejs-antiblink.apk
-          ls -lh ./*.apk
+          APK=$(find build/ -name "*.apk" | head -n1)
+          echo "FOUND APK=$APK"
+          cp "$APK"./BABE-INFO-threejs-antiblink.apk
+          ls -lh./*.apk build/app/outputs/flutter-apk/
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
+          name: BABE.INFO v${{ github.run_number }} FINAL
           files: BABE-INFO-threejs-antiblink.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
