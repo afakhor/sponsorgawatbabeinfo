@@ -93,9 +93,8 @@ class _GlobePageState extends State<GlobePage>{
     });
   }
 
-    void buildModel(){
+      void buildModel(){
     if(threeJs.scene==null) return;
-    // clear
     if(globe!=null) threeJs.scene.remove(globe!);
     if(glow!=null) threeJs.scene.remove(glow!);
     for(var r in rings) threeJs.scene.remove(r);
@@ -103,42 +102,62 @@ class _GlobePageState extends State<GlobePage>{
     rings.clear();
 
     var t=themes[temaIdx];
-    // GLOBE
     if(modelIdx==0){
-      var geo=three.SphereGeometry(1,64,64);
-      var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble())..shininess=100;
-      globe=three.Mesh(geo,mat); globe!.position.y=0.15; threeJs.scene.add(globe!);
-      // GLOW ATMOSFER
-      var glowGeo=three.SphereGeometry(1.18,32,32);
-      var glowMat=three.MeshBasicMaterial()..color=three.Color(t.accent.toDouble())..transparent=true..opacity=0.18;
-      glow=three.Mesh(glowGeo,glowMat); glow!.position.y=0.15; threeJs.scene.add(glow!);
-      // RING SATELIT
-      var torusGeo=three.TorusGeometry(1.08,0.02,12,100);
-      for(int i=0;i<3;i++){
-        var m=three.MeshBasicMaterial()..color=three.Color(t.accent.toDouble())..transparent=true..opacity=0.6;
+      // FIX RAM 4-6GB: 40 segment, bukan 64 - ANTI LOADING HITAM
+      var geo=three.SphereGeometry(0.9, 40, 40);
+      var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble())..shininess=60;
+      globe=three.Mesh(geo,mat);
+      globe!.position.y=0.1;
+      threeJs.scene.add(globe!);
+
+      // GLOW TIPIS 24 segment
+      var glowGeo=three.SphereGeometry(1.05, 24, 24);
+      var glowMat=three.MeshBasicMaterial()..color=three.Color(t.accent.toDouble())..transparent=true..opacity=0.12;
+      glow=three.Mesh(glowGeo,glowMat);
+      glow!.position.y=0.1;
+      threeJs.scene.add(glow!);
+
+      // CUMA 2 CINCIN BIAR RINGAN
+      var torusGeo=three.TorusGeometry(1.0, 0.018, 10, 70);
+      for(int i=0;i<2;i++){
+        var m=three.MeshBasicMaterial()..color=three.Color(t.accent.toDouble())..transparent=true..opacity=0.5;
         var ring=three.Mesh(torusGeo,m.clone());
-        ring.rotation.x=i*1.3; ring.rotation.y=i*0.7; ring.position.y=0.15;
-        rings.add(ring); threeJs.scene.add(ring);
+        ring.rotation.x=i==0?0.6:1.3;
+        ring.rotation.y=i==0?0:0.7;
+        ring.position.y=0.1;
+        rings.add(ring);
+        threeJs.scene.add(ring);
       }
       loadTex();
     }
-    else if(modelIdx==1){ // KUBUS 3D
-      var geo=three.BoxGeometry(1.4,1.4,1.4);
+    else if(modelIdx==1){
+      var geo=three.BoxGeometry(1.2, 1.2, 1.2);
       var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble());
-      cube=three.Mesh(geo,mat); cube!.position.y=0.15; threeJs.scene.add(cube!); globe=cube;
+      cube=three.Mesh(geo,mat);
+      cube!.position.y=0.1;
+      threeJs.scene.add(cube!);
+      globe=cube;
     }
-    else if(modelIdx==2){ // CINCIN SATELIT BESAR
-      var geo=three.SphereGeometry(0.8,32,32);
+    else if(modelIdx==2){
+      var geo=three.SphereGeometry(0.8, 32, 32);
       var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble());
-      globe=three.Mesh(geo,mat); globe!.position.y=0.15; threeJs.scene.add(globe!);
-      var bigTorus=three.TorusGeometry(1.5,0.08,16,100);
+      globe=three.Mesh(geo,mat);
+      globe!.position.y=0.1;
+      threeJs.scene.add(globe!);
+      var bigTorus=three.TorusGeometry(1.4, 0.06, 12, 70);
       var m=three.MeshBasicMaterial()..color=three.Color(t.accent.toDouble());
-      var r=three.Mesh(bigTorus,m); r.rotation.x=1.2; r.position.y=0.15; rings.add(r); threeJs.scene.add(r);
+      var r=three.Mesh(bigTorus,m);
+      r.rotation.x=1.2;
+      r.position.y=0.1;
+      rings.add(r);
+      threeJs.scene.add(r);
     }
     else{
-      var geo=three.SphereGeometry(1,32,32);
+      var geo=three.SphereGeometry(0.9, 32, 32);
       var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble());
-      globe=three.Mesh(geo,mat); globe!.position.y=0.15; threeJs.scene.add(globe!);
+      globe=three.Mesh(geo,mat);
+      globe!.position.y=0.1;
+      threeJs.scene.add(globe!);
     }
   }
 
