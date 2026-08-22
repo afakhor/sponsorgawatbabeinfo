@@ -38,7 +38,7 @@ jobs:
         run: |
           APK=$(find build/ -name "*.apk" | head -n1)
           echo "FOUND APK=$APK"
-          cp "$APK"./BABE-INFO-threejs-antiblink.apk
+          cp "$APK" ./BABE-INFO-threejs-antiblink.apk
           ls -lh./*.apk build/app/outputs/flutter-apk/
 
       - name: Release
