@@ -20,7 +20,7 @@ jobs:
       - name: Install CMake & NDK
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393"
 
-      - name: Build FINAL
+            - name: Build FINAL
         run: |
           flutter clean
           flutter pub get
@@ -28,19 +28,18 @@ jobs:
           ANGLE=$(find $PUB -maxdepth 1 -type d -name "flutter_angle-*" | head -n1)
           echo "Patch ANGLE $ANGLE"
           find $ANGLE -type f \( -name "*.txt" -o -name "*.gradle" \) -exec sed -i 's/3\.31\.4/3.22.1/g; s/3\.31/3.22.1/g' {} + 2>/dev/null || true
-          CORE=$(find $PUB -maxdepth 1 -type d -name "three_js_core-*" | head -n1)
-          echo "CORE $CORE"
           flutter build apk --release 2>&1 | tee build.log
           tail -n 100 build.log
           find build/ -name "*.apk" -exec ls -lh {} \;
 
       - name: Rename APK - FINAL NO TYPO
         run: |
-          APK=$(find build/ -name "*.apk" | head -n1)
+          APK=$(find build/app/outputs/flutter-apk -name "*.apk" | head -n1)
           echo "FOUND APK=$APK"
+          ls -lh "$APK"
           cp "$APK" ./BABE-INFO-threejs-antiblink.apk
-          ls -lh./*.apk build/app/outputs/flutter-apk/
-
+          ls -lh ./BABE-INFO-threejs-antiblink.apk
+          ls -lh build/app/outputs/flutter-apk/
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
