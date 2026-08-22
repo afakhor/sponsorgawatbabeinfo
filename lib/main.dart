@@ -8,10 +8,10 @@ import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:cross_file/cross_file.dart'; // FIX: butuh XFile
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
-// 21 TEMA PREMIUM
 class AppTheme {
   final String name; final int globe; final int bg; final int accent;
   AppTheme(this.name,this.globe,this.bg,this.accent);
@@ -50,18 +50,24 @@ class GlobePage extends StatefulWidget{const GlobePage({super.key});@override St
 class _GlobePageState extends State<GlobePage>{
   late three.ThreeJS threeJs;
   three.Mesh? globe; three.Mesh? glow; List<three.Mesh> rings=[]; three.Mesh? cube; three.Mesh? textLogo;
-  bool inited=false; int temaIdx=0; int modelIdx=0; //0 globe,1 cube,2 rings,3 logo
+  bool inited=false; bool gpuSiap=false; // SATU AJA - ANTI DOBEL
+  int temaIdx=0; int modelIdx=0;
   File? audioFile,bgFile,outVideo; String? customTexPath;
   final player=PlayerController(); final recorder=RecorderController();
   double total=180,s=0,e=60; bool load=false, isRec=false;
-  String status=""; String runText="BABE.INFO HERU WINGCHUN ✨";
+  String status="GPU napas 4 detik..."; String runText="BABE.INFO HERU WINGCHUN ✨";
   List<String> history=[];
   double speed=1.0,pitch=1.0;
   bool showParticles=true;
 
   @override void initState(){
     super.initState();
-    threeJs=three.ThreeJS(onSetupComplete:(){setState(()=>inited=true);},setup:setup);
+    // FIX three_js 0.1.7 constructor
+    threeJs=three.ThreeJS(
+      onSetupComplete:(){ setup(); },
+      setupSources: (three.ThreeJS p){},
+      settings: three.Settings(renderOptions:{"antialias":false,"alpha":true})
+    );
     izin();
   }
   Future<void> izin() async{
@@ -78,18 +84,12 @@ class _GlobePageState extends State<GlobePage>{
     setState(()=>history=files.reversed.take(20).toList());
   }
 
-    bool gpuSiap = false; // tambah variable ini di atas
-
+  // SETUP NAPAS 4 DETIK ANTI RESET
   Future<void> setup() async{
-    if(gpuSiap) return; // ANTI RESET - kalau udah siap jangan reset lagi!
-
+    if(gpuSiap) return;
     debugPrint("GPU lagi napas 4 detik...");
-    setState(()=>status="GPU bernapas 4 detik...");
-
-    // NAPAS PANJANG 4 DETIK - JANGAN DIGANGGU
     await Future.delayed(Duration(seconds: 4));
-
-    if(threeJs.scene!= null) return; // CEK LAGI - anti reset dobel
+    if(threeJs.scene!=null) return;
 
     threeJs.scene=three.Scene();
     threeJs.camera=three.PerspectiveCamera(45,threeJs.width/threeJs.height,0.1,1000);
@@ -100,9 +100,7 @@ class _GlobePageState extends State<GlobePage>{
     threeJs.scene.add(l);
 
     buildModel();
-    gpuSiap = true; // TANDA GPU UDAH SIAP
-
-    // BARU HILANGIN LOADING - KASIH 1 DETIK LAGI
+    gpuSiap=true;
     await Future.delayed(Duration(seconds: 1));
     if(mounted) setState((){
       inited=true;
@@ -110,119 +108,78 @@ class _GlobePageState extends State<GlobePage>{
     });
   }
 
+  // SATU-SATUNYA buildModel - FIX RAM 4-6GB + toDouble()
   void buildModel(){
     if(threeJs.scene==null) return;
-    if(!gpuSiap && globe!=null) return; // JANGAN RESET KALAU GPU BELUM SIAP
-
-    // clear
+    if(!gpuSiap && globe!=null) return;
     if(globe!=null) threeJs.scene.remove(globe!);
     if(glow!=null) threeJs.scene.remove(glow!);
     for(var r in rings) threeJs.scene.remove(r);
     if(cube!=null) threeJs.scene.remove(cube!);
-    rings.clear();
-
-    var t=themes[temaIdx];
-    var geo=three.SphereGeometry(0.9, 40, 40);
-    var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble())..shininess=60;
-    globe=three.Mesh(geo,mat);
-    globe!.position.y=0.1;
-    threeJs.scene.add(globe!);
-
-    // loadTex pelan2
-    Future.delayed(Duration(seconds: 2),()=>loadTex());
-  }
-
-      void buildModel(){
-    if(threeJs.scene==null) return;
-    if(globe!=null) threeJs.scene.remove(globe!);
-    if(glow!=null) threeJs.scene.remove(glow!);
-    for(var r in rings) threeJs.scene.remove(r);
-    if(cube!=null) threeJs.scene.remove(cube!);
+    if(textLogo!=null) threeJs.scene.remove(textLogo!);
     rings.clear();
 
     var t=themes[temaIdx];
     if(modelIdx==0){
-      // FIX RAM 4-6GB: 40 segment, bukan 64 - ANTI LOADING HITAM
-      var geo=three.SphereGeometry(0.9, 40, 40);
+      var geo=three.SphereGeometry(0.9,40,40);
       var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble())..shininess=60;
-      globe=three.Mesh(geo,mat);
-      globe!.position.y=0.1;
-      threeJs.scene.add(globe!);
-
-      // GLOW TIPIS 24 segment
-      var glowGeo=three.SphereGeometry(1.05, 24, 24);
+      globe=three.Mesh(geo,mat); globe!.position.y=0.1; threeJs.scene.add(globe!);
+      var glowGeo=three.SphereGeometry(1.05,24,24);
       var glowMat=three.MeshBasicMaterial()..color=three.Color(t.accent.toDouble())..transparent=true..opacity=0.12;
-      glow=three.Mesh(glowGeo,glowMat);
-      glow!.position.y=0.1;
-      threeJs.scene.add(glow!);
-
-      // CUMA 2 CINCIN BIAR RINGAN
-      var torusGeo=three.TorusGeometry(1.0, 0.018, 10, 70);
+      glow=three.Mesh(glowGeo,glowMat); glow!.position.y=0.1; threeJs.scene.add(glow!);
+      var torusGeo=three.TorusGeometry(1.0,0.018,10,70);
       for(int i=0;i<2;i++){
         var m=three.MeshBasicMaterial()..color=three.Color(t.accent.toDouble())..transparent=true..opacity=0.5;
         var ring=three.Mesh(torusGeo,m.clone());
-        ring.rotation.x=i==0?0.6:1.3;
-        ring.rotation.y=i==0?0:0.7;
-        ring.position.y=0.1;
-        rings.add(ring);
-        threeJs.scene.add(ring);
+        ring.rotation.x=i==0?0.6:1.3; ring.rotation.y=i==0?0:0.7; ring.position.y=0.1;
+        rings.add(ring); threeJs.scene.add(ring);
       }
       loadTex();
     }
     else if(modelIdx==1){
-      var geo=three.BoxGeometry(1.2, 1.2, 1.2);
+      var geo=three.BoxGeometry(1.2,1.2,1.2);
       var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble());
-      cube=three.Mesh(geo,mat);
-      cube!.position.y=0.1;
-      threeJs.scene.add(cube!);
-      globe=cube;
+      cube=three.Mesh(geo,mat); cube!.position.y=0.1; threeJs.scene.add(cube!); globe=cube;
     }
     else if(modelIdx==2){
-      var geo=three.SphereGeometry(0.8, 32, 32);
+      var geo=three.SphereGeometry(0.8,32,32);
       var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble());
-      globe=three.Mesh(geo,mat);
-      globe!.position.y=0.1;
-      threeJs.scene.add(globe!);
-      var bigTorus=three.TorusGeometry(1.4, 0.06, 12, 70);
+      globe=three.Mesh(geo,mat); globe!.position.y=0.1; threeJs.scene.add(globe!);
+      var bigTorus=three.TorusGeometry(1.4,0.06,12,70);
       var m=three.MeshBasicMaterial()..color=three.Color(t.accent.toDouble());
-      var r=three.Mesh(bigTorus,m);
-      r.rotation.x=1.2;
-      r.position.y=0.1;
-      rings.add(r);
-      threeJs.scene.add(r);
+      var r=three.Mesh(bigTorus,m); r.rotation.x=1.2; r.position.y=0.1; rings.add(r); threeJs.scene.add(r);
     }
     else{
-      var geo=three.SphereGeometry(0.9, 32, 32);
+      var geo=three.SphereGeometry(0.9,32,32);
       var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble());
-      globe=three.Mesh(geo,mat);
-      globe!.position.y=0.1;
-      threeJs.scene.add(globe!);
+      globe=three.Mesh(geo,mat); globe!.position.y=0.1; threeJs.scene.add(globe!);
     }
   }
 
   Future<void> loadTex() async{
     try{
+      await Future.delayed(Duration(seconds: 2));
       var loader=three.TextureLoader();
       three.Texture? tex;
       if(customTexPath!=null){ tex=await loader.fromAsset(customTexPath!); }
       else{ tex=await loader.fromAsset('assets/images/babe_gold.jpg'); }
-      if(tex!=null && globe!=null){ (globe!.material as three.MeshPhongMaterial).map=tex; (globe!.material as three.MeshPhongMaterial).needsUpdate=true; }
+      if(tex!=null && globe!=null){
+        var m = globe!.material as three.MeshPhongMaterial;
+        m.map=tex; m.needsUpdate=true;
+      }
     }catch(e){debugPrint("tex fail $e");}
   }
 
-  // CUSTOM TEXTURE
   Future<void> pickCustomTex() async{
     var r=await FilePicker.platform.pickFiles(type: FileType.image);
     if(r==null) return;
     customTexPath=r.files.single.path; await loadTex(); setState(()=>status="Skin custom OK");
   }
 
-  // AUDIO
   Future<void> pickAudio() async{
     var r=await FilePicker.platform.pickFiles(type: FileType.any);
     if(r==null) return;
     var p=r.files.single.path!;
-    // EKSTRAK AUDIO DARI VIDEO
     if(p.endsWith(".mp4")||p.endsWith(".mov")){
       setState(()=>status="Ekstrak audio dari video...");
       var tmp=await getTemporaryDirectory();
@@ -243,26 +200,18 @@ class _GlobePageState extends State<GlobePage>{
     setState(()=>bgFile=File(r.files.single.path!));
   }
 
-    Future<void> toggleRec() async{
+  Future<void> toggleRec() async{
     if(isRec){
-      var p = await recorder.stop(); // FIX: di 1.3.0 namanya stop(), bukan stopRecorder()
+      var p=await recorder.stop();
       if(p!=null){
         File f=File(p);
         await player.preparePlayer(path:f.path,shouldExtractWaveform:true,noOfSamples:200);
         await Future.delayed(Duration(milliseconds:400));
         var d=await player.getDuration(DurationType.max);
         setState((){
-          audioFile=f;
-          total=(d/1000).toDouble();
-          if(total<=0) total=180;
-          s=0;
-          e=total>60?60:total;
-          isRec=false;
-          status="Rekaman OK";
+          audioFile=f; total=(d/1000).toDouble(); if(total<=0) total=180; s=0; e=total>60?60:total; isRec=false; status="Rekaman OK";
         });
-      } else {
-        setState(()=>isRec=false);
-      }
+      } else { setState(()=>isRec=false); }
     }else{
       var tmp=await getTemporaryDirectory();
       var path="${tmp.path}/rec_${DateTime.now().millisecondsSinceEpoch}.m4a";
@@ -281,31 +230,25 @@ class _GlobePageState extends State<GlobePage>{
       String trim="${tmp.path}/trim_$ts.m4a";
       String out="${tmp.path}/BABE_${ts}.mp4";
       double dur=e-s; if(dur<=0||dur>60) dur=60; if(dur<2) dur=5;
-      // SPEED & PITCH - Nightcore / Slowed
       String filter="atempo=$speed";
       if(pitch!=1.0) filter+=",asetrate=44100*$pitch,aresample=44100";
       var cmdTrim='-y -ss $s -t $dur -i "${audioFile!.path}" -filter:a "$filter" -c:a aac -b:a 128k "$trim"';
       var s1=await FFmpegKit.execute(cmdTrim);
       if(!ReturnCode.isSuccess(await s1.getReturnCode())){ setState((){load=false; status="Trim gagal";}); return;}
-
       String bg=bgFile?.path??"";
       if(bg.isEmpty){
         try{ var data=await DefaultAssetBundle.of(context).load('assets/images/bg.jpg'); File f=File('${tmp.path}/bg_$ts.jpg'); await f.writeAsBytes(data.buffer.asUint8List()); bg=f.path; }catch(_){bg="";}
       }
-
-      // PARTIKEL + RUNNING TEXT
       String txtFilter="";
       if(runText.isNotEmpty){
         txtFilter=",drawtext=text='$runText':fontcolor=white:fontsize=32:x=w-mod(t*200\\,w+tw):y=h-th-20:box=1:boxcolor=black@0.5";
       }
-
       String cmd;
       if(bg.isNotEmpty){
         cmd='-y -loop 1 -i "$bg" -i "$trim" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280${txtFilter}" -c:a aac -shortest -t $dur "$out"';
       }else{
         cmd='-y -f lavfi -i color=c=black:s=720x1280:d=$dur -i "$trim" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -vf "scale=720:1280${txtFilter}" -c:a aac -shortest -t $dur "$out"';
       }
-
       var s2=await FFmpegKit.execute(cmd);
       if(ReturnCode.isSuccess(await s2.getReturnCode())){
         setState((){outVideo=File(out); load=false; status="MP4 JADI!"; history.insert(0,out);});
@@ -324,7 +267,7 @@ class _GlobePageState extends State<GlobePage>{
         SizedBox(height:6),
         SizedBox(height:30,child:ListView.builder(scrollDirection:Axis.horizontal,itemCount:themes.length,itemBuilder:(c,i)=>GestureDetector(onTap:(){setState(()=>temaIdx=i); buildModel();},child:Container(margin:EdgeInsets.only(right:6),padding:EdgeInsets.symmetric(horizontal:10,vertical:4),decoration:BoxDecoration(color:i==temaIdx?Color(th.accent):Colors.white12,borderRadius:BorderRadius.circular(20),border:Border.all(color:Color(themes[i].accent))),child:Text(themes[i].name.split(" ").first,style:TextStyle(fontSize:9,color:i==temaIdx?Colors.black:Colors.white)))))),
       ]))),
-            Positioned(top:110,left:w/2-110,child:GestureDetector(
+      Positioned(top:110,left:w/2-110,child:GestureDetector(
         onPanUpdate:(d){ if(globe!=null){ globe!.rotation.y+=d.delta.dx*0.015; globe!.rotation.x+=d.delta.dy*0.015; } },
         onDoubleTap:(){ setState((){modelIdx=(modelIdx+1)%4;}); buildModel(); },
         child:Container(width:220,height:220,decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:Color(th.accent),width:2),boxShadow:[BoxShadow(color:Color(th.accent).withOpacity(0.35),blurRadius:20,spreadRadius:2)]),child:ClipOval(child:threeJs.build())),
