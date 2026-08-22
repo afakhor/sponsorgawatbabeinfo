@@ -20,7 +20,7 @@ jobs:
       - name: Install CMake & NDK
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1" "ndk;25.1.8937393"
 
-            - name: Build FINAL
+      - name: Build FINAL
         run: |
           flutter clean
           flutter pub get
