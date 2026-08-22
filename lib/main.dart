@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:three_js/three_js.dart' as three;
 import 'package:file_picker/file_picker.dart';
@@ -43,17 +44,21 @@ class GlobePage extends StatefulWidget{const GlobePage({super.key});@override St
 class _GlobePageState extends State<GlobePage>{
   late three.ThreeJS threeJs;
   three.Mesh? globe; three.Mesh? glow; List<three.Mesh> rings=[]; three.Mesh? cube; three.Mesh? textLogo;
-  bool inited=false; bool gpuSiap=false; bool animAdded=false;
+  bool inited=false; bool gpuSiap=false; Timer? rotTimer;
   int temaIdx=0; int modelIdx=0;
   File? audioFile,bgFile,outVideo; String? customTexPath;
   final player=PlayerController(); final recorder=RecorderController();
   double total=180,s=0,e=60; bool load=false, isRec=false;
   String status="GPU napas 4 detik..."; String runText="BABE.INFO HERU WINGCHUN";
-  List<String> history=[]; double speed=1.0,pitch=1.0; bool showParticles=true;
+  List<String> history=[]; double speed=1.0,pitch=1.0;
 
   @override void initState(){
     super.initState();
-    threeJs=three.ThreeJS(setup: (){}, onSetupComplete:(){ debugPrint("onSetupComplete KE-PANGGIL"); setup(); }, settings: three.Settings(renderOptions:{"antialias":false,"alpha":true}));
+    threeJs=three.ThreeJS(
+      setup: () {},
+      onSetupComplete:(){ setup(); },
+      settings: three.Settings(renderOptions:{"antialias":false,"alpha":true})
+    );
     izin();
     Future.delayed(Duration(seconds:6),(){ if(!inited && mounted) setup(); });
   }
@@ -65,13 +70,19 @@ class _GlobePageState extends State<GlobePage>{
     if(mounted) setState(()=>status="GPU napas 4 detik...");
     await Future.delayed(Duration(seconds:4));
     if(threeJs.scene!=null) return;
-    threeJs.scene=three.Scene(); threeJs.scene.background=three.Color(0x000000);
+    threeJs.scene=three.Scene();
+    threeJs.scene.background=three.Color(0x000000.toDouble()); // FIX: double
     double aspect = threeJs.width>0 && threeJs.height>0? threeJs.width/threeJs.height : 0.5625;
     threeJs.camera=three.PerspectiveCamera(45,aspect,0.1,1000); threeJs.camera.position.z=3.2;
-    threeJs.scene.add(three.AmbientLight(0xffffff,0.9));
-    var l=three.DirectionalLight(0xffffff,1.2); l.position.setValues(5,5,5); threeJs.scene.add(l);
+    threeJs.scene.add(three.AmbientLight(0xffffff.toDouble(),0.9));
+    var l=three.DirectionalLight(0xffffff.toDouble(),1.2); l.position.setValues(5,5,5); threeJs.scene.add(l);
     buildModel();
-    if(!animAdded){ threeJs.addAnimation((dt){ if(globe!=null){ globe!.rotation.y+=0.005; for(var r in rings) r.rotation.z+=0.003; } if(cube!=null){ cube!.rotation.y+=0.01; } }); animAdded=true; }
+    // FIX: GANTI addAnimation PAKAI Timer - ANTI ERROR di 0.1.8
+    rotTimer?.cancel();
+    rotTimer=Timer.periodic(Duration(milliseconds:16),(_){
+      if(globe!=null){ globe!.rotation.y+=0.005; for(var r in rings) r.rotation.z+=0.003; }
+      if(cube!=null){ cube!.rotation.y+=0.01; }
+    });
     gpuSiap=true; await Future.delayed(Duration(milliseconds:500)); if(mounted) setState((){ inited=true; status="GLOBE OK"; });
   }
 
@@ -81,14 +92,14 @@ class _GlobePageState extends State<GlobePage>{
       if(globe!=null) threeJs.scene.remove(globe!); if(glow!=null) threeJs.scene.remove(glow!); for(var r in rings) threeJs.scene.remove(r); if(cube!=null) threeJs.scene.remove(cube!); if(textLogo!=null) threeJs.scene.remove(textLogo!); rings.clear();
       var t=themes[temaIdx];
       if(modelIdx==0){
-        var geo=three.SphereGeometry(0.9,40,40); var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe); mat.shininess=60;
+        var geo=three.SphereGeometry(0.9,40,40); var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe.toDouble()); mat.shininess=60; // FIX toDouble
         globe=three.Mesh(geo,mat); globe!.position.y=0.1; threeJs.scene.add(globe!);
-        var glowGeo=three.SphereGeometry(1.05,24,24); var glowMat=three.MeshBasicMaterial(); glowMat.color=three.Color(t.accent); glowMat.transparent=true; glowMat.opacity=0.12;
+        var glowGeo=three.SphereGeometry(1.05,24,24); var glowMat=three.MeshBasicMaterial(); glowMat.color=three.Color(t.accent.toDouble()); glowMat.transparent=true; glowMat.opacity=0.12;
         glow=three.Mesh(glowGeo,glowMat); glow!.position.y=0.1; threeJs.scene.add(glow!);
         var torusGeo=three.TorusGeometry(1.0,0.018,10,70);
-        for(int i=0;i<2;i++){ var m=three.MeshBasicMaterial(); m.color=three.Color(t.accent); m.transparent=true; m.opacity=0.5; var ring=three.Mesh(torusGeo,m.clone()); ring.rotation.x=i==0?0.6:1.3; ring.rotation.y=i==0?0:0.7; ring.position.y=0.1; rings.add(ring); threeJs.scene.add(ring); }
-      } else if(modelIdx==1){ var geo=three.BoxGeometry(1.2,1.2,1.2); var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe); cube=three.Mesh(geo,mat); cube!.position.y=0.1; threeJs.scene.add(cube!); globe=cube; }
-      else { var geo=three.SphereGeometry(0.9,32,32); var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe); globe=three.Mesh(geo,mat); globe!.position.y=0.1; threeJs.scene.add(globe!); }
+        for(int i=0;i<2;i++){ var m=three.MeshBasicMaterial(); m.color=three.Color(t.accent.toDouble()); m.transparent=true; m.opacity=0.5; var ring=three.Mesh(torusGeo,m.clone()); ring.rotation.x=i==0?0.6:1.3; ring.rotation.y=i==0?0:0.7; ring.position.y=0.1; rings.add(ring); threeJs.scene.add(ring); }
+      } else if(modelIdx==1){ var geo=three.BoxGeometry(1.2,1.2,1.2); var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe.toDouble()); cube=three.Mesh(geo,mat); cube!.position.y=0.1; threeJs.scene.add(cube!); globe=cube; }
+      else { var geo=three.SphereGeometry(0.9,32,32); var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe.toDouble()); globe=three.Mesh(geo,mat); globe!.position.y=0.1; threeJs.scene.add(globe!); }
       loadTex();
     }catch(e){ debugPrint("buildModel ERROR $e"); }
   }
@@ -115,7 +126,6 @@ class _GlobePageState extends State<GlobePage>{
         SizedBox(height:6), SizedBox(height:30,child:ListView.builder(scrollDirection:Axis.horizontal,itemCount:themes.length,itemBuilder:(c,i)=>GestureDetector(onTap:(){setState(()=>temaIdx=i); buildModel();},child:Container(margin:EdgeInsets.only(right:6),padding:EdgeInsets.symmetric(horizontal:10,vertical:4),decoration:BoxDecoration(color:i==temaIdx?Color(th.accent):Colors.white12,borderRadius:BorderRadius.circular(20),border:Border.all(color:Color(themes[i].accent))),child:Text(themes[i].name.split(" ").first,style:TextStyle(fontSize:9,color:i==temaIdx?Colors.black:Colors.white)))))),
       ]))),
       Positioned(top:110,left:w/2-110,child:GestureDetector(onPanUpdate:(d){ if(globe!=null){ globe!.rotation.y+=d.delta.dx*0.015; globe!.rotation.x+=d.delta.dy*0.015; } }, onDoubleTap:(){ setState((){modelIdx=(modelIdx+1)%4;}); buildModel(); }, child:Container(width:220,height:220,decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:Color(th.accent),width:2)),child:ClipOval(child:threeJs.build())))),
-      Positioned(top:420,left:0,right:0,child:Column(children:[Text("Swipe=Rotasi • DoubleTap=Ganti Model",style:TextStyle(color:Color(th.accent),fontSize:10)), if(showParticles && audioFile!=null) Container(height:40,margin:EdgeInsets.only(top:4),child:AudioFileWaveforms(size:Size(w,40),playerController:player,waveformType:WaveformType.long,playerWaveStyle:PlayerWaveStyle(fixedWaveColor:Colors.white24,liveWaveColor:Color(th.accent))))])),
       SafeArea(child:Align(alignment:Alignment.bottomCenter,child:SingleChildScrollView(child:Container(margin:EdgeInsets.all(10),padding:EdgeInsets.all(10),decoration:BoxDecoration(color:Colors.black.withOpacity(0.9),borderRadius:BorderRadius.circular(16),border:Border.all(color:Color(th.accent))),child:Column(mainAxisSize:MainAxisSize.min,children:[
         if(audioFile!=null) RangeSlider(min:0,max:total>0?total:1,values:RangeValues(s.clamp(0,total),e.clamp(s,total)),activeColor:Color(th.accent),inactiveColor:Colors.white24,onChanged:(v){ if(v.end-v.start<=60) setState((){s=v.start; e=v.end;}); }),
         Row(children:[
@@ -124,13 +134,11 @@ class _GlobePageState extends State<GlobePage>{
           SizedBox(width:4), Expanded(child:ElevatedButton.icon(onPressed:pickBg,icon:Icon(Icons.image,size:14),label:Text("BG",style:TextStyle(fontSize:9)),style:ElevatedButton.styleFrom(backgroundColor:Color(th.accent),foregroundColor:Colors.black))),
           SizedBox(width:4), Expanded(child:ElevatedButton.icon(onPressed:pickCustomTex,icon:Icon(Icons.public,size:14),label:Text("SKIN",style:TextStyle(fontSize:9)),style:ElevatedButton.styleFrom(backgroundColor:Colors.amber,foregroundColor:Colors.black))),
         ]),
-        SizedBox(height:6), Row(children:[Expanded(child:Column(children:[Text("Speed ${speed.toStringAsFixed(1)}x",style:TextStyle(fontSize:9)),Slider(min:0.5,max:2.0,value:speed,activeColor:Color(th.accent),onChanged:(v)=>setState(()=>speed=v))])), Expanded(child:Column(children:[Text("Pitch ${pitch.toStringAsFixed(1)}",style:TextStyle(fontSize:9)),Slider(min:0.5,max:2.0,value:pitch,activeColor:Color(th.accent),onChanged:(v)=>setState(()=>pitch=v))]))]),
-        TextField(decoration:InputDecoration(hintText:"Running Text...",isDense:true,contentPadding:EdgeInsets.all(8),border:OutlineInputBorder(borderRadius:BorderRadius.circular(8))),style:TextStyle(fontSize:11),onChanged:(v)=>runText=v),
         SizedBox(height:6), SizedBox(width:double.infinity,child:ElevatedButton.icon(onPressed:load?null:buatMp4,icon:load?SizedBox(width:14,height:14,child:CircularProgressIndicator(strokeWidth:2)):Icon(Icons.video_file,size:14),label:Text(load?"RENDER...":"BUAT MP4",style:TextStyle(fontSize:11,fontWeight:FontWeight.bold)),style:ElevatedButton.styleFrom(backgroundColor:Colors.greenAccent,foregroundColor:Colors.black))),
         if(status.isNotEmpty) Padding(padding:EdgeInsets.only(top:4),child:Text(status,style:TextStyle(fontSize:9,color:Color(th.accent)))),
         if(outVideo!=null) SizedBox(width:double.infinity,child:ElevatedButton.icon(onPressed:() async{ await Share.shareXFiles([XFile(outVideo!.path)],text:runText); },icon:Icon(Icons.share,size:14),label:Text("SHARE WA STATUS",style:TextStyle(fontSize:11)),style:ElevatedButton.styleFrom(backgroundColor:Color(0xFF25D366),foregroundColor:Colors.white))),
       ]))))),
     ]));
   }
-  @override void dispose(){ player.dispose(); recorder.dispose(); threeJs.dispose(); super.dispose(); }
+  @override void dispose(){ rotTimer?.cancel(); player.dispose(); recorder.dispose(); threeJs.dispose(); super.dispose(); }
 }
