@@ -48,91 +48,61 @@ class _GlobePageState extends State<GlobePage>{
   File? audioFile,bgFile,outVideo; String? customTexPath;
   final player=PlayerController(); final recorder=RecorderController();
   double total=180,s=0,e=60; bool load=false, isRec=false;
-  String status="GPU napas 4 detik..."; String runText="BABE.INFO HERU WINGCHUN ✨";
+  String status="GPU napas 4 detik..."; String runText="BABE.INFO HERU WINGCHUN";
   List<String> history=[]; double speed=1.0,pitch=1.0; bool showParticles=true;
 
   @override void initState(){
     super.initState();
-    threeJs=three.ThreeJS(
-      setup: () {},
-      onSetupComplete:(){ debugPrint("onSetupComplete KE-PANGGIL!"); setup(); },
-      settings: three.Settings(renderOptions:{"antialias":false,"alpha":true})
-    );
+    threeJs=three.ThreeJS(setup: (){}, onSetupComplete:(){ debugPrint("onSetupComplete KE-PANGGIL"); setup(); }, settings: three.Settings(renderOptions:{"antialias":false,"alpha":true}));
     izin();
-    Future.delayed(Duration(seconds:6),(){ if(!inited && mounted){ debugPrint("FORCE SETUP"); setup(); }});
+    Future.delayed(Duration(seconds:6),(){ if(!inited && mounted) setup(); });
   }
-
-  Future<void> izin() async{
-    try{ var i=await DeviceInfoPlugin().androidInfo; if(i.version.sdkInt>=33){await Permission.audio.request();await Permission.photos.request();await Permission.microphone.request();} else{await Permission.storage.request();await Permission.microphone.request();} }catch(_){}
-    loadHistory();
-  }
+  Future<void> izin() async{ try{ var i=await DeviceInfoPlugin().androidInfo; if(i.version.sdkInt>=33){await Permission.audio.request();await Permission.photos.request();await Permission.microphone.request();} else{await Permission.storage.request();await Permission.microphone.request();} }catch(_){} loadHistory(); }
   void loadHistory() async{ var d=await getTemporaryDirectory(); var files=d.listSync().where((f)=>f.path.endsWith(".mp4")).map((e)=>e.path).toList(); setState(()=>history=files.reversed.take(20).toList()); }
 
   Future<void> setup() async{
     if(gpuSiap) return;
-    debugPrint("SETUP MULAI - GPU napas 4 detik");
     if(mounted) setState(()=>status="GPU napas 4 detik...");
     await Future.delayed(Duration(seconds:4));
-    if(threeJs.scene!=null){ debugPrint("SETUP RETURN scene sudah ada"); return; }
-
+    if(threeJs.scene!=null) return;
     threeJs.scene=three.Scene(); threeJs.scene.background=three.Color(0x000000);
-    double aspect = threeJs.width>0 && threeJs.height>0? threeJs.width/threeJs.height : 9/16;
+    double aspect = threeJs.width>0 && threeJs.height>0? threeJs.width/threeJs.height : 0.5625;
     threeJs.camera=three.PerspectiveCamera(45,aspect,0.1,1000); threeJs.camera.position.z=3.2;
     threeJs.scene.add(three.AmbientLight(0xffffff,0.9));
     var l=three.DirectionalLight(0xffffff,1.2); l.position.setValues(5,5,5); threeJs.scene.add(l);
-
     buildModel();
-
-    if(!animAdded){
-      threeJs.addAnimation((dt){
-        if(globe!=null){ globe!.rotation.y+=0.005; for(var r in rings) r.rotation.z+=0.003; }
-        if(cube!=null){ cube!.rotation.y+=0.01; cube!.rotation.x+=0.005; }
-      });
-      animAdded=true;
-    }
-
-    gpuSiap=true; await Future.delayed(Duration(milliseconds:500));
-    if(mounted) setState((){ inited=true; status="GLOBE OK - Swipe rotasi"; });
-    debugPrint("SETUP SELESAI - inited=true");
+    if(!animAdded){ threeJs.addAnimation((dt){ if(globe!=null){ globe!.rotation.y+=0.005; for(var r in rings) r.rotation.z+=0.003; } if(cube!=null){ cube!.rotation.y+=0.01; } }); animAdded=true; }
+    gpuSiap=true; await Future.delayed(Duration(milliseconds:500)); if(mounted) setState((){ inited=true; status="GLOBE OK"; });
   }
 
-  // FIX BUILD SUCCESS - HAPUS return jebakan + HAPUS toDouble()
   void buildModel(){
-    if(threeJs.scene==null){ debugPrint("buildModel RETURN scene null"); return; }
+    if(threeJs.scene==null) return;
     try{
-      debugPrint("buildModel MULAI tema=${themes[temaIdx].name}");
-      if(globe!=null) threeJs.scene.remove(globe!); if(glow!=null) threeJs.scene.remove(glow!);
-      for(var r in rings) threeJs.scene.remove(r); if(cube!=null) threeJs.scene.remove(cube!); if(textLogo!=null) threeJs.scene.remove(textLogo!); rings.clear();
-
+      if(globe!=null) threeJs.scene.remove(globe!); if(glow!=null) threeJs.scene.remove(glow!); for(var r in rings) threeJs.scene.remove(r); if(cube!=null) threeJs.scene.remove(cube!); if(textLogo!=null) threeJs.scene.remove(textLogo!); rings.clear();
       var t=themes[temaIdx];
       if(modelIdx==0){
-        var geo=three.SphereGeometry(0.9,40,40);
-        var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe); mat.shininess=60; // FIX: INT bukan toDouble()
+        var geo=three.SphereGeometry(0.9,40,40); var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe); mat.shininess=60;
         globe=three.Mesh(geo,mat); globe!.position.y=0.1; threeJs.scene.add(globe!);
-        var glowGeo=three.SphereGeometry(1.05,24,24);
-        var glowMat=three.MeshBasicMaterial(); glowMat.color=three.Color(t.accent); glowMat.transparent=true; glowMat.opacity=0.12;
+        var glowGeo=three.SphereGeometry(1.05,24,24); var glowMat=three.MeshBasicMaterial(); glowMat.color=three.Color(t.accent); glowMat.transparent=true; glowMat.opacity=0.12;
         glow=three.Mesh(glowGeo,glowMat); glow!.position.y=0.1; threeJs.scene.add(glow!);
         var torusGeo=three.TorusGeometry(1.0,0.018,10,70);
         for(int i=0;i<2;i++){ var m=three.MeshBasicMaterial(); m.color=three.Color(t.accent); m.transparent=true; m.opacity=0.5; var ring=three.Mesh(torusGeo,m.clone()); ring.rotation.x=i==0?0.6:1.3; ring.rotation.y=i==0?0:0.7; ring.position.y=0.1; rings.add(ring); threeJs.scene.add(ring); }
-      }
-      else if(modelIdx==1){ var geo=three.BoxGeometry(1.2,1.2,1.2); var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe); cube=three.Mesh(geo,mat); cube!.position.y=0.1; threeJs.scene.add(cube!); globe=cube; }
-      else if(modelIdx==2){ var geo=three.SphereGeometry(0.8,32,32); var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe); globe=three.Mesh(geo,mat); globe!.position.y=0.1; threeJs.scene.add(globe!); var bigTorus=three.TorusGeometry(1.4,0.06,12,70); var m=three.MeshBasicMaterial(); m.color=three.Color(t.accent); var r=three.Mesh(bigTorus,m); r.rotation.x=1.2; r.position.y=0.1; rings.add(r); threeJs.scene.add(r); }
-      else{ var geo=three.SphereGeometry(0.9,32,32); var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe); globe=three.Mesh(geo,mat); globe!.position.y=0.1; threeJs.scene.add(globe!); }
-      debugPrint("buildModel SUCCESS");
+      } else if(modelIdx==1){ var geo=three.BoxGeometry(1.2,1.2,1.2); var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe); cube=three.Mesh(geo,mat); cube!.position.y=0.1; threeJs.scene.add(cube!); globe=cube; }
+      else { var geo=three.SphereGeometry(0.9,32,32); var mat=three.MeshPhongMaterial(); mat.color=three.Color(t.globe); globe=three.Mesh(geo,mat); globe!.position.y=0.1; threeJs.scene.add(globe!); }
       loadTex();
     }catch(e){ debugPrint("buildModel ERROR $e"); }
   }
 
-  Future<void> loadTex() async{ try{ await Future.delayed(Duration(seconds:2)); var loader=three.TextureLoader(); three.Texture? tex; if(customTexPath!=null){ tex=await loader.fromAsset(customTexPath!); } else{ try{ tex=await loader.fromAsset('assets/images/babe_gold.jpg'); }catch(_){}} if(tex!=null && globe!=null){ var m = globe!.material as three.MeshPhongMaterial; m.map=tex; m.needsUpdate=true; } }catch(e){debugPrint("tex fail $e");} }
+  Future<void> loadTex() async{ try{ await Future.delayed(Duration(seconds:2)); var loader=three.TextureLoader(); three.Texture? tex; if(customTexPath!=null){ tex=await loader.fromAsset(customTexPath!); } else { try{ tex=await loader.fromAsset('assets/images/babe_gold.jpg'); }catch(_){}} if(tex!=null && globe!=null){ var m = globe!.material as three.MeshPhongMaterial; m.map=tex; m.needsUpdate=true; } }catch(e){debugPrint("tex fail $e");} }
   Future<void> pickCustomTex() async{ var r=await FilePicker.platform.pickFiles(type: FileType.image); if(r==null) return; customTexPath=r.files.single.path; await loadTex(); setState(()=>status="Skin custom OK"); }
-  Future<void> pickAudio() async{ var r=await FilePicker.platform.pickFiles(type: FileType.any); if(r==null) return; var p=r.files.single.path!; if(p.endsWith(".mp4")||p.endsWith(".mov")){ setState(()=>status="Ekstrak audio dari video..."); var tmp=await getTemporaryDirectory(); var out="${tmp.path}/ext_${DateTime.now().millisecondsSinceEpoch}.m4a"; await FFmpegKit.execute('-y -i "$p" -vn -c:a aac "$out"'); p=out; } File f=File(p); await player.preparePlayer(path:f.path,shouldExtractWaveform:true,noOfSamples:200); await Future.delayed(Duration(milliseconds:400)); var d=await player.getDuration(DurationType.max); setState((){audioFile=f; total=(d/1000).toDouble(); if(total<=0) total=180; s=0; e=total>60?60:total; status="Audio OK: ${f.path.split('/').last}";}); }
+  Future<void> pickAudio() async{ var r=await FilePicker.platform.pickFiles(type: FileType.any); if(r==null) return; var p=r.files.single.path!; if(p.endsWith(".mp4")||p.endsWith(".mov")){ setState(()=>status="Ekstrak audio..."); var tmp=await getTemporaryDirectory(); var out="${tmp.path}/ext_${DateTime.now().millisecondsSinceEpoch}.m4a"; await FFmpegKit.execute('-y -i "$p" -vn -c:a aac "$out"'); p=out; } File f=File(p); await player.preparePlayer(path:f.path,shouldExtractWaveform:true,noOfSamples:200); await Future.delayed(Duration(milliseconds:400)); var d=await player.getDuration(DurationType.max); setState((){audioFile=f; total=(d/1000).toDouble(); if(total<=0) total=180; s=0; e=total>60?60:total; status="Audio OK";}); }
   Future<void> pickBg() async{ var r=await FilePicker.platform.pickFiles(type: FileType.image); if(r==null) return; setState(()=>bgFile=File(r.files.single.path!)); }
   Future<void> toggleRec() async{ if(isRec){ var p=await recorder.stop(); if(p!=null){ File f=File(p); await player.preparePlayer(path:f.path,shouldExtractWaveform:true,noOfSamples:200); await Future.delayed(Duration(milliseconds:400)); var d=await player.getDuration(DurationType.max); setState((){audioFile=f; total=(d/1000).toDouble(); if(total<=0) total=180; s=0; e=total>60?60:total; isRec=false; status="Rekaman OK";}); } else { setState(()=>isRec=false); } }else{ var tmp=await getTemporaryDirectory(); var path="${tmp.path}/rec_${DateTime.now().millisecondsSinceEpoch}.m4a"; await recorder.record(path: path); setState(()=>isRec=true); } }
   Future<void> buatMp4() async{
-    if(audioFile==null){setState(()=>status="Pilih musik / rekam dulu!"); return;}
+    if(audioFile==null){setState(()=>status="Pilih musik dulu!"); return;}
     setState((){load=true; status="Render...";});
     try{
-      await player.stopPlayer(); var tmp=await getTemporaryDirectory(); var ts=DateTime.now().millisecondsSinceEpoch; String trim="${tmp.path}/trim_$ts.m4a"; String out="${tmp.path}/BABE_${ts}.mp4"; double dur=e-s; if(dur<=0||dur>60) dur=60; if(dur<2) dur=5; String filter="atempo=$speed"; if(pitch!=1.0) filter+=",asetrate=44100*$pitch,aresample=44100"; var cmdTrim='-y -ss $s -t $dur -i "${audioFile!.path}" -filter:a "$filter" -c:a aac -b:a 128k "$trim"'; var s1=await FFmpegKit.execute(cmdTrim); if(!ReturnCode.isSuccess(await s1.getReturnCode())){ setState((){load=false; status="Trim gagal";}); return;} String bg=bgFile?.path??""; if(bg.isEmpty){ try{ var data=await DefaultAssetBundle.of(context).load('assets/images/bg.jpg'); File f=File('${tmp.path}/bg_$ts.jpg'); await f.writeAsBytes(data.buffer.asUint8List()); bg=f.path; }catch(_){bg="";} } String txtFilter=""; if(runText.isNotEmpty){ txtFilter=",drawtext=text='$runText':fontcolor=white:fontsize=32:x=w-mod(t*200\\,w+tw):y=h-th-20:box=1:boxcolor=black@0.5"; } String cmd; if(bg.isNotEmpty){ cmd='-y -loop 1 -i "$bg" -i "$trim" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280${txtFilter}" -c:a aac -shortest -t $dur "$out"'; }else{ cmd='-y -f lavfi -i color=c=black:s=720x1280:d=$dur -i "$trim" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -vf "scale=720:1280${txtFilter}" -c:a aac -shortest -t $dur "$out"'; } var s2=await FFmpegKit.execute(cmd); if(ReturnCode.isSuccess(await s2.getReturnCode())){ setState((){outVideo=File(out); load=false; status="MP4 JADI!"; history.insert(0,out);}); }else{ var l=await s2.getAllLogsAsString(); setState((){load=false; status="MP4 gagal";}); debugPrint(l??"");} }catch(e){setState((){load=false; status="Error $e";});}
+      await player.stopPlayer(); var tmp=await getTemporaryDirectory(); var ts=DateTime.now().millisecondsSinceEpoch; String trim="${tmp.path}/trim_$ts.m4a"; String out="${tmp.path}/BABE_${ts}.mp4"; double dur=e-s; if(dur<=0||dur>60) dur=60; if(dur<2) dur=5; String filter="atempo=$speed"; if(pitch!=1.0) filter+=",asetrate=44100*$pitch,aresample=44100"; var cmdTrim='-y -ss $s -t $dur -i "${audioFile!.path}" -filter:a "$filter" -c:a aac -b:a 128k "$trim"'; var s1=await FFmpegKit.execute(cmdTrim); if(!ReturnCode.isSuccess(await s1.getReturnCode())){ setState((){load=false; status="Trim gagal";}); return;} String bg=bgFile?.path??""; if(bg.isEmpty){ try{ var data=await DefaultAssetBundle.of(context).load('assets/images/bg.jpg'); File f=File('${tmp.path}/bg_$ts.jpg'); await f.writeAsBytes(data.buffer.asUint8List()); bg=f.path; }catch(_){bg="";} } String txtFilter=""; if(runText.isNotEmpty){ txtFilter=",drawtext=text='$runText':fontcolor=white:fontsize=32:x=w-mod(t*200\\,w+tw):y=h-th-20:box=1:boxcolor=black@0.5"; } String cmd; if(bg.isNotEmpty){ cmd='-y -loop 1 -i "$bg" -i "$trim" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280${txtFilter}" -c:a aac -shortest -t $dur "$out"'; }else{ cmd='-y -f lavfi -i color=c=black:s=720x1280:d=$dur -i "$trim" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -vf "scale=720:1280${txtFilter}" -c:a aac -shortest -t $dur "$out"'; } var s2=await FFmpegKit.execute(cmd); if(ReturnCode.isSuccess(await s2.getReturnCode())){ setState((){outVideo=File(out); load=false; status="MP4 JADI!"; history.insert(0,out);}); }else{ setState((){load=false; status="MP4 gagal";}); } }catch(e){setState((){load=false; status="Error $e";});}
   }
 
   @override Widget build(BuildContext context){
@@ -142,40 +112,23 @@ class _GlobePageState extends State<GlobePage>{
       Positioned.fill(child:bgW),
       Positioned(top:MediaQuery.of(context).padding.top+8,left:8,right:8,child:Container(padding:EdgeInsets.all(8),decoration:BoxDecoration(color:Colors.black87,borderRadius:BorderRadius.circular(10),border:Border.all(color:Color(th.accent))),child:Column(children:[
         Row(children:[Icon(Icons.public,color:Color(th.accent),size:16),SizedBox(width:6),Expanded(child:Text("${th.name} • ${['Globe','Cube','Ring','Logo'][modelIdx]}",style:TextStyle(fontSize:11,fontWeight:FontWeight.w900,color:Color(th.accent)))),Text(inited?"GLOBE OK":"LOADING...",style:TextStyle(fontSize:8,color:Colors.white70))]),
-        SizedBox(height:6),
-        SizedBox(height:30,child:ListView.builder(scrollDirection:Axis.horizontal,itemCount:themes.length,itemBuilder:(c,i)=>GestureDetector(onTap:(){setState(()=>temaIdx=i); buildModel();},child:Container(margin:EdgeInsets.only(right:6),padding:EdgeInsets.symmetric(horizontal:10,vertical:4),decoration:BoxDecoration(color:i==temaIdx?Color(th.accent):Colors.white12,borderRadius:BorderRadius.circular(20),border:Border.all(color:Color(themes[i].accent))),child:Text(themes[i].name.split(" ").first,style:TextStyle(fontSize:9,color:i==temaIdx?Colors.black:Colors.white)))))),
+        SizedBox(height:6), SizedBox(height:30,child:ListView.builder(scrollDirection:Axis.horizontal,itemCount:themes.length,itemBuilder:(c,i)=>GestureDetector(onTap:(){setState(()=>temaIdx=i); buildModel();},child:Container(margin:EdgeInsets.only(right:6),padding:EdgeInsets.symmetric(horizontal:10,vertical:4),decoration:BoxDecoration(color:i==temaIdx?Color(th.accent):Colors.white12,borderRadius:BorderRadius.circular(20),border:Border.all(color:Color(themes[i].accent))),child:Text(themes[i].name.split(" ").first,style:TextStyle(fontSize:9,color:i==temaIdx?Colors.black:Colors.white)))))),
       ]))),
-      Positioned(top:110,left:w/2-110,child:GestureDetector(
-        onPanUpdate:(d){ if(globe!=null){ globe!.rotation.y+=d.delta.dx*0.015; globe!.rotation.x+=d.delta.dy*0.015; } },
-        onDoubleTap:(){ setState((){modelIdx=(modelIdx+1)%4;}); buildModel(); },
-        child:Container(width:220,height:220,decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:Color(th.accent),width:2),boxShadow:[BoxShadow(color:Color(th.accent).withOpacity(0.35),blurRadius:20,spreadRadius:2)]),child:ClipOval(child:threeJs.build())),
-      )),
-      Positioned(top:420,left:0,right:0,child:Column(children:[
-        Text("👆 Swipe = Rotasi Interaktif • Double Tap = Ganti Model",style:TextStyle(color:Color(th.accent),fontSize:10)),
-        if(showParticles && audioFile!=null) Container(height:40,margin:EdgeInsets.only(top:4),child:AudioFileWaveforms(size:Size(w,40),playerController:player,waveformType:WaveformType.long,playerWaveStyle:PlayerWaveStyle(fixedWaveColor:Colors.white24,liveWaveColor:Color(th.accent)))),
-      ])),
+      Positioned(top:110,left:w/2-110,child:GestureDetector(onPanUpdate:(d){ if(globe!=null){ globe!.rotation.y+=d.delta.dx*0.015; globe!.rotation.x+=d.delta.dy*0.015; } }, onDoubleTap:(){ setState((){modelIdx=(modelIdx+1)%4;}); buildModel(); }, child:Container(width:220,height:220,decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:Color(th.accent),width:2)),child:ClipOval(child:threeJs.build())))),
+      Positioned(top:420,left:0,right:0,child:Column(children:[Text("Swipe=Rotasi • DoubleTap=Ganti Model",style:TextStyle(color:Color(th.accent),fontSize:10)), if(showParticles && audioFile!=null) Container(height:40,margin:EdgeInsets.only(top:4),child:AudioFileWaveforms(size:Size(w,40),playerController:player,waveformType:WaveformType.long,playerWaveStyle:PlayerWaveStyle(fixedWaveColor:Colors.white24,liveWaveColor:Color(th.accent))))])),
       SafeArea(child:Align(alignment:Alignment.bottomCenter,child:SingleChildScrollView(child:Container(margin:EdgeInsets.all(10),padding:EdgeInsets.all(10),decoration:BoxDecoration(color:Colors.black.withOpacity(0.9),borderRadius:BorderRadius.circular(16),border:Border.all(color:Color(th.accent))),child:Column(mainAxisSize:MainAxisSize.min,children:[
         if(audioFile!=null) RangeSlider(min:0,max:total>0?total:1,values:RangeValues(s.clamp(0,total),e.clamp(s,total)),activeColor:Color(th.accent),inactiveColor:Colors.white24,onChanged:(v){ if(v.end-v.start<=60) setState((){s=v.start; e=v.end;}); }),
         Row(children:[
-          Expanded(child:ElevatedButton.icon(onPressed:pickAudio,icon:Icon(Icons.music_note,size:14),label:Text("MUSIK/VIDEO",style:TextStyle(fontSize:9)),style:ElevatedButton.styleFrom(backgroundColor:Colors.white,foregroundColor:Colors.black))),
-          SizedBox(width:4),
-          Expanded(child:ElevatedButton.icon(onPressed:toggleRec,icon:Icon(isRec?Icons.stop:Icons.mic,size:14),label:Text(isRec?"STOP":"REC",style:TextStyle(fontSize:9)),style:ElevatedButton.styleFrom(backgroundColor:isRec?Colors.red:Color(th.accent),foregroundColor:Colors.black))),
-          SizedBox(width:4),
-          Expanded(child:ElevatedButton.icon(onPressed:pickBg,icon:Icon(Icons.image,size:14),label:Text("BG",style:TextStyle(fontSize:9)),style:ElevatedButton.styleFrom(backgroundColor:Color(th.accent),foregroundColor:Colors.black))),
-          SizedBox(width:4),
-          Expanded(child:ElevatedButton.icon(onPressed:pickCustomTex,icon:Icon(Icons.public,size:14),label:Text("SKIN",style:TextStyle(fontSize:9)),style:ElevatedButton.styleFrom(backgroundColor:Colors.amber,foregroundColor:Colors.black))),
+          Expanded(child:ElevatedButton.icon(onPressed:pickAudio,icon:Icon(Icons.music_note,size:14),label:Text("MUSIK",style:TextStyle(fontSize:9)),style:ElevatedButton.styleFrom(backgroundColor:Colors.white,foregroundColor:Colors.black))),
+          SizedBox(width:4), Expanded(child:ElevatedButton.icon(onPressed:toggleRec,icon:Icon(isRec?Icons.stop:Icons.mic,size:14),label:Text(isRec?"STOP":"REC",style:TextStyle(fontSize:9)),style:ElevatedButton.styleFrom(backgroundColor:isRec?Colors.red:Color(th.accent),foregroundColor:Colors.black))),
+          SizedBox(width:4), Expanded(child:ElevatedButton.icon(onPressed:pickBg,icon:Icon(Icons.image,size:14),label:Text("BG",style:TextStyle(fontSize:9)),style:ElevatedButton.styleFrom(backgroundColor:Color(th.accent),foregroundColor:Colors.black))),
+          SizedBox(width:4), Expanded(child:ElevatedButton.icon(onPressed:pickCustomTex,icon:Icon(Icons.public,size:14),label:Text("SKIN",style:TextStyle(fontSize:9)),style:ElevatedButton.styleFrom(backgroundColor:Colors.amber,foregroundColor:Colors.black))),
         ]),
-        SizedBox(height:6),
-        Row(children:[
-          Expanded(child:Column(children:[Text("Speed ${speed.toStringAsFixed(1)}x",style:TextStyle(fontSize:9)),Slider(min:0.5,max:2.0,value:speed,activeColor:Color(th.accent),onChanged:(v)=>setState(()=>speed=v))])),
-          Expanded(child:Column(children:[Text("Pitch ${pitch.toStringAsFixed(1)}",style:TextStyle(fontSize:9)),Slider(min:0.5,max:2.0,value:pitch,activeColor:Color(th.accent),onChanged:(v)=>setState(()=>pitch=v))])),
-        ]),
-        TextField(decoration:InputDecoration(hintText:"Running Text...",hintStyle:TextStyle(fontSize:10),isDense:true,contentPadding:EdgeInsets.all(8),border:OutlineInputBorder(borderRadius:BorderRadius.circular(8))),style:TextStyle(fontSize:11),onChanged:(v)=>runText=v),
-        SizedBox(height:6),
-        SizedBox(width:double.infinity,child:ElevatedButton.icon(onPressed:load?null:buatMp4,icon:load?SizedBox(width:14,height:14,child:CircularProgressIndicator(strokeWidth:2)):Icon(Icons.video_file,size:14),label:Text(load?"RENDER...":"BUAT MP4 + VISUALIZER",style:TextStyle(fontSize:11,fontWeight:FontWeight.bold)),style:ElevatedButton.styleFrom(backgroundColor:Colors.greenAccent,foregroundColor:Colors.black))),
-        if(status.isNotEmpty) Padding(padding:EdgeInsets.only(top:4),child:Text(status,style:TextStyle(fontSize:9,color:Color(th.accent)),textAlign:TextAlign.center)),
-        if(outVideo!=null) SizedBox(width:double.infinity,child:ElevatedButton.icon(onPressed:() async{ await Share.shareXFiles([XFile(outVideo!.path)],text:'$runText\n#${th.name}'); },icon:Icon(Icons.share,size:14),label:Text("SHARE WA STATUS",style:TextStyle(fontSize:11,fontWeight:FontWeight.bold)),style:ElevatedButton.styleFrom(backgroundColor:Color(0xFF25D366),foregroundColor:Colors.white))),
-        if(history.isNotEmpty)...[Divider(color:Colors.white24),Text("GALERI HISTORY ${history.length}",style:TextStyle(fontSize:9)),SizedBox(height:40,child:ListView.builder(scrollDirection:Axis.horizontal,itemCount:history.length,itemBuilder:(c,i)=>GestureDetector(onTap:() async{ await Share.shareXFiles([XFile(history[i])]); },child:Container(margin:EdgeInsets.only(right:6),width:60,height:40,color:Colors.white24,child:Icon(Icons.play_circle,color:Color(th.accent))))))],
+        SizedBox(height:6), Row(children:[Expanded(child:Column(children:[Text("Speed ${speed.toStringAsFixed(1)}x",style:TextStyle(fontSize:9)),Slider(min:0.5,max:2.0,value:speed,activeColor:Color(th.accent),onChanged:(v)=>setState(()=>speed=v))])), Expanded(child:Column(children:[Text("Pitch ${pitch.toStringAsFixed(1)}",style:TextStyle(fontSize:9)),Slider(min:0.5,max:2.0,value:pitch,activeColor:Color(th.accent),onChanged:(v)=>setState(()=>pitch=v))]))]),
+        TextField(decoration:InputDecoration(hintText:"Running Text...",isDense:true,contentPadding:EdgeInsets.all(8),border:OutlineInputBorder(borderRadius:BorderRadius.circular(8))),style:TextStyle(fontSize:11),onChanged:(v)=>runText=v),
+        SizedBox(height:6), SizedBox(width:double.infinity,child:ElevatedButton.icon(onPressed:load?null:buatMp4,icon:load?SizedBox(width:14,height:14,child:CircularProgressIndicator(strokeWidth:2)):Icon(Icons.video_file,size:14),label:Text(load?"RENDER...":"BUAT MP4",style:TextStyle(fontSize:11,fontWeight:FontWeight.bold)),style:ElevatedButton.styleFrom(backgroundColor:Colors.greenAccent,foregroundColor:Colors.black))),
+        if(status.isNotEmpty) Padding(padding:EdgeInsets.only(top:4),child:Text(status,style:TextStyle(fontSize:9,color:Color(th.accent)))),
+        if(outVideo!=null) SizedBox(width:double.infinity,child:ElevatedButton.icon(onPressed:() async{ await Share.shareXFiles([XFile(outVideo!.path)],text:runText); },icon:Icon(Icons.share,size:14),label:Text("SHARE WA STATUS",style:TextStyle(fontSize:11)),style:ElevatedButton.styleFrom(backgroundColor:Color(0xFF25D366),foregroundColor:Colors.white))),
       ]))))),
     ]));
   }
