@@ -25,15 +25,13 @@ jobs:
           flutter clean
           flutter pub get
           PUB=$HOME/.pub-cache/hosted/pub.dev
-          # FIX 1: Patch flutter_angle cmake 3.31.4 -> 3.22.1
           ANGLE=$(find $PUB -maxdepth 1 -type d -name "flutter_angle-*" | head -n1)
           echo "Patch ANGLE $ANGLE"
           find $ANGLE -type f \( -name "*.txt" -o -name "*.gradle" \) -exec sed -i 's/3\.31\.4/3.22.1/g; s/3\.31/3.22.1/g' {} + 2>/dev/null || true
-          # FIX 2: Patch three_js_core gradle (biar gak minta setup pakai param)
           CORE=$(find $PUB -maxdepth 1 -type d -name "three_js_core-*" | head -n1)
           echo "CORE $CORE"
-
-          flutter build apk --release --no-split-per-abi 2>&1 | tee build.log
+          flutter build apk --release 2>&1 | tee build.log
+          tail -n 100 build.log
           find build/ -name "*.apk" -exec ls -lh {} \;
 
       - name: Rename APK - FINAL NO TYPO
