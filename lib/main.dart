@@ -65,25 +65,29 @@ class _GlobePageState extends State<GlobePage>{
   Future<void> izin() async{ try{ var i=await DeviceInfoPlugin().androidInfo; if(i.version.sdkInt>=33){await Permission.audio.request();await Permission.photos.request();await Permission.microphone.request();} else{await Permission.storage.request();await Permission.microphone.request();} }catch(_){} loadHistory(); }
   void loadHistory() async{ var d=await getTemporaryDirectory(); var files=d.listSync().where((f)=>f.path.endsWith(".mp4")).map((e)=>e.path).toList(); setState(()=>history=files.reversed.take(20).toList()); }
 
-  Future<void> setup() async{
+    Future<void> setup() async{
     if(gpuSiap) return;
     if(mounted) setState(()=>status="GPU napas 4 detik...");
     await Future.delayed(Duration(seconds:4));
     if(threeJs.scene!=null) return;
     threeJs.scene=three.Scene();
-    threeJs.scene.background=three.Color(0x000000.toDouble()); // FIX: double
+    threeJs.scene.background=three.Color(0x000000.toDouble()); // Color pakai double
     double aspect = threeJs.width>0 && threeJs.height>0? threeJs.width/threeJs.height : 0.5625;
-    threeJs.camera=three.PerspectiveCamera(45,aspect,0.1,1000); threeJs.camera.position.z=3.2;
-    threeJs.scene.add(three.AmbientLight(0xffffff.toDouble(),0.9));
-    var l=three.DirectionalLight(0xffffff.toDouble(),1.2); l.position.setValues(5,5,5); threeJs.scene.add(l);
+    threeJs.camera=three.PerspectiveCamera(45,aspect,0.1,1000); 
+    threeJs.camera.position.z=3.2;
+    threeJs.scene.add(three.AmbientLight(0xffffff,0.9)); // Light pakai INT!
+    var l=three.DirectionalLight(0xffffff,1.2); // Light pakai INT!
+    l.position.setValues(5,5,5); 
+    threeJs.scene.add(l);
     buildModel();
-    // FIX: GANTI addAnimation PAKAI Timer - ANTI ERROR di 0.1.8
     rotTimer?.cancel();
     rotTimer=Timer.periodic(Duration(milliseconds:16),(_){
       if(globe!=null){ globe!.rotation.y+=0.005; for(var r in rings) r.rotation.z+=0.003; }
       if(cube!=null){ cube!.rotation.y+=0.01; }
     });
-    gpuSiap=true; await Future.delayed(Duration(milliseconds:500)); if(mounted) setState((){ inited=true; status="GLOBE OK"; });
+    gpuSiap=true; 
+    await Future.delayed(Duration(milliseconds:500)); 
+    if(mounted) setState((){ inited=true; status="GLOBE OK"; });
   }
 
   void buildModel(){
