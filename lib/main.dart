@@ -78,19 +78,58 @@ class _GlobePageState extends State<GlobePage>{
     setState(()=>history=files.reversed.take(20).toList());
   }
 
+    bool gpuSiap = false; // tambah variable ini di atas
+
   Future<void> setup() async{
+    if(gpuSiap) return; // ANTI RESET - kalau udah siap jangan reset lagi!
+
+    debugPrint("GPU lagi napas 4 detik...");
+    setState(()=>status="GPU bernapas 4 detik...");
+
+    // NAPAS PANJANG 4 DETIK - JANGAN DIGANGGU
+    await Future.delayed(Duration(seconds: 4));
+
+    if(threeJs.scene!= null) return; // CEK LAGI - anti reset dobel
+
     threeJs.scene=three.Scene();
     threeJs.camera=three.PerspectiveCamera(45,threeJs.width/threeJs.height,0.1,1000);
     threeJs.camera.position.z=3.2;
     threeJs.scene.add(three.AmbientLight(0xffffff,0.9));
-    var l=three.DirectionalLight(0xffffff,1.2); l.position.setValues(5,5,5); threeJs.scene.add(l);
+    var l=three.DirectionalLight(0xffffff,1.2);
+    l.position.setValues(5,5,5);
+    threeJs.scene.add(l);
+
     buildModel();
-    threeJs.addAnimationEvent((dt){
-      if(globe!=null){globe!.rotation.y+=0.006*speed;}
-      if(glow!=null){glow!.rotation.y-=0.002;}
-      for(var r in rings){r.rotation.y+=0.004;}
-      if(cube!=null){cube!.rotation.x+=0.01;cube!.rotation.y+=0.01;}
+    gpuSiap = true; // TANDA GPU UDAH SIAP
+
+    // BARU HILANGIN LOADING - KASIH 1 DETIK LAGI
+    await Future.delayed(Duration(seconds: 1));
+    if(mounted) setState((){
+      inited=true;
+      status="GPU siap - globe muncul";
     });
+  }
+
+  void buildModel(){
+    if(threeJs.scene==null) return;
+    if(!gpuSiap && globe!=null) return; // JANGAN RESET KALAU GPU BELUM SIAP
+
+    // clear
+    if(globe!=null) threeJs.scene.remove(globe!);
+    if(glow!=null) threeJs.scene.remove(glow!);
+    for(var r in rings) threeJs.scene.remove(r);
+    if(cube!=null) threeJs.scene.remove(cube!);
+    rings.clear();
+
+    var t=themes[temaIdx];
+    var geo=three.SphereGeometry(0.9, 40, 40);
+    var mat=three.MeshPhongMaterial()..color=three.Color(t.globe.toDouble())..shininess=60;
+    globe=three.Mesh(geo,mat);
+    globe!.position.y=0.1;
+    threeJs.scene.add(globe!);
+
+    // loadTex pelan2
+    Future.delayed(Duration(seconds: 2),()=>loadTex());
   }
 
       void buildModel(){
