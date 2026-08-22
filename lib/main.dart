@@ -285,10 +285,10 @@ class _GlobePageState extends State<GlobePage>{
         SizedBox(height:6),
         SizedBox(height:30,child:ListView.builder(scrollDirection:Axis.horizontal,itemCount:themes.length,itemBuilder:(c,i)=>GestureDetector(onTap:(){setState(()=>temaIdx=i); buildModel();},child:Container(margin:EdgeInsets.only(right:6),padding:EdgeInsets.symmetric(horizontal:10,vertical:4),decoration:BoxDecoration(color:i==temaIdx?Color(th.accent):Colors.white12,borderRadius:BorderRadius.circular(20),border:Border.all(color:Color(themes[i].accent))),child:Text(themes[i].name.split(" ").first,style:TextStyle(fontSize:9,color:i==temaIdx?Colors.black:Colors.white)))))),
       ]))),
-      Positioned(top:110,left:w/2-150,child:GestureDetector(
-        onPanUpdate:(d){ if(globe!=null){ globe!.rotation.y+=d.delta.dx*0.01; globe!.rotation.x+=d.delta.dy*0.01; } },
+            Positioned(top:110,left:w/2-110,child:GestureDetector(
+        onPanUpdate:(d){ if(globe!=null){ globe!.rotation.y+=d.delta.dx*0.015; globe!.rotation.x+=d.delta.dy*0.015; } },
         onDoubleTap:(){ setState((){modelIdx=(modelIdx+1)%4;}); buildModel(); },
-        child:Container(width:300,height:300,decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:Color(th.accent),width:2),boxShadow:[BoxShadow(color:Color(th.accent).withOpacity(0.4),blurRadius:25)]),child:ClipOval(child:threeJs.build())),
+        child:Container(width:220,height:220,decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:Color(th.accent),width:2),boxShadow:[BoxShadow(color:Color(th.accent).withOpacity(0.35),blurRadius:20,spreadRadius:2)]),child:ClipOval(child:threeJs.build())),
       )),
       Positioned(top:420,left:0,right:0,child:Column(children:[
         Text("👆 Swipe = Rotasi Interaktif • Double Tap = Ganti Model",style:TextStyle(color:Color(th.accent),fontSize:10)),
