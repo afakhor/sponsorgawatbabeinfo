@@ -497,20 +497,24 @@ void main() {
                 );
 
             vec4 textPixel =
-                sampleTextTexture(textUV);
+    texture(
+        textTexture,
+        textUV
+    );
 
-            // Gunakan alpha PNG sebagai bentuk tulisan.
-            // Jika PNG transparan, hanya tulisan yang muncul.
-            float textAlpha =
-                textPixel.a;
+// Debug: abaikan alpha PNG
+float textAlpha = 1.0;
 
-            // Sedikit tingkatkan visibility
-            textAlpha =
-                smoothstep(
-                    0.02,
-                    0.20,
-                    textAlpha
-                );
+vec3 textColor =
+    textPixel.rgb;
+
+globeColor =
+    mix(
+        globeColor,
+        textColor,
+        1.0
+    );
+
 
             vec3 textColor =
                 vec3(1.0, 0.92, 0.36);
