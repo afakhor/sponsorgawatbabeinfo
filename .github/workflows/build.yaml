@@ -33,8 +33,14 @@ jobs:
           flutter clean
           flutter pub get
 
-      - name: Build APK Release
-        run: flutter build apk --release --split-per-abi
+      - name: Fix Gradle Version
+        run: |
+          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.0-all.zip" > android/gradle/wrapper/gradle-wrapper.properties
+          cat android/gradle/wrapper/gradle-wrapper.properties
+
+      - name: Build APK Release - FIX AGP9
+        run: |
+          flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
