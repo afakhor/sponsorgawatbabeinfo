@@ -21,3 +21,7 @@
 
 # Audio Waveforms
 -keep class com.cometchat.pro.** { *; }
+
+# SHADER BLACKHOLE - JANGAN DI OBFUSCATE!
+-keep class io.flutter.view.FlutterView { *; }
+-keep class io.flutter.embedding.android.FlutterFragment { *; }
