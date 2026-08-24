@@ -102,23 +102,34 @@ class _SponsorBabePageState extends State<SponsorBabePage>
   }
 
   Future<ui.Image> _loadTextTexture() async {
-    final ByteData data = await DefaultAssetBundle.of(context).load(
-      'assets/images/babe_info.png',
-    );
+  const String assetPath =
+      'assets/images/babe_info.png';
 
-    final Uint8List bytes = data.buffer.asUint8List(
-      data.offsetInBytes,
-      data.lengthInBytes,
-    );
+  final ByteData data =
+      await DefaultAssetBundle.of(context).load(
+    assetPath,
+  );
 
-    final ui.Codec codec =
-        await ui.instantiateImageCodec(bytes);
+  final Uint8List bytes =
+      data.buffer.asUint8List(
+    data.offsetInBytes,
+    data.lengthInBytes,
+  );
 
-    final ui.FrameInfo frame =
-        await codec.getNextFrame();
+  final ui.Codec codec =
+      await ui.instantiateImageCodec(bytes);
 
-    return frame.image;
-  }
+  final ui.FrameInfo frame =
+      await codec.getNextFrame();
+
+  debugPrint(
+    'Texture loaded: '
+    '${frame.image.width} x ${frame.image.height}',
+  );
+
+  return frame.image;
+}
+
 
   @override
   void dispose() {
