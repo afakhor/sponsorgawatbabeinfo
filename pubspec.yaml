@@ -19,3 +19,4 @@ flutter:
     - shaders/globe.frag
   assets:
     - assets/images/bg.jpg
+    - assets/images/babe_info.png
