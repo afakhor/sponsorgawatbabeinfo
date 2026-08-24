@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 class GlobeShaderPainter extends CustomPainter {
@@ -14,9 +15,10 @@ class GlobeShaderPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final shader = program.fragmentShader();
+    final ui.FragmentShader shader =
+        program.fragmentShader();
 
-    // Urutan uniform float:
+    // Float uniform:
     // 0 = iResolution.x
     // 1 = iResolution.y
     // 2 = iTime
@@ -27,14 +29,14 @@ class GlobeShaderPainter extends CustomPainter {
     shader.setFloat(0, size.width);
     shader.setFloat(1, size.height);
     shader.setFloat(2, time);
-    shader.setFloat(3, time * 0.75);
-    shader.setFloat(4, time * -1.2);
-    shader.setFloat(5, 2.2);
+    shader.setFloat(3, time * 0.72);
+    shader.setFloat(4, time * -1.0);
+    shader.setFloat(5, 3.0);
 
-    // Sampler pertama: babe_info.png
+    // Sampler index pertama
     shader.setImageSampler(0, textTexture);
 
-    final paint = Paint()
+    final Paint paint = Paint()
       ..shader = shader
       ..filterQuality = FilterQuality.high;
 
@@ -45,7 +47,9 @@ class GlobeShaderPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant GlobeShaderPainter oldDelegate) {
+  bool shouldRepaint(
+    covariant GlobeShaderPainter oldDelegate,
+  ) {
     return oldDelegate.program != program ||
         oldDelegate.textTexture != textTexture ||
         oldDelegate.time != time;
@@ -68,12 +72,12 @@ class GlobeShaderWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: CustomPaint(
+        size: Size.infinite,
         painter: GlobeShaderPainter(
           program: program,
           textTexture: textTexture,
           time: time,
         ),
-        size: Size.infinite,
       ),
     );
   }
