@@ -40,17 +40,40 @@ class _SponsorBabePageState extends State<SponsorBabePage> with TickerProviderSt
   Future<void> initPerm() async{ try{ var i=await DeviceInfoPlugin().androidInfo; if(i.version.sdkInt>=33){ await [Permission.audio, Permission.photos].request(); } else { await Permission.storage.request(); } }catch(_){} }
   Future<void> loadShader() async{ try{ shaderProg=await ui.FragmentProgram.fromAsset('shaders/globe.frag'); }catch(_){} }
 
-  Future<void> setupThree() async{
-    scene=three.Scene(); scene!.background=three.Color.fromHex32(0xFF000000);
-    camera=three.PerspectiveCamera(65, threeJS!.width/threeJS!.height, 0.1, 1000); camera!.position.z=4.5;
-    renderer=three.WebGLRenderer(three.WebGLRendererOptions(antialias:true, alpha:true)); 
+    Future<void> setupThree() async{
+    scene=three.Scene();
+    scene!.background=three.Color.fromHex32(0xFF000000);
+    camera=three.PerspectiveCamera(65, threeJS!.width/threeJS!.height, 0.1, 1000);
+    camera!.position.z=4.5;
+    // FIX GAWAT - pakai Map bukan WebGLRendererOptions!
+    renderer=three.WebGLRenderer({
+      "antialias": true,
+      "alpha": true,
+    });
     renderer!.setSize(threeJS!.width, threeJS!.height);
     var geo=three.SphereGeometry(1.1, 64, 64);
-    var mat=three.MeshStandardMaterial.fromMap({"color":0xFFD4AF37, "metalness":0.9, "roughness":0.25});
-    globeMesh=three.Mesh(geo, mat); scene!.add(globeMesh);
-    scene!.add(three.AmbientLight(0xffffff,0.8)); var dl=three.DirectionalLight(0xffffff,1.2); dl.position.setValues(3,4,5); scene!.add(dl);
-    var ringGeo=three.RingGeometry(1.6,2.2,64); var ringMat=three.MeshBasicMaterial.fromMap({"color":0xFFD4AF37, "side":three.DoubleSide, "transparent":true, "opacity":0.6});
-    var ring=three.Mesh(ringGeo, ringMat); ring.rotation.x=math.pi/2; ring.position.y=1.2; scene!.add(ring);
+    var mat=three.MeshStandardMaterial.fromMap({
+      "color":0xFFD4AF37,
+      "metalness":0.9,
+      "roughness":0.25
+    });
+    globeMesh=three.Mesh(geo, mat);
+    scene!.add(globeMesh);
+    scene!.add(three.AmbientLight(0xffffff,0.8));
+    var dl=three.DirectionalLight(0xffffff,1.2);
+    dl.position.setValues(3,4,5);
+    scene!.add(dl);
+    var ringGeo=three.RingGeometry(1.6,2.2,64);
+    var ringMat=three.MeshBasicMaterial.fromMap({
+      "color":0xFFD4AF37,
+      "side":three.DoubleSide,
+      "transparent":true,
+      "opacity":0.6
+    });
+    var ring=three.Mesh(ringGeo, ringMat);
+    ring.rotation.x=math.pi/2;
+    ring.position.y=1.2;
+    scene!.add(ring);
   }
 
   Future<void> pickAudio() async{ var r=await FilePicker.platform.pickFiles(type:FileType.audio); if(r==null)return; File f=File(r.files.single.path!); await player.preparePlayer(path:f.path, shouldExtractWaveform:true, noOfSamples:200); setState(()=>audioFile=f); }
