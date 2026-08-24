@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import '../shaders/globe.dart'; // <--- sesuai request kamu
+import 'globes/globe.dart';
 
 void main() => runApp(const MaterialApp(debugShowCheckedModeBanner: false, home: SponsorBabePage()));
 
