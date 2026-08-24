@@ -108,34 +108,25 @@ class _SponsorBabePageState extends State<SponsorBabePage> with TickerProviderSt
 }
 
 class FullBlackholeFragPainter extends CustomPainter {
-  final ui.FragmentProgram prog; final double time;
+  final ui.FragmentProgram prog; 
+  final double time;
+  
   FullBlackholeFragPainter(this.prog, this.time);
-  @override void paint(Canvas canvas, Size size) {
+
+  @override 
+  void paint(Canvas canvas, Size size) {
     final shader = prog.fragmentShader();
-    shader.setFloat(0, size.width);
-    shader.setFloat(1, size.height);
-    shader.setFloat(2, time);
-    shader.setFloat(3, 0.15); // rotX
-    shader.setFloat(4, 0.0);  // rotY
-    shader.setFloat(5, 1.5);  // glow
+    
+    // Sesuai urutan di globe.frag - 5 uniform aja!
+    shader.setFloat(0, size.width);   // iResolution.x
+    shader.setFloat(1, size.height);  // iResolution.y
+    shader.setFloat(2, time);         // iTime - detik berjalan
+    shader.setFloat(3, time * 0.35);  // rotY - muter globe 0.35 speed (biar BABE.INFO keliatan jalan)
+    shader.setFloat(4, 1.8);          // glow - NAIKIN JADI 1.8 BIAR ANGIN EMAS TERANG KAYA GAMBAR BOS!
+
     canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
   }
-  @override bool shouldRepaint(covariant FullBlackholeFragPainter old) => old.time != time;
-}
 
-class BlackholeWavePainter extends CustomPainter {
-  final double anim; BlackholeWavePainter(this.anim);
-  @override void paint(Canvas canvas, Size size) {
-    var path = Path();
-    for (double x = 0; x < size.width; x += 2) {
-      double p = x / size.width;
-      double y = size.height/2 + math.sin(p*8*math.pi + anim*2*math.pi)*14 + math.sin(p*14*math.pi + anim*3*math.pi)*7;
-      if (x==0) path.moveTo(x,y); else path.lineTo(x,y);
-    }
-    var glow = Paint()..color = const Color(0xFFFFD700).withOpacity(0.25)..style=PaintingStyle.stroke..strokeWidth=16..maskFilter=const MaskFilter.blur(BlurStyle.normal,12);
-    canvas.drawPath(path, glow);
-    var main = Paint()..color=const Color(0xFFFFD700)..style=PaintingStyle.stroke..strokeWidth=2.8;
-    canvas.drawPath(path, main);
-  }
-  @override bool shouldRepaint(covariant BlackholeWavePainter old) => true;
+  @override 
+  bool shouldRepaint(covariant FullBlackholeFragPainter old) => old.time != time;
 }
