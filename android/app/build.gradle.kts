@@ -9,7 +9,9 @@ plugins {
 android {
     namespace = "com.example.sponsorbabeinfogawat"
     compileSdk = 35
-    ndkVersion = "28.0.12433566"
+    ndkVersion = "25.1.8937393" // GANTI DARI 28.0.12433566 KE 25.1.8937393 - SUDAH ADA DI RUNNER!
+    
+  
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
