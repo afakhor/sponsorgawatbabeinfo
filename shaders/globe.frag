@@ -1,70 +1,76 @@
-#version 460 core
-#include <flutter/runtime_effect.gl>
+#include <flutter/runtime_effect.glsl>
 
-uniform vec2 uResolution;
-uniform float uTime;
-uniform float uRotX;
-uniform float uRotY;
-uniform vec3 uGoldColor;
+uniform vec2 iResolution;
+uniform float iTime;
+uniform float rotX;
+uniform float rotY;
+uniform float zoom;
+uniform float glow;
+uniform float base;
+
 out vec4 fragColor;
 
-float noise(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+#define PI 3.14159265359
+
+// Blackhole Atmosphere + Golden Globe Gawat
+vec3 blackhole(vec2 uv, float t){
+    vec2 c = uv - 0.5;
+    float r = length(c) * 2.0;
+    float ang = atan(c.y, c.x) + t*0.15 + r*0.6;
+    
+    // Pusaran blackhole
+    float spiral = sin(ang*3.0 + r*6.0 - t*1.5) * 0.5 + 0.5;
+    float hole = smoothstep(0.5, 0.15, r) * smoothstep(0.0, 0.3, r);
+    
+    // Gold atmosphere
+    vec3 gold1 = vec3(1.0, 0.95, 0.6);
+    vec3 gold2 = vec3(0.83, 0.68, 0.21);
+    vec3 gold3 = vec3(0.72, 0.53, 0.04);
+    
+    vec3 col = mix(gold3, gold2, spiral);
+    col = mix(col, gold1, sin(r*10.0 - t*2.0)*0.5+0.5);
+    col *= hole;
+    col += vec3(1.0,0.84,0.0) * pow(hole, 2.0) * 1.5 * glow;
+    
+    // Event horizon glow
+    float horizon = smoothstep(0.35, 0.3, r) * smoothstep(0.15, 0.25, r);
+    col += gold1 * horizon * 2.0;
+    
+    // Stars background
+    float stars = step(0.995, sin(uv.x*200.0)*sin(uv.y*200.0 + t));
+    col += stars * (1.0 - hole) * 0.8;
+    
+    return col;
+}
 
 void main(){
-    vec2 uv = FlutterFragCoord().xy / uResolution.xy;
-    vec2 c = uv*2.0-1.0; c.x*=uResolution.x/uResolution.y;
-    float dist = length(c);
-    float angle = atan(c.y,c.x);
+    vec2 fragCoord = FlutterFragCoord().xy;
+    vec2 uv = fragCoord / iResolution.xy;
     
-    // Background marmer hitam
-    float marble = noise(uv*4.0 + uTime*0.03);
-    vec3 bg = vec3(0.02) + vec3(0.08,0.06,0.02)*marble;
+    // Fix aspect
+    float aspect = iResolution.x / iResolution.y;
+    uv.x *= aspect;
+    uv.x -= (aspect - 1.0) * 0.5;
     
-    // BLACKHOLE CORE
-    float hole = smoothstep(0.35,0.15, dist);
-    float ring = smoothstep(0.15,0.22,dist)*smoothstep(0.4,0.32,dist);
-    // Pusaran atmosphere - 3 lapisan emas muter kayak topan
-    float vortex1 = sin(angle*2.0 + dist*8.0 - uTime*1.5)*0.5+0.5;
-    float vortex2 = sin(angle*3.0 + dist*6.0 - uTime*2.2)*0.5+0.5;
-    float swirl = vortex1*0.6 + vortex2*0.4;
+    // Rotate
+    uv -= 0.5;
+    float rx = rotX * 0.5;
+    float ry = rotY * 0.5;
+    mat2 rotXMat = mat2(cos(rx), -sin(rx), sin(rx), cos(rx));
+    mat2 rotYMat = mat2(cos(ry), -sin(ry), sin(ry), cos(ry));
+    uv = rotXMat * uv;
+    uv = rotYMat * uv;
+    uv += 0.5;
     
-    vec3 goldSwirl = vec3(1.0,0.84,0.0)*swirl*ring*1.5;
-    goldSwirl += vec3(0.8,0.6,0.1)*pow(swirl,2.0)*ring;
+    vec3 col = blackhole(uv, iTime);
     
-    // Atmosphere fog tertarik
-    float suck = (1.0-dist)*0.3;
-    bg = mix(bg, goldSwirl, ring*0.8 + suck*0.4);
+    // Vignette luxury
+    float vign = 1.0 - length((fragCoord / iResolution.xy - 0.5) * 0.6);
+    vign = pow(vign, 1.2);
+    col *= vign;
     
-    // Blackhole hitam pekat
-    bg = mix(bg, vec3(0.0), hole*0.95);
-    // Event horizon glow
-    float horizon = smoothstep(0.18,0.16,dist)*smoothstep(0.12,0.16,dist);
-    bg += vec3(1.0,0.9,0.5)*horizon*0.9;
+    // Gold tint
+    col = mix(col, col * vec3(1.1, 0.95, 0.5), 0.2);
     
-    // Globe terjebak - di bawah blackhole, ketarik melar
-    vec2 globePos = vec2(0.0, 0.45); // bawah
-    vec2 toGlobe = c - globePos;
-    float dGlobe = length(toGlobe);
-    float globeMask = smoothstep(0.22,0.18, dGlobe);
-    
-    if(globeMask>0.01){
-        // Real 3D globe shading + BABE.INFO emboss
-        float lat = toGlobe.y*3.0 + uRotX;
-        float lon = toGlobe.x*3.0 + uRotY + uTime*0.3;
-        float light = dot(normalize(vec3(toGlobe,0.5)), vec3(-0.3,-0.4,1.0))*0.5+0.5;
-        vec3 gold = uGoldColor*light + vec3(1.0,0.9,0.5)*pow(light,6.0)*0.6;
-        
-        // Duri hitam melilit
-        float thorn = sin(lon*8.0 + lat*6.0)*0.5+0.5;
-        thorn = smoothstep(0.65,0.75,thorn);
-        gold = mix(gold, vec3(0.0), thorn*0.85);
-        
-        // Tertarik blackhole - melar
-        float stretch = (0.45 - c.y)*1.5; // makin atas makin melar
-        gold *= 1.0 + stretch*0.3;
-        
-        bg = mix(bg, gold, globeMask);
-    }
-    
-    fragColor = vec4(bg,1.0);
+    fragColor = vec4(col, 1.0);
 }
