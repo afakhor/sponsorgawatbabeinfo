@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../shaders/globe.dart'; // <--- sesuai request kamu
 
 void main() => runApp(const MaterialApp(debugShowCheckedModeBanner: false, home: SponsorBabePage()));
 
@@ -13,27 +14,21 @@ class _SponsorBabePageState extends State<SponsorBabePage> with TickerProviderSt
   ui.FragmentProgram? fragProg;
   late AnimationController timeCtrl, textCtrl, waveCtrl;
   final runTextCtrl = TextEditingController(text: "TERJEBAK PUSARAN BLACKHOLE ATMOSPHERE! BABE.INFO LUXURY! TERHIPNOTIS 60 DETIK!");
-  GlobalKey globeKey = GlobalKey();
   double time = 0;
-  bool fragReady = false;
 
   @override
   void initState() {
     super.initState();
-    timeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 16))..addListener((){ time += 0.016; })..repeat();
+    timeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 16))
+      ..addListener((){ time += 0.016; if(mounted) setState((){}); })..repeat();
     textCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 14))..repeat();
     waveCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
-    loadFrag();
+    _load();
   }
 
-  Future<void> loadFrag() async {
-    try {
-      fragProg = await ui.FragmentProgram.fromAsset('shaders/globe.frag');
-      setState(()=> fragReady = true);
-    } catch (e) {
-      print("FRAG ERROR: $e");
-      setState(()=> fragReady = false);
-    }
+  Future<void> _load() async {
+    fragProg = await ui.FragmentProgram.fromAsset('shaders/globe.frag');
+    setState((){});
   }
 
   @override void dispose() {
@@ -47,12 +42,9 @@ class _SponsorBabePageState extends State<SponsorBabePage> with TickerProviderSt
       body: Stack(
         children: [
           Positioned.fill(
-            child: RepaintBoundary(
-              key: globeKey,
-              child: fragReady && fragProg != null
-                  ? CustomPaint(painter: FullBlackholeFragPainter(fragProg!, time), size: Size.infinite)
-                  : const Center(child: CircularProgressIndicator(color: Color(0xFFFFD700))),
-            ),
+            child: fragProg == null
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFD700)))
+              : GlobeShaderWidget(program: fragProg!, time: time),
           ),
           SafeArea(
             child: Column(
@@ -60,7 +52,7 @@ class _SponsorBabePageState extends State<SponsorBabePage> with TickerProviderSt
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.82)])),
+                  decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.85)])),
                   child: Column(
                     children: [
                       ShaderMask(
@@ -78,23 +70,6 @@ class _SponsorBabePageState extends State<SponsorBabePage> with TickerProviderSt
                           }),
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      SizedBox(height: 28, child: TextField(controller: runTextCtrl, style: const TextStyle(color: Colors.white, fontSize: 11), decoration: InputDecoration(hintText: "Input running text...", hintStyle: const TextStyle(color: Colors.white38, fontSize: 10), filled: true, fillColor: Colors.white10, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)), onChanged: (_) => setState(() {}))),
-                      const SizedBox(height: 8),
-                      Container(
-                        height: 66,
-                        decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.5))),
-                        child: AnimatedBuilder(
-                          animation: waveCtrl,
-                          builder: (c, _) => CustomPaint(size: const Size(double.infinity, 66), painter: BlackholeWavePainter(waveCtrl.value)),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(children: [
-                        Expanded(child: ElevatedButton(onPressed: () {}, child: const Text("UPLOAD AUDIO", style: TextStyle(fontSize: 9)))),
-                        const SizedBox(width: 6),
-                        Expanded(flex: 2, child: ElevatedButton(onPressed: () {}, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black), child: const Text("RENDER BLACKHOLE 60S...", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)))),
-                      ]),
                     ],
                   ),
                 ),
@@ -105,51 +80,4 @@ class _SponsorBabePageState extends State<SponsorBabePage> with TickerProviderSt
       ),
     );
   }
-}
-
-class FullBlackholeFragPainter extends CustomPainter {
-  final ui.FragmentProgram prog;
-  final double time;
-  FullBlackholeFragPainter(this.prog, this.time);
-  @override
-  void paint(Canvas canvas, Size size) {
-    final shader = prog.fragmentShader();
-    shader.setFloat(0, size.width);
-    shader.setFloat(1, size.height);
-    shader.setFloat(2, time);
-    shader.setFloat(3, time * 0.35);
-    shader.setFloat(4, 1.8);
-    canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
-  }
-  @override bool shouldRepaint(covariant FullBlackholeFragPainter old) => old.time != time;
-}
-
-class BlackholeWavePainter extends CustomPainter {
-  final double anim;
-  BlackholeWavePainter(this.anim);
-  @override
-  void paint(Canvas canvas, Size size) {
-    var path = Path();
-    for (double x = 0; x < size.width; x += 1.5) {
-      double p = x / size.width;
-      double y = size.height/2 + math.sin(p*8*math.pi + anim*2*math.pi)*14 + math.sin(p*14*math.pi + anim*3*math.pi)*7 + math.sin(p*22*math.pi + anim*4*math.pi)*3;
-      if (x==0) path.moveTo(x,y); else path.lineTo(x,y);
-    }
-    var glow = Paint()..color = const Color(0xFFFFD700).withOpacity(0.35)..style=PaintingStyle.stroke..strokeWidth=18..maskFilter=const MaskFilter.blur(BlurStyle.normal,14);
-    canvas.drawPath(path, glow);
-    var main = Paint()
-      ..shader = const LinearGradient(colors: [Color(0xFFFFF59D), Color(0xFFFFD700), Color(0xFFB8860B)]).createShader(Rect.fromLTWH(0,0,400,66))
-      ..style=PaintingStyle.stroke
-      ..strokeWidth=3.2
-      ..strokeCap=StrokeCap.round;
-    canvas.drawPath(path, main);
-    var dotPaint = Paint()..color = const Color(0xFFFFF59D);
-    for(double x=0; x<size.width; x+=28){
-      double p = x / size.width;
-      double y = size.height/2 + math.sin(p*8*math.pi + anim*2*math.pi)*14;
-      double sparkle = (math.sin(x*0.1 + anim*6*math.pi)*0.5+0.5);
-      if(sparkle > 0.7) canvas.drawCircle(Offset(x,y), 1.8*sparkle, dotPaint);
-    }
-  }
-  @override bool shouldRepaint(covariant BlackholeWavePainter old) => true;
 }
