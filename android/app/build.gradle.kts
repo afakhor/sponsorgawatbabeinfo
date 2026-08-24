@@ -6,15 +6,25 @@ plugins {
 
 android {
     namespace = "com.example.sponsorbabeinfogawat"
-    compileSdk = 35
-    ndkVersion = "25.1.8937393"
+    compileSdk = 36
+    ndkVersion = "28.2.13676358"
 
     packaging {
         resources {
-            excludes += setOf("META-INF/*", "META-INF/licenses/*", "**/LICENSE*")
+            excludes += setOf(
+                "META-INF/*",
+                "META-INF/licenses/*",
+                "**/LICENSE*"
+            )
         }
         jniLibs {
-            pickFirsts += setOf("**/libc++_shared.so", "**/libjShared.so", "**/libangle.so", "**/libEGL.so", "**/libGLESv2.so")
+            pickFirsts += setOf(
+                "**/libc++_shared.so",
+                "**/libjShared.so",
+                "**/libangle.so",
+                "**/libEGL.so",
+                "**/libGLESv2.so"
+            )
             useLegacyPackaging = true
         }
     }
@@ -24,29 +34,39 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+
+    kotlinOptions { 
+        jvmTarget = "17" 
+    }
 
     defaultConfig {
         applicationId = "com.example.sponsorbabeinfogawat"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // GAK PAKAI abiFilters - BIAR SPLIT-PER-ABI YANG ATUR!
+        // HAPUS abiFilters - biar --split-per-abi yang atur! JANGAN PAKAI KEDUANYA!
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
             isShrinkResources = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
             signingConfig = signingConfigs.getByName("debug")
-            ndk { debugSymbolLevel = "FULL" }
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
         }
     }
 }
 
-flutter { source = "../.." }
+flutter { 
+    source = "../.." 
+}
 
 dependencies {
     implementation("com.google.android.material:material:1.9.0")
