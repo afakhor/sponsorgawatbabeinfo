@@ -25,11 +25,11 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Accept Android Licenses & Install NDK 28
+      - name: Accept Licenses & Install NDK + CMake + SDK 36
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;28.2.13676358" "platforms;android-36" || true
-          ls $ANDROID_HOME/ndk/ || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.0.12077973" "platforms;android-36" "cmake;3.22.1" "cmake;3.31.4" "build-tools;36.0.0" || true
+          ls $ANDROID_HOME/cmake/ || true
 
       - name: Fix Gradle Wrapper URL
         run: |
@@ -40,7 +40,6 @@ jobs:
           zipStorePath=wrapper/dists
           distributionUrl=https://services.gradle.org/distributions/gradle-8.13-all.zip
           EOF
-          cat android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Flutter doctor
         run: flutter doctor -v
