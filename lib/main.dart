@@ -105,9 +105,17 @@ class _SponsorBabePageState extends State<SponsorBabePage>
   const String assetPath =
       'assets/images/babe_info.png';
 
+  debugPrint(
+    'DEBUG 1: mulai memuat asset: $assetPath',
+  );
+
   final ByteData data =
       await DefaultAssetBundle.of(context).load(
     assetPath,
+  );
+
+  debugPrint(
+    'DEBUG 2: asset berhasil dibaca',
   );
 
   final Uint8List bytes =
@@ -123,12 +131,13 @@ class _SponsorBabePageState extends State<SponsorBabePage>
       await codec.getNextFrame();
 
   debugPrint(
-    'Texture loaded: '
+    'DEBUG 3: texture berhasil dibuat: '
     '${frame.image.width} x ${frame.image.height}',
   );
 
   return frame.image;
 }
+
 
 
   @override
