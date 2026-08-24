@@ -2,15 +2,23 @@
 
 uniform vec2 iResolution;
 uniform float iTime;
-uniform float rotX;
 uniform float rotY;
 uniform float glow;
 
 out vec4 fragColor;
 
 #define PI 3.14159265359
-
 mat2 rot2D(float a){ float c=cos(a), s=sin(a); return mat2(c,-s,s,c); }
+
+// Noise emas
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5); }
+float noise(vec2 p){
+    vec2 i = floor(p); vec2 f = fract(p);
+    float a = hash(i); float b = hash(i+vec2(1.0,0.0));
+    float c = hash(i+vec2(0.0,1.0)); float d = hash(i+vec2(1.0,1.0));
+    vec2 u = f*f*(3.0-2.0*f);
+    return mix(a,b,u.x) + (c-a)*u.y*(1.0-u.x) + (d-b)*u.x*u.y;
+}
 
 void main(){
     vec2 fragCoord = FlutterFragCoord().xy;
@@ -18,111 +26,109 @@ void main(){
     vec2 p = uv * 2.0 - 1.0;
     p.x *= iResolution.x / iResolution.y;
 
-    vec2 center = vec2(0.0, -0.05);
+    vec2 center = vec2(0.0, 0.25);
     vec2 d = p - center;
     float r = length(d);
     float ang = atan(d.y, d.x);
 
     vec3 col = vec3(0.0);
 
-    // === BLACKHOLE ACCRETION DISK ===
-    float diskR = r;
-    float diskAng = ang + iTime * 0.25 + diskR * 0.8;
-    float spiral = sin(diskAng * 3.0 + diskR * 6.0 - iTime * 1.2) * 0.5 + 0.5;
-    
-    float horizonOuter = smoothstep(1.4, 0.9, diskR);
-    float horizonInner = smoothstep(0.35, 0.55, diskR);
-    float horizon = horizonOuter * horizonInner;
+    // === BACKGROUND MARMER HITAM URAT EMAS ===
+    vec2 marbleUV = p * 1.2 + vec2(iTime*0.02, 0.0);
+    float marble = noise(marbleUV * 2.5);
+    float veins = sin(marbleUV.x * 3.0 + marble * 4.0) * 0.5 + 0.5;
+    veins = pow(veins, 8.0) * 2.0;
+    vec3 marbleCol = vec3(0.02, 0.02, 0.025) + vec3(0.8, 0.6, 0.15) * veins * 0.9;
+    marbleCol += vec3(0.15,0.12,0.08) * marble * 0.2;
+    col = marbleCol;
 
-    vec3 gold1 = vec3(1.0, 0.97, 0.65);
-    vec3 gold2 = vec3(1.0, 0.84, 0.0);
-    vec3 gold3 = vec3(0.8, 0.55, 0.05);
-
-    vec3 diskCol = mix(gold3, gold2, spiral);
-    diskCol = mix(diskCol, gold1, pow(spiral, 2.0));
-    diskCol *= horizon * (1.8 + glow);
-
-    // Anamorphic stretch buat disk
-    float diskFlatten = 0.22;
-    vec2 diskUV = d; diskUV.y /= diskFlatten;
-    float diskR2 = length(diskUV);
-    float diskMask = smoothstep(1.5, 1.2, diskR2) * smoothstep(0.5, 0.7, diskR2);
-    diskCol *= diskMask;
-
-    col += diskCol;
-
-    // Event horizon glow
-    float eh = smoothstep(0.58, 0.52, r) * smoothstep(0.38, 0.45, r);
-    col += gold1 * eh * 1.8;
-
-    // === GLOBE EMAS 3D ===
-    float globeRadius = 0.62;
-    float globeDist = r;
-
-    if(globeDist < globeRadius){
-        // Sphere mapping
-        vec2 sphereUV = d / globeRadius;
-        float z = sqrt(max(0.0, 1.0 - dot(sphereUV, sphereUV)));
-        vec3 normal = vec3(sphereUV, z);
-
-        // Rotate globe
-        float ry = rotY + iTime * 0.35;
-        float rx = rotX * 0.5;
-        normal.xz = rot2D(ry) * normal.xz;
-        normal.yz = rot2D(rx) * normal.yz;
-
-        float lon = atan(normal.z, normal.x);
-        float lat = asin(normal.y);
-
-        // Gold base
-        vec3 base = mix(gold3, gold2, 0.5 + 0.5 * sin(lat * 3.0));
-        base = mix(base, gold1, pow(max(0.0, dot(normal, vec3(-0.4,-0.4,0.8))), 2.0));
-
-        // Longitude lines rotating
-        float lines = 0.0;
-        for(float i=0.0; i<12.0; i++){
-            float l = lon + i * PI / 6.0;
-            lines += smoothstep(0.02, 0.0, abs(sin(l * 1.0)));
-        }
-        lines *= 0.18;
-        
-        float latLines = 0.0;
-        for(float i=-2.0; i<=2.0; i++){
-            latLines += smoothstep(0.03, 0.0, abs(lat - i * 0.52));
-        }
-        latLines *= 0.15;
-
-        base -= (lines + latLines) * 0.6;
-
-        // Shading
-        float diff = max(0.0, dot(normal, normalize(vec3(-0.6,-0.5,0.8))));
-        float spec = pow(max(0.0, dot(reflect(vec3(0.0,0.0,-1.0), normal), normalize(vec3(-0.5,-0.5,0.8)))), 32.0);
-
-        vec3 globeCol = base * (0.6 + diff * 0.8) + spec * 0.6;
-
-        // Lensing di pinggir globe
-        float fresnel = pow(1.0 - max(0.0, dot(normal, vec3(0.0,0.0,1.0))), 3.0);
-        globeCol += gold2 * fresnel * 0.6;
-
-        // Shadow blackhole di globe
-        float shadow = 1.0 - smoothstep(0.3, 0.9, globeDist / globeRadius);
-        globeCol *= 0.85 + shadow * 0.15;
-
-        col = mix(col, globeCol, smoothstep(globeRadius+0.02, globeRadius-0.01, globeDist));
-        
-        // Outer glow globe
-        float glowRing = smoothstep(0.05, 0.0, abs(globeDist - globeRadius));
-        col += gold2 * glowRing * 0.35;
+    // === ANGIN ATMOSFER EMAS MULUK - PUSARAN ===
+    for(float i=0.0; i<3.0; i++){
+        float t = iTime * (0.08 + i*0.04);
+        float rr = r * (0.8 + i*0.25);
+        float aa = ang + rr * (1.5 + i*0.5) + t;
+        float swirl = sin(aa * (2.0 + i) + rr * 4.0) * 0.5 + 0.5;
+        float mask = smoothstep(1.8, 0.4, rr) * smoothstep(0.2, 0.5, rr);
+        mask *= 0.6 / (0.3 + i*0.3);
+        vec3 goldSwirl = vec3(1.0,0.84,0.15) * swirl * mask;
+        goldSwirl += vec3(1.0,0.95,0.6) * pow(swirl, 3.0) * mask * 1.2;
+        // Partikel debu emas
+        float dust = hash(vec2(aa*5.0, rr*8.0 + t)) * step(0.7, swirl);
+        goldSwirl += vec3(1.0,0.9,0.4) * dust * mask * 2.0;
+        col += goldSwirl * glow;
     }
 
-    // Stars
-    vec2 starUV = uv * 80.0;
-    float stars = step(0.998, sin(starUV.x + iTime*0.1) * sin(starUV.y));
-    col += stars * (1.0 - horizon) * 0.5;
+    // === GLOBE BABE.INFO ===
+    float globeR = 0.52;
+    float dist = r;
+    if(dist < globeR){
+        vec2 sUV = d / globeR;
+        float z = sqrt(max(0.0, 1.0 - dot(sUV, sUV)));
+        vec3 normal = vec3(sUV, z);
 
-    // Vignette luxury
-    float vign = 1.0 - dot(p, p) * 0.22;
-    col *= vign;
+        // Rotate
+        float ry = rotY + iTime * 0.28;
+        normal.xz = rot2D(ry) * normal.xz;
+
+        // Sphere shading
+        vec3 lightDir = normalize(vec3(-0.5, -0.3, 0.9));
+        float diff = max(0.0, dot(normal, lightDir));
+        float spec = pow(max(0.0, dot(reflect(-lightDir, normal), vec3(0.0,0.0,1.0))), 48.0);
+
+        // Base emas
+        vec3 base = mix(vec3(0.6,0.45,0.08), vec3(1.0,0.84,0.0), diff);
+        base = mix(base, vec3(1.0,0.95,0.65), spec);
+
+        // UKIRAN BABE.INFO - simulasi text berulang dengan noise pattern
+        float lon = atan(normal.z, normal.x);
+        float lat = asin(normal.y);
+        float textPattern = 0.0;
+        // Buat baris-baris text BABE.INFO
+        for(float row=-2.0; row<=2.0; row+=1.0){
+            float latBand = abs(lat - row*0.4);
+            if(latBand < 0.22){
+                float repeatLon = lon * 3.0 + iTime*0.0; // 3x pengulangan
+                float stripe = sin(repeatLon * 8.0) * 0.5 + 0.5;
+                stripe = smoothstep(0.45, 0.55, stripe);
+                textPattern += stripe * smoothstep(0.22, 0.12, latBand) * 0.5;
+            }
+        }
+        // Emboss effect
+        float emboss = textPattern * 0.35;
+        base += emboss * 0.3;
+        base -= textPattern * 0.15;
+
+        // Darken edges
+        float fresnel = pow(1.0 - max(0.0, dot(normal, vec3(0.0,0.0,1.0))), 2.0);
+        base = mix(base, base * 0.6, fresnel * 0.5);
+
+        col = mix(col, base, smoothstep(globeR+0.02, globeR-0.01, dist));
+        
+        // Highlight globe
+        col += vec3(1.0,0.95,0.6) * smoothstep(0.03, 0.0, abs(dist - globeR)) * 0.5;
+    }
+
+    // === MAHKOTA DURI HITAM ===
+    float crownR = globeR + 0.03;
+    float crownDist = abs(r - crownR);
+    if(crownDist < 0.045){
+        float thornAng = ang * 16.0; // 16 duri
+        float thorns = sin(thornAng) * 0.5 + 0.5;
+        thorns = pow(thorns, 4.0);
+        float thornMask = smoothstep(0.045, 0.01, crownDist) * (0.3 + thorns * 1.2);
+        // Duri hitam mengkilat
+        vec3 thornCol = vec3(0.04,0.04,0.05) + vec3(0.15) * thorns;
+        col = mix(col, thornCol, thornMask * 0.95);
+        // Highlight duri
+        col += vec3(0.3) * thorns * thornMask * smoothstep(0.6, 0.0, crownDist) * 0.5;
+    }
+
+    // Outer glow atmosphere
+    float outerGlow = smoothstep(0.15, 0.0, abs(r - (globeR + 0.12))) * 0.4;
+    col += vec3(1.0,0.84,0.0) * outerGlow * glow;
+
+    // Vignette
+    col *= 1.0 - dot(p,p) * 0.18;
 
     fragColor = vec4(col, 1.0);
 }
