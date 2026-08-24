@@ -34,12 +34,11 @@ subprojects {
     configurations.all {
         resolutionStrategy.eachDependency {
             if (requested.group == "org.jetbrains.kotlin") {
-                useVersion("1.9.22")
+                useVersion("2.0.0") // FIX GAWAT - DARI 1.9.22 KE 2.0.0
             }
         }
     }
 
-    // Paksa seluruh Java & Kotlin tasks subproject memakai JVM Target 17
     tasks.withType<JavaCompile>().configureEach {
         sourceCompatibility = JavaVersion.VERSION_17.toString()
         targetCompatibility = JavaVersion.VERSION_17.toString()
