@@ -33,15 +33,19 @@ jobs:
           flutter clean
           flutter pub get
 
-      - name: Fix Gradle Version
+      - name: Fix Gradle Wrapper URL (anti github 404)
         run: |
-          echo "distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.0-all.zip" > android/gradle/wrapper/gradle-wrapper.properties
+          cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          distributionUrl=https://services.gradle.org/distributions/gradle-8.13-all.zip
+          EOF
           cat android/gradle/wrapper/gradle-wrapper.properties
 
-      - name: Build APK Release - FIX AGP9
-        run: |
-          flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
-
+      - name: Build APK
+        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
