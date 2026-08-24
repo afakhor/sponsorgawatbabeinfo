@@ -1,117 +1,141 @@
-class BlackholeGlobePainter extends CustomPainter {
-  final double anim, time;
-  BlackholeGlobePainter(this.anim, this.time);
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+import 'package:flutter/material.dart';
+
+void main() => runApp(const MaterialApp(debugShowCheckedModeBanner: false, home: SponsorBabePage()));
+
+class SponsorBabePage extends StatefulWidget {
+  const SponsorBabePage({super.key});
+  @override State<SponsorBabePage> createState() => _SponsorBabePageState();
+}
+
+class _SponsorBabePageState extends State<SponsorBabePage> with TickerProviderStateMixin {
+  ui.FragmentProgram? fragProg;
+  late AnimationController timeCtrl, textCtrl, waveCtrl;
+  final runTextCtrl = TextEditingController(text: "TERJEBAK PUSARAN BLACKHOLE ATMOSPHERE! BABE.INFO LUXURY! TERHIPNOTIS 60 DETIK!");
+  GlobalKey globeKey = GlobalKey();
+  double time = 0;
+  bool fragReady = false;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height * 0.42);
-    final radius = size.width * 0.38;
-
-    // 1. BLACKHOLE CORE - HITAM PEKAT DI BELAKANG GLOBE
-    final blackHolePaint = Paint()..color = const Color(0xFF000000)..style = PaintingStyle.fill;
-    canvas.drawCircle(center, radius * 1.45, blackHolePaint);
-
-    // 2. EVENT HORIZON - GLOW HITAM KE EMAS
-    final horizonPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [Colors.black, Colors.black, const Color(0xFF1A1200), const Color(0xFFFFD700).withOpacity(0.0)],
-        stops: const [0.0, 0.65, 0.85, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: radius * 1.6))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
-    canvas.drawCircle(center, radius * 1.6, horizonPaint);
-
-    // 3. ACCRETION DISK - PUSARAN MAUT (3 lapis muter beda kecepatan)
-    for (int i = 0; i < 4; i++) {
-      double baseR = radius * (1.25 + i * 0.18);
-      double speed = 0.5 + i * 0.35;
-      double rot = anim * 2 * math.pi * speed;
-      
-      canvas.save();
-      canvas.translate(center.dx, center.dy);
-      canvas.rotate(rot);
-      canvas.scale(1, 0.22 + i * 0.04);
-
-      // Disk gradient emas menyala
-      final diskPath = Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: baseR));
-      final diskPaint = Paint()
-        ..shader = SweepGradient(
-          colors: [
-            const Color(0xFFFFD700).withOpacity(0.0),
-            const Color(0xFFFFD700),
-            const Color(0xFFFFA500),
-            const Color(0xFFFFD700),
-            const Color(0xFFFFF59D),
-            const Color(0xFFFFD700).withOpacity(0.0),
-          ],
-          stops: const [0.0, 0.15, 0.35, 0.5, 0.7, 1.0],
-          startAngle: 0,
-          endAngle: math.pi * 2,
-        ).createShader(Rect.fromCircle(center: Offset.zero, radius: baseR))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 8 - i * 1.2
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 6);
-
-      canvas.drawCircle(Offset.zero, baseR, diskPaint);
-      
-      // Partikel pusaran
-      for (int j = 0; j < 8; j++) {
-        double ang = j * math.pi / 4 + anim * 3;
-        double x = math.cos(ang) * baseR;
-        double y = math.sin(ang) * baseR * 0.3;
-        canvas.drawCircle(Offset(x, y), 2.5, Paint()..color = const Color(0xFFFFF59D).withOpacity(0.8));
-      }
-      canvas.restore();
-    }
-
-    // 4. GLOBE UTAMA - Sekarang di depan blackhole, tapi ada shadow blackhole
-    final globeRect = Rect.fromCircle(center: center, radius: radius);
-    final globePaint = Paint()
-      ..shader = RadialGradient(
-        colors: [const Color(0xFFFFF59D), const Color(0xFFFFD700), const Color(0xFFB8860B), const Color(0xFF5D4E00)],
-        stops: const [0.0, 0.25, 0.65, 1.0],
-        center: const Alignment(-0.35, -0.45),
-        radius: 1.1,
-      ).createShader(globeRect)
-      ..style = PaintingStyle.fill;
-
-    // Shadow globe karena blackhole
-    canvas.drawCircle(center + Offset(radius * 0.15, radius * 0.1), radius, Paint()..color = Colors.black.withOpacity(0.4)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15));
-    canvas.drawCircle(center, radius, globePaint);
-
-    // 5. LENSING EFFECT - Cahaya melengkung di pinggir globe
-    final lensPaint = Paint()
-      ..color = const Color(0xFFFFD700).withOpacity(0.5)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-    canvas.drawCircle(center, radius * 1.02, lensPaint);
-
-    // 6. Garis longitude biar muter
-    final linePaint = Paint()..color = Colors.black.withOpacity(0.22)..style = PaintingStyle.stroke..strokeWidth = 1;
-    for (int i = 0; i < 12; i++) {
-      double angle = (anim * 2 * math.pi + i * math.pi / 6) % (2 * math.pi);
-      double x = math.cos(angle);
-      if (x > -0.3) {
-        Path p = Path();
-        for (double yy = -1; yy <= 1; yy += 0.05) {
-          double xx = x * math.sqrt(1 - yy * yy);
-          double px = center.dx + xx * radius;
-          double py = center.dy + yy * radius * 0.85;
-          if (yy == -1) p.moveTo(px, py); else p.lineTo(px, py);
-        }
-        canvas.drawPath(p, linePaint);
-      }
-    }
-    for (double lat = -60; lat <= 60; lat += 30) {
-      double y = center.dy + radius * math.sin(lat * math.pi / 180) * 0.8;
-      double w = radius * math.cos(lat * math.pi / 180);
-      canvas.drawOval(Rect.fromCenter(center: Offset(center.dx, y), width: w * 2, height: w * 0.3), linePaint);
-    }
-
-    // 7. GLOW DEPAN PALING GAWAT
-    canvas.drawCircle(center, radius * 1.12, Paint()..color = const Color(0xFFFFD700).withOpacity(0.25)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 22));
-    canvas.drawCircle(center + Offset(-radius * 0.32, -radius * 0.38), radius * 0.19, Paint()..color = Colors.white.withOpacity(0.55)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
+  void initState() {
+    super.initState();
+    timeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 16))..addListener((){ setState(()=> time += 0.016); })..repeat();
+    textCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 14))..repeat();
+    waveCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+    loadFrag();
   }
 
-  @override bool shouldRepaint(covariant BlackholeGlobePainter old) => old.anim != anim;
+  Future<void> loadFrag() async {
+    try {
+      fragProg = await ui.FragmentProgram.fromAsset('shaders/globe.frag');
+      setState(()=> fragReady = true);
+    } catch (e) {
+      print("FRAG ERROR: $e");
+      setState(()=> fragReady = false);
+    }
+  }
+
+  @override void dispose() {
+    timeCtrl.dispose(); textCtrl.dispose(); waveCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // FULL FRAG BLACKHOLE + GLOBE
+          Positioned.fill(
+            child: RepaintBoundary(
+              key: globeKey,
+              child: fragReady && fragProg != null
+                  ? CustomPaint(
+                      painter: FullBlackholeFragPainter(fragProg!, time),
+                      size: Size.infinite,
+                    )
+                  : const Center(child: CircularProgressIndicator(color: Color(0xFFFFD700))),
+            ),
+          ),
+
+          // UI BAWAH - TETAP
+          SafeArea(
+            child: Column(
+              children: [
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.82)])),
+                  child: Column(
+                    children: [
+                      ShaderMask(
+                        shaderCallback: (b) => const LinearGradient(colors: [Color(0xFFFFF59D), Color(0xFFFFD700), Color(0xFFB8860B)]).createShader(b),
+                        child: const Text("BABE.INFO", style: TextStyle(fontSize: 46, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 3, shadows: [Shadow(color: Colors.black, offset: Offset(3, 3), blurRadius: 10), Shadow(color: Color(0xFFFFD700), blurRadius: 25)])),
+                      ),
+                      const Text("(n/) By Heru Wingchun", style: TextStyle(color: Color(0xFFFFD700), fontSize: 13, fontStyle: FontStyle.italic)),
+                      const SizedBox(height: 10),
+                      Container(
+                        height: 38, width: double.infinity,
+                        decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), border: const Border.symmetric(horizontal: BorderSide(color: Color(0xFFD4AF37))), boxShadow: [BoxShadow(color: const Color(0xFFD4AF37).withOpacity(0.4), blurRadius: 15)]),
+                        child: ClipRect(
+                          child: AnimatedBuilder(animation: textCtrl, builder: (c, _) {
+                            return Transform.translate(offset: Offset(MediaQuery.of(context).size.width - textCtrl.value * (MediaQuery.of(context).size.width + 900), 0), child: Text("${runTextCtrl.text}   •   ${runTextCtrl.text}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic, color: Color(0xFFFFD700))));
+                          }),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SizedBox(height: 28, child: TextField(controller: runTextCtrl, style: const TextStyle(color: Colors.white, fontSize: 11), decoration: InputDecoration(hintText: "Input running text...", hintStyle: const TextStyle(color: Colors.white38, fontSize: 10), filled: true, fillColor: Colors.white10, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)), onChanged: (_) => setState(() {}))),
+                      const SizedBox(height: 8),
+                      Container(height: 66, decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFD4AF37).withOpacity(0.5))), child: AnimatedBuilder(animation: waveCtrl, builder: (c, _) => CustomPaint(size: const Size(double.infinity, 66), painter: BlackholeWavePainter(waveCtrl.value)))),
+                      const SizedBox(height: 8),
+                      Row(children: [
+                        Expanded(child: ElevatedButton(onPressed: () {}, child: const Text("UPLOAD AUDIO", style: TextStyle(fontSize: 9)))),
+                        const SizedBox(width: 6),
+                        Expanded(flex: 2, child: ElevatedButton(onPressed: () {}, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black), child: const Text("RENDER BLACKHOLE 60S...", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11)))),
+                      ]),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class FullBlackholeFragPainter extends CustomPainter {
+  final ui.FragmentProgram prog; final double time;
+  FullBlackholeFragPainter(this.prog, this.time);
+  @override void paint(Canvas canvas, Size size) {
+    final shader = prog.fragmentShader();
+    shader.setFloat(0, size.width);
+    shader.setFloat(1, size.height);
+    shader.setFloat(2, time);
+    shader.setFloat(3, 0.15); // rotX
+    shader.setFloat(4, 0.0);  // rotY
+    shader.setFloat(5, 1.5);  // glow
+    canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
+  }
+  @override bool shouldRepaint(covariant FullBlackholeFragPainter old) => old.time != time;
+}
+
+class BlackholeWavePainter extends CustomPainter {
+  final double anim; BlackholeWavePainter(this.anim);
+  @override void paint(Canvas canvas, Size size) {
+    var path = Path();
+    for (double x = 0; x < size.width; x += 2) {
+      double p = x / size.width;
+      double y = size.height/2 + math.sin(p*8*math.pi + anim*2*math.pi)*14 + math.sin(p*14*math.pi + anim*3*math.pi)*7;
+      if (x==0) path.moveTo(x,y); else path.lineTo(x,y);
+    }
+    var glow = Paint()..color = const Color(0xFFFFD700).withOpacity(0.25)..style=PaintingStyle.stroke..strokeWidth=16..maskFilter=const MaskFilter.blur(BlurStyle.normal,12);
+    canvas.drawPath(path, glow);
+    var main = Paint()..color=const Color(0xFFFFD700)..style=PaintingStyle.stroke..strokeWidth=2.8;
+    canvas.drawPath(path, main);
+  }
+  @override bool shouldRepaint(covariant BlackholeWavePainter old) => true;
 }
