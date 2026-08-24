@@ -15,25 +15,25 @@ class GlobeShaderPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) {
+      return;
+    }
+
     final ui.FragmentShader shader =
         program.fragmentShader();
 
-    // Float uniform:
-    // 0 = iResolution.x
-    // 1 = iResolution.y
-    // 2 = iTime
-    // 3 = rotY
-    // 4 = windRot
-    // 5 = glow
-
+    // iResolution adalah vec2,
+    // sehingga indeksnya memakai slot 0 dan 1.
     shader.setFloat(0, size.width);
     shader.setFloat(1, size.height);
+
+    // Float berikutnya
     shader.setFloat(2, time);
     shader.setFloat(3, time * 0.72);
     shader.setFloat(4, time * -1.0);
     shader.setFloat(5, 3.0);
 
-    // Sampler index pertama
+    // Sampler pertama pada shader
     shader.setImageSampler(0, textTexture);
 
     final Paint paint = Paint()
@@ -70,13 +70,14 @@ class GlobeShaderWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: GlobeShaderPainter(
-          program: program,
-          textTexture: textTexture,
-          time: time,
+    return SizedBox.expand(
+      child: RepaintBoundary(
+        child: CustomPaint(
+          painter: GlobeShaderPainter(
+            program: program,
+            textTexture: textTexture,
+            time: time,
+          ),
         ),
       ),
     );
