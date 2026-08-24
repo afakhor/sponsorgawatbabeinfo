@@ -15,6 +15,7 @@ dependencies:
 
 flutter:
   uses-material-design: true
+  shaders:
+    - shaders/globe.frag
   assets:
-    - assets/images/babe_gold.jpg
     - assets/images/bg.jpg
