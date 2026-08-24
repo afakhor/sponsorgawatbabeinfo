@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -17,9 +16,7 @@ void main() {
 }
 
 class SponsorBabePage extends StatefulWidget {
-  const SponsorBabePage({
-    super.key,
-  });
+  const SponsorBabePage({super.key});
 
   @override
   State<SponsorBabePage> createState() {
@@ -35,36 +32,32 @@ class _SponsorBabePageState extends State<SponsorBabePage>
   late final Ticker ticker;
 
   double time = 0.0;
-  Duration? lastElapsed;
-
+  Duration? previousElapsed;
   String? errorMessage;
 
   @override
   void initState() {
     super.initState();
 
-    ticker = createTicker(
-      (Duration elapsed) {
-        if (lastElapsed == null) {
-          lastElapsed = elapsed;
-          return;
-        }
+    ticker = createTicker((Duration elapsed) {
+      if (previousElapsed == null) {
+        previousElapsed = elapsed;
+        return;
+      }
 
-        final double delta =
-            (elapsed - lastElapsed!).inMicroseconds / 1000000.0;
+      final double delta =
+          (elapsed - previousElapsed!).inMicroseconds / 1000000.0;
 
-        lastElapsed = elapsed;
+      previousElapsed = elapsed;
 
-        if (!mounted) {
-          return;
-        }
+      if (!mounted) {
+        return;
+      }
 
-        setState(() {
-          // Batas delta mencegah lonjakan jika aplikasi sempat pause
-          time += delta.clamp(0.0, 0.05);
-        });
-      },
-    );
+      setState(() {
+        time += delta.clamp(0.0, 0.05);
+      });
+    });
 
     ticker.start();
     _loadResources();
@@ -72,20 +65,27 @@ class _SponsorBabePageState extends State<SponsorBabePage>
 
   Future<void> _loadResources() async {
     try {
-      final results = await Future.wait<Object>([
-        ui.FragmentProgram.fromAsset(
-          'shaders/globe.frag',
-        ),
-        _loadTextTexture(),
-      ]);
+      final ui.FragmentProgram program =
+          await ui.FragmentProgram.fromAsset(
+        'shaders/globe.frag',
+      );
+
+      final ui.Image texture =
+          await _loadTextTexture();
+
+      debugPrint(
+        'BABE.INFO texture loaded: '
+        '${texture.width} x ${texture.height}',
+      );
 
       if (!mounted) {
+        texture.dispose();
         return;
       }
 
       setState(() {
-        fragmentProgram = results[0] as ui.FragmentProgram;
-        textTexture = results[1] as ui.Image;
+        fragmentProgram = program;
+        textTexture = texture;
       });
     } catch (error, stackTrace) {
       debugPrint('RESOURCE LOAD ERROR: $error');
@@ -106,11 +106,10 @@ class _SponsorBabePageState extends State<SponsorBabePage>
       'assets/images/babe_info.png',
     );
 
-    final Uint8List bytes =
-        data.buffer.asUint8List(
-          data.offsetInBytes,
-          data.lengthInBytes,
-        );
+    final Uint8List bytes = data.buffer.asUint8List(
+      data.offsetInBytes,
+      data.lengthInBytes,
+    );
 
     final ui.Codec codec =
         await ui.instantiateImageCodec(bytes);
@@ -124,24 +123,19 @@ class _SponsorBabePageState extends State<SponsorBabePage>
   @override
   void dispose() {
     ticker.dispose();
-
     textTexture?.dispose();
-
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final ui.FragmentProgram? program =
-        fragmentProgram;
+    final ui.FragmentProgram? program = fragmentProgram;
+    final ui.Image? texture = textTexture;
 
-    final ui.Image? texture =
-        textTexture;
-
-    final Widget body;
+    late final Widget content;
 
     if (errorMessage != null) {
-      body = Center(
+      content = Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Text(
@@ -155,13 +149,13 @@ class _SponsorBabePageState extends State<SponsorBabePage>
         ),
       );
     } else if (program == null || texture == null) {
-      body = const Center(
+      content = const Center(
         child: CircularProgressIndicator(
           color: Color(0xFFFFD21F),
         ),
       );
     } else {
-      body = GlobeShaderWidget(
+      content = GlobeShaderWidget(
         program: program,
         textTexture: texture,
         time: time,
@@ -171,7 +165,7 @@ class _SponsorBabePageState extends State<SponsorBabePage>
     return Scaffold(
       backgroundColor: Colors.black,
       body: SizedBox.expand(
-        child: body,
+        child: content,
       ),
     );
   }
