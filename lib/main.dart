@@ -1,136 +1,140 @@
-import 'dart:ui' as ui;
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:three_js/three_js.dart' as three;
+import 'package:three_js_controls/three_js_controls.dart';
+import 'package:flutter_angle/flutter_angle.dart';
+import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cross_file/cross_file.dart';
 import 'package:audio_waveforms/audio_waveforms.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/rendering.dart';
 
-class FinalBabePage extends StatefulWidget{const FinalBabePage({super.key});@override State<FinalBabePage> createState()=>_FinalBabePageState();}
-class _FinalBabePageState extends State<FinalBabePage> with TickerProviderStateMixin{
-  ui.FragmentProgram? program;
-  late AnimationController ctrl, waveCtrl, textCtrl;
-  double rotX=0.3, rotY=0.0, time=0;
+void main()=>runApp(MaterialApp(debugShowCheckedModeBanner:false, home: SponsorBabePage()));
+
+class SponsorBabePage extends StatefulWidget{const SponsorBabePage({super.key});@override State<SponsorBabePage> createState()=>_SponsorBabePageState();}
+class _SponsorBabePageState extends State<SponsorBabePage> with TickerProviderStateMixin{
+  ui.FragmentProgram? shaderProg;
+  three.ThreeJS? threeJS; three.WebGLRenderer? renderer; three.Scene? scene; three.PerspectiveCamera? camera; three.Mesh? globeMesh;
+  late AnimationController shaderCtrl, waveCtrl, textCtrl;
+  double rotX=0.3, rotY=0, time=0;
+  File? audioFile, outVideo; bool loading=false;
   final player=PlayerController();
-  final TextEditingController runTextCtrl=TextEditingController(text:"BABE.INFO - Bukan Sekedar Info, Ini LUXURY! ✨ Terhipnotis 60 Detik! 🌪️");
+  final runTextCtrl=TextEditingController(text:"TERJEBAK PUSARAN BLACKHOLE ATMOSPHERE! 🕳️🌪️ BABE.INFO LUXURY! ✨ TERHIPNOTIS 60 DETIK!");
+  GlobalKey globeKey=GlobalKey();
+  String status="BLACKHOLE ATMOSPHERE READY";
 
   @override void initState(){
     super.initState();
-    ctrl=AnimationController(vsync:this, duration:Duration(milliseconds:16))..addListener(()=>setState(()=>time+=0.016))..repeat();
-    waveCtrl=AnimationController(vsync:this, duration:Duration(milliseconds:800))..repeat();
-    textCtrl=AnimationController(vsync:this, duration:Duration(seconds:12))..repeat();
-    loadShader();
+    shaderCtrl=AnimationController(vsync:this, duration:Duration(milliseconds:16))..addListener(()=>setState(()=>time+=0.016))..repeat();
+    waveCtrl=AnimationController(vsync:this, duration:Duration(milliseconds:900))..repeat();
+    textCtrl=AnimationController(vsync:this, duration:Duration(seconds:14))..repeat();
+    loadShader(); initPerm();
+    threeJS = three.ThreeJS(onSetupComplete:(){ setState((){}); }, setup: setupThree);
   }
-  Future<void> loadShader() async{ program=await ui.FragmentProgram.fromAsset('shaders/globe.frag'); setState((){}); }
+  Future<void> initPerm() async{ try{ var i=await DeviceInfoPlugin().androidInfo; if(i.version.sdkInt>=33){ await [Permission.audio, Permission.photos].request(); } else { await Permission.storage.request(); } }catch(_){} }
+  Future<void> loadShader() async{ try{ shaderProg=await ui.FragmentProgram.fromAsset('shaders/globe.frag'); }catch(_){} }
+
+  Future<void> setupThree() async{
+    scene=three.Scene(); scene!.background=three.Color.fromHex32(0xFF000000);
+    camera=three.PerspectiveCamera(65, threeJS!.width/threeJS!.height, 0.1, 1000); camera!.position.z=4.5;
+    renderer=three.WebGLRenderer(three.WebGLRendererParameters(antialias:true, alpha:true)); renderer!.setSize(threeJS!.width, threeJS!.height);
+    // Globe emas 3D three.js
+    var geo=three.SphereGeometry(1.1, 64, 64);
+    var mat=three.MeshStandardMaterial.fromMap({"color":0xFFD4AF37, "metalness":0.9, "roughness":0.25});
+    globeMesh=three.Mesh(geo, mat); scene!.add(globeMesh);
+    scene!.add(three.AmbientLight(0xffffff,0.8)); var dl=three.DirectionalLight(0xffffff,1.2); dl.position.setValues(3,4,5); scene!.add(dl);
+    // Blackhole ring
+    var ringGeo=three.RingGeometry(1.6,2.2,64); var ringMat=three.MeshBasicMaterial.fromMap({"color":0xFFD4AF37, "side":three.DoubleSide, "transparent":true, "opacity":0.6});
+    var ring=three.Mesh(ringGeo, ringMat); ring.rotation.x=math.pi/2; ring.position.y=1.2; scene!.add(ring);
+  }
+
+  Future<void> pickAudio() async{ var r=await FilePicker.platform.pickFiles(type:FileType.audio); if(r==null)return; File f=File(r.files.single.path!); await player.preparePlayer(path:f.path, shouldExtractWaveform:true, noOfSamples:200); var d=await player.getDuration(DurationType.max); setState(()=>audioFile=f); }
+  Future<void> bust60sBlackhole() async{
+    if(audioFile==null){ setState(()=>status="UPLOAD AUDIO DULU!"); return; }
+    setState((){loading=true; status="RENDER BLACKHOLE 60S...";});
+    try{
+      var tmp=await getTemporaryDirectory(); var ts=DateTime.now().millisecondsSinceEpoch;
+      String trim="${tmp.path}/trim_$ts.m4a"; String globeImg="${tmp.path}/globe_$ts.png"; String out="${tmp.path}/BABE_BLACKHOLE_60S_$ts.mp4";
+      await FFmpegKit.execute('-y -i "${audioFile!.path}" -filter:a "aloop=loop=-1:size=2e+09,atrim=0:60,afade=t=in:st=0:d=2,afade=t=out:st=58:d=2" -c:a aac "$trim"');
+      try{ RenderRepaintBoundary? b=globeKey.currentContext?.findRenderObject() as RenderRepaintBoundary?; if(b!=null){ var img=await b.toImage(pixelRatio:3); var by=await img.toByteData(format:ui.ImageByteFormat.png); await File(globeImg).writeAsBytes(by!.buffer.asUint8List()); } }catch(_){}
+      String bg=""; try{ var data=await DefaultAssetBundle.of(context).load('assets/images/bg.jpg'); File f=File('${tmp.path}/bg_$ts.jpg'); await f.writeAsBytes(data.buffer.asUint8List()); bg=f.path; }catch(_){}
+      String cmd='-y -loop 1 -i "$bg" -loop 1 -i "$globeImg" -i "$trim" -filter_complex "[0]scale=720:1280,zoompan=z=\'1+0.0012*t\':d=1:s=720x1280:fps=30[base];[1]scale=520:520,rotate=0.03*PI*t:c=black@0:ow=rotw(0.03*PI*t):oh=roth(0.03*PI*t)[g];[base][g]overlay=(W-w)/2:(H-h)/2-140:format=auto,drawtext=text=\'BABE.INFO\':fontcolor=gold:fontsize=68:x=(w-text_w)/2:y=h-280:box=1:boxcolor=black@0.6:boxborderw=8:shadowcolor=black:shadowx=3:shadowy=3,drawtext=text=\'(n/) By Heru Wingchun\':fontcolor=#FFD700:fontsize=20:x=(w-text_w)/2:y=h-220" -c:v libx264 -preset ultrafast -pix_fmt yuv420p -c:a aac -t 60 "$out"';
+      var s=await FFmpegKit.execute(cmd);
+      if(ReturnCode.isSuccess(await s.getReturnCode())){ setState((){outVideo=File(out); loading=false; status="VIDEO BLACKHOLE 60S JADI!";}); } else { setState(()=>loading=false); }
+    }catch(e){ setState(()=>loading=false); }
+  }
 
   @override Widget build(BuildContext context){
-    if(program==null) return Scaffold(backgroundColor:Colors.black, body:Center(child:CircularProgressIndicator(color:Color(0xFFD4AF37))));
-    
     return Scaffold(backgroundColor:Colors.black, body:Stack(children:[
-      // 1. GLOBE SHADER TOPAN EMAS
-      Positioned.fill(child:GestureDetector(
-        onPanUpdate:(d){ setState((){ rotY+=d.delta.dx*0.01; rotX+=d.delta.dy*0.01; rotX=rotX.clamp(-1.4,1.4); }); },
-        child:CustomPaint(size:Size.infinite, painter:GlobeShaderPainter(program!, time, rotX, rotY)),
-      )),
+      // LAYER 1: SHADER BLACKHOLE ATMOSPHERE (background)
+      if(shaderProg!=null) Positioned.fill(child: RepaintBoundary(key:globeKey, child:CustomPaint(size:Size.infinite, painter:BlackholeShaderPainter(shaderProg!, time, rotX, rotY)))),
+      // LAYER 2: THREE.JS GLOBE 3D (opsional, di atas shader)
+      if(threeJS!=null) Positioned(top:80, left:0, right:0, height:360, child:threeJS!.build()),
 
-      // 2. LAYOUT BAWAH - BABE.INFO + RUNNING TEXT + WAVE
-      SafeArea(child:Align(alignment:Alignment.bottomCenter, child:Container(
-        width:double.infinity,
-        padding:EdgeInsets.fromLTRB(12,12,12,12+MediaQuery.of(context).padding.bottom),
-        decoration:BoxDecoration(
-          gradient:LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Colors.transparent, Colors.black.withOpacity(0.3), Colors.black.withOpacity(0.95)]),
-        ),
-        child:Column(mainAxisSize:MainAxisSize.min, children:[
-          // BABE.INFO 3D GOLD
-          ShaderMask(
-            shaderCallback:(b)=>LinearGradient(colors:[Color(0xFFFFF59D), Color(0xFFFFD700), Color(0xFFB8860B)]).createShader(b),
-            child:Text("BABE.INFO", style:TextStyle(fontSize:42, fontWeight:FontWeight.w900, color:Colors.white, letterSpacing:2, shadows:[Shadow(color:Colors.black, offset:Offset(2,2), blurRadius:8), Shadow(color:Color(0xFFD4AF37), blurRadius:20)])),
-          ),
-          Text("(n/) By Heru Wingchun", style:TextStyle(color:Color(0xFFFFD700), fontSize:13, fontStyle:FontStyle.italic, letterSpacing:1)),
-
+      // LAYER 3: CONTENT
+      SafeArea(child:Column(children:[
+        Spacer(),
+        Container(padding:EdgeInsets.all(12), decoration:BoxDecoration(gradient:LinearGradient(begin:Alignment.topCenter, end:Alignment.bottomCenter, colors:[Colors.transparent, Colors.black.withOpacity(0.85)])), child:Column(children:[
+          // BABE.INFO - GAK KETUTUPAN!
+          ShaderMask(shaderCallback:(b)=>LinearGradient(colors:[Color(0xFFFFF59D),Color(0xFFFFD700),Color(0xFFB8860B)]).createShader(b), child:Text("BABE.INFO", style:TextStyle(fontSize:46, fontWeight:FontWeight.w900, color:Colors.white, letterSpacing:3, shadows:[Shadow(color:Colors.black, offset:Offset(3,3), blurRadius:10), Shadow(color:Color(0xFFFFD700), blurRadius:25)]))),
+          Text("(n/) By Heru Wingchun", style:TextStyle(color:Color(0xFFFFD700), fontSize:13, fontStyle:FontStyle.italic)),
           SizedBox(height:10),
-
-          // RUNNING TEXT BOLD ITALIC SHADES 20px HIPNOTIS - INPUTAN BOS!
-          Container(
-            height:32,
-            width:double.infinity,
-            decoration:BoxDecoration(color:Colors.black.withOpacity(0.6), border:Border.symmetric(horizontal:BorderSide(color:Color(0xFFD4AF37).withOpacity(0.5))), boxShadow:[BoxShadow(color:Color(0xFFD4AF37).withOpacity(0.3), blurRadius:10)]),
-            child:ClipRect(child:AnimatedBuilder(animation:textCtrl, builder:(c, _){
-              return Transform.translate(offset:Offset( MediaQuery.of(context).size.width - (textCtrl.value * (MediaQuery.of(context).size.width + 800)), 0),
-                child:Row(children:[
-                  Text(runTextCtrl.text + "   •   " + runTextCtrl.text, 
-                    style:TextStyle(
-                      fontSize:20, // 20px
-                      fontWeight:FontWeight.bold, // bold
-                      fontStyle:FontStyle.italic, // italic
-                      color:Color(0xFFFFD700),
-                      shadows:[
-                        Shadow(color:Colors.black, offset:Offset(2,2), blurRadius:4), // shades
-                        Shadow(color:Color(0xFFD4AF37), offset:Offset(0,0), blurRadius:12),
-                        Shadow(color:Colors.white.withOpacity(0.5* (0.5+0.5*math.sin(time*3))), offset:Offset(0,0), blurRadius:6), // hipnotis blink
-                      ],
-                    ),
-                  ),
-                ]),
-              );
-            })),
-          ),
-
+          // RUNNING TEXT BOLD ITALIC 20px SHADES - INPUTAN BOS
+          Container(height:38, width:double.infinity, decoration:BoxDecoration(color:Colors.black.withOpacity(0.7), border:Border.symmetric(horizontal:BorderSide(color:Color(0xFFD4AF37))), boxShadow:[BoxShadow(color:Color(0xFFD4AF37).withOpacity(0.4), blurRadius:15)]), child:ClipRect(child:AnimatedBuilder(animation:textCtrl, builder:(c,_){
+            return Transform.translate(offset:Offset(MediaQuery.of(context).size.width - textCtrl.value*(MediaQuery.of(context).size.width+900),0), child: Text(runTextCtrl.text+"   •   "+runTextCtrl.text, style:TextStyle(fontSize:20, fontWeight:FontWeight.bold, fontStyle:FontStyle.italic, color:Color(0xFFFFD700), shadows:[Shadow(color:Colors.black, offset:Offset(2,2), blurRadius:5), Shadow(color:Color(0xFFD4AF37), blurRadius:15), Shadow(color:Colors.white.withOpacity(0.6* (0.5+0.5*math.sin(time*3))), blurRadius:8)])));
+          }))),
           SizedBox(height:6),
-          // INPUT RUNNING TEXT
-          SizedBox(height:30, child:TextField(controller:runTextCtrl, style:TextStyle(color:Colors.white, fontSize:11), decoration:InputDecoration(hintText:"Input running text hipnotis...", hintStyle:TextStyle(color:Colors.white38, fontSize:10), filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(8)), contentPadding:EdgeInsets.symmetric(horizontal:10, vertical:4)), onChanged:(_)=>setState((){}) )),
-
-          SizedBox(height:10),
-
-          // WAVE MUSIC MENGHIPNOTIS
-          Container(
-            height:60,
-            decoration:BoxDecoration(color:Colors.black.withOpacity(0.5), borderRadius:BorderRadius.circular(12), border:Border.all(color:Color(0xFFD4AF37).withOpacity(0.4))),
-            child:AnimatedBuilder(animation:waveCtrl, builder:(c, _){
-              return CustomPaint(size:Size(MediaQuery.of(context).size.width-24, 60), painter:HypnoticWavePainter(waveCtrl.value, time));
-            }),
-          ),
-          SizedBox(height:4),
-          Text("🔊 Dengerin pakai headset - WAVE HIPNOTIS 60Hz", style:TextStyle(color:Color(0xFFD4AF37), fontSize:9, fontStyle:FontStyle.italic)),
-        ]),
-      ))),
-
-      // Tombol BUST 60S
-      Positioned(top:40, right:12, child:ElevatedButton(onPressed:(){}, child:Text("BUST 60S HIPNOTIS", style:TextStyle(fontSize:10, fontWeight:FontWeight.bold)), style:ElevatedButton.styleFrom(backgroundColor:Color(0xFFFFD700), foregroundColor:Colors.black))),
+          SizedBox(height:28, child:TextField(controller:runTextCtrl, style:TextStyle(color:Colors.white, fontSize:11), decoration:InputDecoration(hintText:"Input running text hipnotis...", hintStyle:TextStyle(color:Colors.white38, fontSize:10), filled:true, fillColor:Colors.white10, border:OutlineInputBorder(borderRadius:BorderRadius.circular(8)), contentPadding:EdgeInsets.symmetric(horizontal:8, vertical:4)), onChanged:(_)=>setState((){}))),
+          SizedBox(height:8),
+          // WAVE MUSIC HIPNOTIS - TERJEBAK BLACKHOLE
+          Container(height:66, decoration:BoxDecoration(color:Colors.black54, borderRadius:BorderRadius.circular(12), border:Border.all(color:Color(0xFFD4AF37).withOpacity(0.5))), boxShadow:[BoxShadow(color:Color(0xFFD4AF37).withOpacity(0.2), blurRadius:10)]), child:AnimatedBuilder(animation:waveCtrl, builder:(c,_){ return CustomPaint(size:Size(double.infinity,66), painter:BlackholeWavePainter(waveCtrl.value, time)); })),
+          SizedBox(height:4), Text("🕳️ BLACKHOLE ATMOSPHERE • 🔊 Headset 60 detik", style:TextStyle(color:Color(0xFFD4AF37), fontSize:9, fontStyle:FontStyle.italic)),
+          SizedBox(height:8),
+          Row(children:[
+            Expanded(child:ElevatedButton(onPressed:pickAudio, child:Text("UPLOAD AUDIO", style:TextStyle(fontSize:9)))),
+            SizedBox(width:6),
+            Expanded(flex:2, child:ElevatedButton(onPressed:loading?null:bust60sBlackhole, style:ElevatedButton.styleFrom(backgroundColor:Color(0xFFFFD700), foregroundColor:Colors.black), child:Text(loading?"RENDER...":"BUST 60S BLACKHOLE GAWAT!", style:TextStyle(fontWeight:FontWeight.w900, fontSize:11)))),
+          ]),
+          if(outVideo!=null) SizedBox(width:double.infinity, child:ElevatedButton.icon(onPressed:() async=>await Share.shareXFiles([XFile(outVideo!.path)], text:"BABE.INFO BLACKHOLE"), icon:Icon(Icons.share), label:Text("SHARE WA STATUS", style:TextStyle(fontWeight:FontWeight.bold)), style:ElevatedButton.styleFrom(backgroundColor:Color(0xFF25D366), foregroundColor:Colors.white))),
+          SizedBox(height:4), Text(status, style:TextStyle(color:Color(0xFFD4AF37), fontSize:10)),
+        ]))),
+      ])),
     ]));
   }
 }
 
-class GlobeShaderPainter extends CustomPainter{
-  final ui.FragmentProgram program; final double time, rotX, rotY;
-  GlobeShaderPainter(this.program, this.time, this.rotX, this.rotY);
+class BlackholeShaderPainter extends CustomPainter{
+  final ui.FragmentProgram prog; final double time, rotX, rotY;
+  BlackholeShaderPainter(this.prog, this.time, this.rotX, this.rotY);
   @override void paint(Canvas canvas, Size size){
-    var shader=program.fragmentShader();
-    shader.setFloat(0, size.width); shader.setFloat(1, size.height); shader.setFloat(2, time); shader.setFloat(3, rotX); shader.setFloat(4, rotY);
-    shader.setFloat(5, 1.0); shader.setFloat(6, 0.84); shader.setFloat(7, 0.0);
-    canvas.drawRect(Offset.zero & size, Paint()..shader=shader);
+    var s=prog.fragmentShader(); s.setFloat(0,size.width); s.setFloat(1,size.height); s.setFloat(2,time); s.setFloat(3,rotX); s.setFloat(4,rotY); s.setFloat(5,1.0); s.setFloat(6,0.84); s.setFloat(7,0.0);
+    canvas.drawRect(Offset.zero&size, Paint()..shader=s);
   }
-  @override bool shouldRepaint(covariant GlobeShaderPainter old)=> old.time!=time || old.rotX!=rotX;
+  @override bool shouldRepaint(covariant BlackholeShaderPainter old)=>old.time!=time||old.rotX!=rotX||old.rotY!=rotY;
 }
-
-class HypnoticWavePainter extends CustomPainter{
-  final double anim, time;
-  HypnoticWavePainter(this.anim, this.time);
+class BlackholeWavePainter extends CustomPainter{
+  final double anim, time; BlackholeWavePainter(this.anim, this.time);
   @override void paint(Canvas canvas, Size size){
-    var paint=Paint()..color=Color(0xFFFFD700)..style=PaintingStyle.stroke..strokeWidth=2.5..maskFilter=MaskFilter.blur(BlurStyle.normal,2);
     var path=Path();
-    for(double x=0; x<size.width; x+=2){
-      double progress=x/size.width;
-      double wave1=math.sin((progress*6*math.pi) + anim*2*math.pi + time*2)*12;
-      double wave2=math.sin((progress*10*math.pi) + anim*2*math.pi*1.5 + time*3)*6;
-      double wave3=math.sin((progress*3*math.pi) + time)*4;
-      double y=size.height/2 + wave1 + wave2 + wave3;
-      // Hipnotis - amplitudo membesar di tengah
-      double envelope=math.sin(progress*math.pi);
-      y=size.height/2 + (y-size.height/2)*envelope;
+    for(double x=0;x<size.width;x+=2){
+      double p=x/size.width;
+      double suck=(1.0-p)*0.8; // makin ke kanan makin ketarik blackhole
+      double w1=math.sin(p*8*math.pi + anim*2*math.pi + time*2)*14*(1.0-suck);
+      double w2=math.sin(p*14*math.pi + anim*3*math.pi + time*3)*7;
+      double y=size.height/2 + (w1+w2)* (0.5+0.5*math.sin(time));
       if(x==0) path.moveTo(x,y); else path.lineTo(x,y);
     }
-    canvas.drawPath(path, paint);
-    // Glow
-    var glow=Paint()..color=Color(0xFFFFD700).withOpacity(0.3)..style=PaintingStyle.stroke..strokeWidth=12..maskFilter=MaskFilter.blur(BlurStyle.normal,12);
+    var glow=Paint()..color=Color(0xFFFFD700).withOpacity(0.25)..style=PaintingStyle.stroke..strokeWidth=16..maskFilter=MaskFilter.blur(BlurStyle.normal,12);
     canvas.drawPath(path, glow);
+    var main=Paint()..color=Color(0xFFFFD700)..style=PaintingStyle.stroke..strokeWidth=2.8..maskFilter=MaskFilter.blur(BlurStyle.normal,1);
+    canvas.drawPath(path, main);
   }
-  @override bool shouldRepaint(covariant HypnoticWavePainter old)=> old.anim!=old.anim;
+  @override bool shouldRepaint(covariant BlackholeWavePainter old)=>true;
 }
