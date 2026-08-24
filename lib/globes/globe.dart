@@ -22,18 +22,22 @@ class GlobeShaderPainter extends CustomPainter {
     final ui.FragmentShader shader =
         program.fragmentShader();
 
-    // iResolution adalah vec2,
-    // sehingga indeksnya memakai slot 0 dan 1.
+    // Harus sama dengan urutan uniform float di globe.frag:
+    //
+    // 0, 1 = iResolution
+    // 2    = iTime
+    // 3    = rotY
+    // 4    = windRot
+    // 5    = glow
+
     shader.setFloat(0, size.width);
     shader.setFloat(1, size.height);
-
-    // Float berikutnya
     shader.setFloat(2, time);
     shader.setFloat(3, time * 0.72);
     shader.setFloat(4, time * -1.0);
     shader.setFloat(5, 3.0);
 
-    // Sampler pertama pada shader
+    // textTexture harus menjadi sampler index 0
     shader.setImageSampler(0, textTexture);
 
     final Paint paint = Paint()
