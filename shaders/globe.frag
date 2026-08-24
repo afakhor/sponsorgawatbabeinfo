@@ -8,112 +8,123 @@ uniform float glow;
 
 out vec4 fragColor;
 
-#define PI 3.14159265359
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+float hash1(float p){ return fract(sin(p*127.1)*43758.5453); }
+float noise(vec2 p){
+    vec2 i=floor(p); vec2 f=fract(p);
+    float a=hash(i), b=hash(i+vec2(1.0,0.0)), c=hash(i+vec2(0.0,1.0)), d=hash(i+vec2(1.0,1.0));
+    vec2 u=f*f*(3.0-2.0*f);
+    return mix(a,b,u.x)+(c-a)*u.y*(1.0-u.x)+(d-b)*u.x*u.y;
+}
 
-mat2 rotate2D(float a){ float c=cos(a), s=sin(a); return mat2(c,-s,s,c); }
-float hash21(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
-float noise2D(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); float a=hash21(i), b=hash21(i+vec2(1,0)), c=hash21(i+vec2(0,1)), d=hash21(i+vec2(1,1)); return mix(mix(a,b,f.x), mix(c,d,f.x), f.y); }
-float fbm(vec2 p){ float v=0., a=0.5; for(int i=0;i<5;i++){ v+=noise2D(p)*a; p=p*2.02+vec2(17.1,9.2); a*=0.5; } return v; }
-float circularMask(float dist, float rad){ return 1.0 - smoothstep(rad-0.008, rad+0.008, dist); }
+// Petir bercabang mengerikan
+float lightning(vec2 p, float ang, float r, float t){
+    float bolt = 0.0;
+    // 3 petir utama acak
+    for(float i=0.0; i<3.0; i++){
+        float seed = i*7.0;
+        float strikeSpeed = 2.3 + seed*0.4;
+        float strikeTime = floor(iTime*strikeSpeed + seed);
+        float strikeTrigger = hash1(strikeTime);
+        
+        // Hanya nyamber kalau hash > 0.82 -> jeda mengerikan
+        if(strikeTrigger > 0.82){
+            float baseAng = hash1(strikeTime+1.0)*6.283 - 3.1415;
+            float angDiff = abs(ang - baseAng);
+            angDiff = min(angDiff, 6.283-angDiff);
+            
+            // Zigzag petir
+            float zigzag = sin(r*18.0 - iTime*25.0 + seed*3.0)*0.15;
+            float mainBolt = smoothstep(0.15, 0.0, abs(angDiff + zigzag) - 0.02);
+            mainBolt *= smoothstep(1.8, 0.2, r) * smoothstep(0.1, 0.4, r);
+            
+            // Cabang-cabang kecil
+            float branch = sin(ang*12.0 + r*20.0 + seed)*0.5+0.5;
+            branch = pow(branch, 8.0) * mainBolt * 0.6;
+            
+            float intensity = pow(strikeTrigger, 3.0) * 4.0;
+            bolt += (mainBolt + branch) * intensity;
+        }
+    }
+    return bolt;
+}
 
 void main(){
-    vec2 uv = FlutterFragCoord().xy / iResolution.xy;
+    vec2 fragCoord = FlutterFragCoord().xy;
+    vec2 uv = fragCoord / iResolution.xy;
     vec2 p = uv*2.0-1.0;
-    p.x *= iResolution.x / iResolution.y;
-
-    vec2 globeCenter = vec2(0.0, 0.22); // Naik sedikit
-    vec2 d = p - globeCenter;
+    p.x *= iResolution.x/iResolution.y;
+    vec2 center = vec2(0.0,0.22);
+    vec2 d = p-center;
     float r = length(d);
-    float angle = atan(d.y, d.x);
+    float ang = atan(d.y,d.x);
+    float globeR = 0.52;
+    vec3 col = vec3(0.008,0.008,0.01); // lebih hitam pekat biar kilat nyala
 
-    // FIX UTAMA: BOLA KECIL
-    float globeRadius = 0.31;
+    // MARMER HITAM RETAK
+    float m = noise(p*1.1*2.2 + iTime*0.01);
+    float veins = pow(sin(p.x*2.2+m*6.0)*0.5+0.5, 12.0);
+    col += vec3(0.85,0.65,0.15)*veins*0.5;
 
-    // --- BACKGROUND MARBLE ---
-    vec2 marbleUV = p * 2.4;
-    float marble = fbm(marbleUV * 1.25);
-    float veinA = sin(marbleUV.x*3.0 + marbleUV.y*1.4 + marble*7.0);
-    float veinB = sin(marbleUV.y*2.1 - marbleUV.x*1.1 + marble*5.0);
-    float veins = pow(abs(veinA*veinB), 7.0);
-    float thinVeins = pow(max(0.0, sin(marbleUV.x*5.0 + marble*10.0)), 18.0);
-    vec3 background = vec3(0.006);
-    background += vec3(0.13,0.075,0.018)*veins;
-    background += vec3(0.48,0.30,0.075)*thinVeins;
-    float grain = hash21(FlutterFragCoord().xy*0.45);
-    background += vec3(grain)*0.015;
-    vec3 color = background;
-
-    // --- FIX ATMOSPHERE DENGAN LUBANG / HOLE ---
-    float wind = 0.0;
-    // Buat mask lubang: atmosfer hanya di luar bola + jarak
-    float holeMask = smoothstep(globeRadius + 0.04, globeRadius + 0.18, r);
-    // Mask luar biar tidak full screen
-    float outerMask = smoothstep(1.4, 0.45, r);
-
-    for(int i=0;i<6;i++){
-        float fi=float(i);
-        float localRadius = r * (0.88 + fi*0.11);
-        float localAngle = angle - windRot*(0.50 + fi*0.07) + localRadius*(2.2 + fi*0.2);
-        vec2 swirlUV = vec2(cos(localAngle)*localRadius, sin(localAngle)*localRadius);
-        swirlUV += vec2(windRot*0.22, -windRot*0.12);
-        float cloud = fbm(swirlUV*(3.2 + fi*0.2) + vec2(0.0, windRot*0.5));
-        float ribbon = sin(localAngle*(2.5+fi*0.18) + cloud*5.0 + localRadius*7.0);
-        ribbon = smoothstep(0.45, 0.90, ribbon*0.5+0.5);
-        float cloudMask = smoothstep(0.48, 0.78, cloud);
-        float line = ribbon * cloudMask * holeMask * outerMask;
-
-        float dust = hash21(vec2(floor(localAngle*20.0), floor(localRadius*45.0)+fi*12.0));
-        dust = pow(dust, 5.0) * holeMask * outerMask * smoothstep(0.65, 0.95, cloud);
-
-        vec3 atmosphereGold = mix(vec3(0.72,0.38,0.035), vec3(1.0,0.88,0.42), ribbon);
-        color += atmosphereGold * line * glow * 0.85;
-        color += vec3(1.0,0.76,0.22)*dust*glow*3.5;
+    // === ATMOSFER MENGGELEGAR ===
+    float atmosAccum = 0.0;
+    for(float i=0.0;i<4.0;i++){
+        float t = windRot*(0.7+i*0.18);
+        float rr = r*(0.88+i*0.15);
+        float distort = noise(vec2(ang*2.0, rr*3.0 + iTime*0.5))*0.4;
+        float aa = ang - t + rr*(2.2+i*0.3) + distort;
+        float swirl = sin(aa*(2.5+i*0.4)+rr*4.0 + noise(vec2(aa*2.0, iTime))*2.0)*0.5+0.5;
+        swirl = pow(swirl, 1.5);
+        float mask = smoothstep(1.25, 0.38, rr) * smoothstep(0.18, 0.52, rr);
+        mask *= 0.6/(0.3+i*0.3);
+        vec3 gold = vec3(1.0,0.78,0.08)*swirl*mask;
+        gold += vec3(1.0,0.9,0.4)*pow(swirl,5.0)*mask*1.8;
+        col += gold*glow*0.6;
+        atmosAccum += mask*swirl;
     }
-    float aura = exp(-r*3.0)*0.18 * holeMask;
-    color += vec3(1.0,0.47,0.06)*aura*glow;
 
-    // --- GLOBE KECIL DI DALAM HOLE ---
-    if(r < globeRadius + 0.03){
-        vec2 sphereUV = d / globeRadius;
-        float z2 = 1.0 - dot(sphereUV, sphereUV);
-        if(z2 > 0.0){
+    // === KILATAN PETIR MENAKUTKAN - DI LUAR BOLA ===
+    float bolt = lightning(p, ang, r, iTime);
+    vec3 lightningCol = vec3(1.0,0.95,0.7)*bolt*3.0 + vec3(1.0,0.92,0.3)*pow(bolt,2.0)*6.0;
+    // Outer glow petir
+    vec3 lightningGlow = vec3(1.0,0.82,0.15)*bolt*0.8;
+    col += lightningCol;
+    col += lightningGlow;
+
+    // FLASH SELURUH LAYAR PAS PETIR NYAMBER - bikin jantung copot
+    float flashTrigger = 0.0;
+    for(float i=0.0;i<3.0;i++){
+        float ft = floor(iTime*(2.1+i*0.3)+i*4.0);
+        if(hash1(ft) > 0.85){
+            float f = fract(iTime*(2.1+i*0.3)+i*4.0);
+            float flash = exp(-f*18.0) * hash1(ft+2.0);
+            flashTrigger += flash;
+        }
+    }
+    col += vec3(1.0,0.92,0.6)*flashTrigger*0.35;
+    col += vec3(0.8,0.7,0.3)*flashTrigger*atmosAccum*0.5;
+
+    // GLOBE EMAS
+    if(r < globeR){
+        vec2 sUV = d/globeR;
+        float z2 = 1.0-dot(sUV,sUV);
+        if(z2>0.0){
             float z = sqrt(z2);
-            vec3 normal = vec3(sphereUV.x, sphereUV.y, z);
-            normal.xz = rotate2D(rotY)*normal.xz;
-            vec3 lightDir = normalize(vec3(-0.52,0.42,0.92));
-            float diffuse = max(0.0, dot(normal, lightDir));
-            vec3 viewDir = vec3(0.0,0.0,1.0);
-            float specular = pow(max(0.0, dot(reflect(-lightDir, normal), viewDir)), 58.0);
-            float fresnel = pow(1.0 - max(0.0, dot(normal, viewDir)), 3.0);
-
-            vec3 darkGold = vec3(0.25,0.105,0.012);
-            vec3 brightGold = vec3(0.95,0.58,0.105);
-            vec3 globeColor = mix(darkGold, brightGold, smoothstep(0.05,0.98,diffuse));
-            globeColor += vec3(1.0,0.78,0.30)*specular*1.4;
-            globeColor = mix(globeColor, globeColor*0.42, fresnel*0.55);
-            float surfaceNoise = fbm(sphereUV*8.0 + vec2(rotY*0.2));
-            globeColor += vec3(0.15,0.075,0.012)*surfaceNoise*0.16;
-
-            float globeMask = circularMask(r, globeRadius);
-            color = mix(color, globeColor, globeMask);
-            float rim = 1.0 - smoothstep(0.0,0.06, abs(r-globeRadius));
-            color += vec3(1.0,0.70,0.18)*rim*0.45;
+            float c = cos(rotY); float s = sin(rotY);
+            vec2 xz = vec2(sUV.x*c - z*s, sUV.x*s + z*c);
+            vec3 n = vec3(xz.x, sUV.y, xz.y);
+            float diff = max(0.0, dot(n, normalize(vec3(-0.6,0.4,0.9))));
+            vec3 base = mix(vec3(0.45,0.32,0.05), vec3(1.0,0.84,0.18), diff);
+            float edge = smoothstep(globeR+0.01, globeR-0.02, r);
+            // Kilat bikin globe kedip
+            base += flashTrigger*0.4;
+            col = mix(col, base, edge);
         }
     }
 
-    // --- THORN CROWN NEMPEL KETAT ---
-    float crownRadius = globeRadius + 0.02;
-    float crownDist = abs(r - crownRadius);
-    if(crownDist < 0.045){
-        float thornAngle = angle*28.0 + rotY*1.25;
-        float thornShape = smoothstep(0.68,0.98, sin(thornAngle)*0.5+0.5);
-        float crownMask = smoothstep(0.045,0.005,crownDist) * thornShape;
-        vec3 crownColor = vec3(0.006,0.004,0.002) + vec3(0.10,0.055,0.012)*thornShape;
-        color = mix(color, crownColor, crownMask*0.96);
-    }
+    // Vignette horror
+    col *= 1.0 - dot(p,p)*0.32;
+    col = pow(col, vec3(0.92)); // contrast tinggi
 
-    float vignette = 1.0 - smoothstep(0.45,1.45,length(p*vec2(0.72,0.84)));
-    color *= 0.70 + vignette*0.42;
-    color = pow(color, vec3(0.91));
-    fragColor = vec4(color,1.0);
+    fragColor = vec4(col,1.0);
 }
