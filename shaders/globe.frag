@@ -24,14 +24,20 @@ float hash1(float p) {
     );
 }
 
+float hash2(vec2 p) {
+    return fract(
+        sin(dot(p, vec2(127.1, 311.7))) *
+        43758.5453
+    );
+}
+
 float angularDistance(float a, float b) {
     float d = abs(a - b);
     return min(d, TWO_PI - d);
 }
 
 // --------------------------------------------------
-// PETIR MEMBUNGKUS GLOBE
-// Globe radius = 0.32
+// PETIR YANG MENYELIMUTI GLOBE
 // --------------------------------------------------
 
 float wrappingLightning(
@@ -41,34 +47,35 @@ float wrappingLightning(
 ) {
     float total = 0.0;
 
-    float nearGlobe =
+    // Petir berada di sekitar tepi globe
+    float surfaceMask =
         smoothstep(
-            0.255,
+            0.275,
             0.315,
             radius
         );
 
-    float outerLimit =
+    float outerMask =
         1.0 -
         smoothstep(
-            0.38,
-            0.62,
+            0.315,
+            0.43,
             radius
         );
 
     float wrapMask =
-        nearGlobe *
-        outerLimit;
+        surfaceMask *
+        outerMask;
 
-    for (float i = 0.0; i < 8.0; i += 1.0) {
+    for (float i = 0.0; i < 10.0; i += 1.0) {
         float seed =
-            i * 17.173;
+            i * 23.731;
 
         float speed =
-            0.45 +
-            i * 0.105;
+            0.35 +
+            i * 0.11;
 
-        float strikeId =
+        float strike =
             floor(
                 time * speed +
                 seed
@@ -76,171 +83,175 @@ float wrappingLightning(
 
         float chance =
             hash1(
-                strikeId +
+                strike +
                 seed
             );
 
-        if (chance > 0.38) {
+        // Mengatur jumlah sambaran
+        if (chance > 0.30) {
             float baseAngle =
                 hash1(
-                    strikeId +
+                    strike +
                     seed +
-                    3.0
+                    4.0
                 ) *
                 TWO_PI;
 
-            float pulsePhase =
+            float phase =
                 fract(
                     time * speed +
                     seed
                 );
 
+            // Denyut pendek seperti kilatan
             float pulse =
                 exp(
-                    -pulsePhase * 9.0
+                    -phase * 13.0
                 );
 
-            float zigzag =
+            // Jalur utama zig-zag
+            float path =
                 sin(
-                    radius * 110.0 +
-                    time * 22.0 +
+                    radius * 160.0 +
+                    time * 17.0 +
                     seed
-                ) * 0.075
+                ) * 0.070
               + sin(
-                    radius * 190.0 -
-                    time * 31.0 +
-                    seed
-                ) * 0.038
+                    radius * 290.0 -
+                    time * 29.0 +
+                    seed * 1.7
+                ) * 0.040
               + sin(
-                    radius * 300.0 +
-                    time * 47.0 +
-                    seed
-                ) * 0.018;
+                    radius * 470.0 +
+                    time * 43.0 +
+                    seed * 2.2
+                ) * 0.020;
 
-            float movingAngle =
+            float lightningAngle =
                 baseAngle +
-                zigzag;
+                path;
 
             float distanceMain =
                 angularDistance(
                     angle,
-                    movingAngle
+                    lightningAngle
                 );
 
+            // Inti petir
             float core =
                 smoothstep(
-                    0.032,
+                    0.020,
                     0.0,
                     distanceMain
                 );
 
+            // Cahaya aura
             float aura =
                 smoothstep(
-                    0.16,
+                    0.105,
                     0.0,
                     distanceMain
                 );
 
-            float branchPattern =
+            // Cabang petir
+            float branchWave1 =
                 sin(
-                    angle * 31.0 +
-                    radius * 105.0 +
+                    angle * 34.0 +
+                    radius * 210.0 +
                     seed
                 ) * 0.5 + 0.5;
 
             float branch1 =
                 pow(
-                    branchPattern,
-                    14.0
+                    branchWave1,
+                    18.0
                 ) *
-                aura *
-                smoothstep(
-                    0.285,
-                    0.335,
-                    radius
-                );
+                aura;
 
-            float branchPattern2 =
+            float branchWave2 =
                 sin(
-                    angle * 47.0 -
-                    radius * 180.0 +
+                    angle * 57.0 -
+                    radius * 330.0 +
                     seed * 2.0
                 ) * 0.5 + 0.5;
 
             float branch2 =
                 pow(
-                    branchPattern2,
-                    19.0
+                    branchWave2,
+                    23.0
                 ) *
                 aura;
 
-            float tailPattern =
+            // Ekor memanjang mengikuti lengkungan globe
+            float tailWave =
                 sin(
-                    angle * 12.0 +
-                    radius * 58.0 -
-                    time * 13.0 +
+                    angle * 15.0 +
+                    radius * 95.0 -
+                    time * 20.0 +
                     seed
                 ) * 0.5 + 0.5;
 
             float tail =
                 pow(
-                    tailPattern,
-                    9.0
+                    tailWave,
+                    12.0
                 ) *
                 smoothstep(
-                    0.08,
+                    0.095,
                     0.0,
                     distanceMain
-                ) *
-                0.9;
+                );
 
             total +=
                 (
-                    core * 5.0 +
-                    aura * 0.75 +
-                    branch1 * 4.2 +
-                    branch2 * 2.4 +
-                    tail
+                    core * 7.0 +
+                    aura * 1.25 +
+                    branch1 * 3.0 +
+                    branch2 * 2.0 +
+                    tail * 1.5
                 ) *
                 pulse;
         }
     }
 
-    float flowingBand =
+    // Aliran listrik tipis tambahan
+    float electricBand =
         sin(
-            angle * 18.0 +
-            radius * 80.0 -
-            time * 10.0
+            angle * 22.0 +
+            radius * 115.0 -
+            time * 15.0
         ) * 0.5 + 0.5;
 
-    flowingBand =
+    electricBand =
         pow(
-            flowingBand,
-            18.0
+            electricBand,
+            22.0
         );
 
-    flowingBand *=
+    electricBand *=
         smoothstep(
             0.285,
-            0.335,
+            0.32,
             radius
         ) *
-        smoothstep(
-            0.54,
-            0.34,
-            radius
+        (
+            1.0 -
+            smoothstep(
+                0.32,
+                0.39,
+                radius
+            )
         );
 
     total +=
-        flowingBand *
+        electricBand *
         2.0;
 
     return total * wrapMask;
 }
 
 // --------------------------------------------------
-// ATMOSFER
-// Globe radius = 0.32
+// ATMOSFER BERLAWANAN ARAH DENGAN GLOBE
 // --------------------------------------------------
 
 float globeAtmosphere(
@@ -248,24 +259,25 @@ float globeAtmosphere(
     float angle,
     float time
 ) {
-    float distanceFromEdge =
+    float edgeDistance =
         abs(
             radius -
             0.32
         );
 
-    float wideGlow =
+    float broadGlow =
         exp(
-            -distanceFromEdge *
-            26.0
+            -edgeDistance *
+            25.0
         );
 
-    float wave =
-        0.70 +
-        0.30 *
+    // Atmosfer bergerak berlawanan arah
+    float movingWave =
+        0.72 +
+        0.28 *
         sin(
-            angle * 9.0 -
-            time * 4.0
+            angle * 8.0 +
+            time * 5.0
         );
 
     float sharpRing =
@@ -274,7 +286,7 @@ float globeAtmosphere(
                 radius -
                 0.335
             ) *
-            130.0
+            125.0
         );
 
     float outerGlow =
@@ -284,66 +296,66 @@ float globeAtmosphere(
                 0.32,
                 0.0
             ) *
-            18.0
+            20.0
         ) *
         smoothstep(
-            0.70,
-            0.28,
+            0.68,
+            0.27,
             radius
         );
 
     return
-        wideGlow *
-        wave *
-        0.55
+        broadGlow *
+        movingWave *
+        0.65
         +
         sharpRing *
         1.25
         +
         outerGlow *
-        0.75;
+        0.85;
 }
 
 // --------------------------------------------------
-// FLASH KILAT
+// FLASH GLOBAL
 // --------------------------------------------------
 
 float lightningFlash(float time) {
     float flash = 0.0;
 
-    for (float i = 0.0; i < 6.0; i += 1.0) {
+    for (float i = 0.0; i < 8.0; i += 1.0) {
         float speed =
-            0.65 +
-            i * 0.18;
+            0.55 +
+            i * 0.19;
 
         float id =
             floor(
                 time * speed +
-                i * 9.17
+                i * 13.17
             );
 
         float randomValue =
             hash1(
                 id +
-                i * 2.71
+                i * 3.71
             );
 
-        if (randomValue > 0.66) {
+        if (randomValue > 0.63) {
             float phase =
                 fract(
                     time * speed +
-                    i * 9.17
+                    i * 13.17
                 );
 
             flash +=
                 exp(
-                    -phase * 24.0
+                    -phase * 28.0
                 ) *
                 (
                     randomValue -
-                    0.66
+                    0.63
                 ) *
-                6.0;
+                7.0;
         }
     }
 
@@ -355,26 +367,6 @@ float lightningFlash(float time) {
 // --------------------------------------------------
 
 void main() {
-//debug
-    vec2 debugUV =
-        FlutterFragCoord().xy /
-        iResolution.xy;
-
-    vec4 debugPixel =
-        texture(
-            textTexture,
-            debugUV
-        );
-
-    fragColor =
-        vec4(
-            debugPixel.rgb,
-            1.0
-        );
-
-    return;
-
-//debug
     vec2 fragCoord =
         FlutterFragCoord().xy;
 
@@ -395,7 +387,7 @@ void main() {
     vec2 center =
         vec2(
             0.0,
-            0.16
+            0.12
         );
 
     vec2 delta =
@@ -411,17 +403,42 @@ void main() {
             delta.x
         );
 
-    // Ukuran globe
     float globeR =
         0.32;
 
-    // Background
+    // --------------------------------------------------
+    // BACKGROUND
+    // --------------------------------------------------
+
     vec3 color =
         vec3(
             0.001,
-            0.002,
-            0.004
+            0.0015,
+            0.003
         );
+
+    // Partikel kecil di background
+    float stars =
+        hash2(
+            floor(
+                p * 110.0
+            )
+        );
+
+    float starMask =
+        step(
+            0.985,
+            stars
+        );
+
+    color +=
+        vec3(
+            1.0,
+            0.40,
+            0.05
+        ) *
+        starMask *
+        0.45;
 
     // --------------------------------------------------
     // ATMOSFER LUAR
@@ -437,7 +454,7 @@ void main() {
     vec3 atmosphereColor =
         vec3(
             1.0,
-            0.20,
+            0.19,
             0.005
         );
 
@@ -445,10 +462,10 @@ void main() {
         atmosphereColor *
         atmosphere *
         glow *
-        0.85;
+        0.95;
 
     // --------------------------------------------------
-    // PETIR LUAR
+    // PETIR DI LUAR GLOBE
     // --------------------------------------------------
 
     float bolt =
@@ -461,17 +478,17 @@ void main() {
     vec3 boltAura =
         vec3(
             1.0,
-            0.22,
-            0.005
+            0.16,
+            0.002
         ) *
         bolt *
-        1.65;
+        1.85;
 
-    vec3 boltWhite =
+    vec3 boltCore =
         vec3(
             1.0,
-            0.98,
-            0.70
+            0.96,
+            0.62
         ) *
         pow(
             max(
@@ -480,15 +497,15 @@ void main() {
             ),
             1.35
         ) *
-        4.6;
+        4.8;
 
     color +=
         boltAura;
 
     color +=
-        boltWhite;
+        boltCore;
 
-    // Flash lokal
+    // Kilatan global
     float flash =
         lightningFlash(
             iTime
@@ -497,14 +514,14 @@ void main() {
     color +=
         vec3(
             1.0,
-            0.52,
-            0.10
+            0.38,
+            0.025
         ) *
         flash *
-        0.15;
+        0.22;
 
     // --------------------------------------------------
-    // GLOBE 3D
+    // PERMUKAAN GLOBE 3D
     // --------------------------------------------------
 
     if (radius < globeR) {
@@ -525,28 +542,24 @@ void main() {
                     zSquared
                 );
 
-            float cosine =
+            float c =
                 cos(
                     rotY
                 );
 
-            float sine =
+            float s =
                 sin(
                     rotY
                 );
 
-            // Rotasi permukaan globe
+            // Rotasi globe
             vec2 rotatedXZ =
                 vec2(
-                    sphereUV.x *
-                    cosine -
-                    z *
-                    sine,
+                    sphereUV.x * c -
+                    z * s,
 
-                    sphereUV.x *
-                    sine +
-                    z *
-                    cosine
+                    sphereUV.x * s +
+                    z * c
                 );
 
             vec3 normal =
@@ -578,8 +591,8 @@ void main() {
 
             float frontLight =
                 smoothstep(
-                    -0.15,
-                    0.65,
+                    -0.20,
+                    0.70,
                     normal.z
                 );
 
@@ -593,29 +606,26 @@ void main() {
                     3.0
                 );
 
-            // --------------------------------------------------
-            // WARNA DASAR GLOBE
-            // --------------------------------------------------
-
+            // Warna emas globe
             vec3 darkGold =
                 vec3(
-                    0.12,
-                    0.018,
+                    0.055,
+                    0.006,
                     0.001
                 );
 
             vec3 gold =
                 vec3(
-                    0.66,
-                    0.20,
-                    0.008
+                    0.40,
+                    0.075,
+                    0.003
                 );
 
             vec3 brightGold =
                 vec3(
                     1.0,
-                    0.78,
-                    0.12
+                    0.58,
+                    0.045
                 );
 
             vec3 globeColor =
@@ -631,7 +641,7 @@ void main() {
                     brightGold,
                     diffuse *
                     frontLight *
-                    0.78
+                    0.82
                 );
 
             // --------------------------------------------------
@@ -653,7 +663,6 @@ void main() {
                     )
                 );
 
-            // Mapping equirectangular
             vec2 textUV =
                 vec2(
                     longitude /
@@ -665,97 +674,99 @@ void main() {
                     0.5
                 );
 
-            // Ulangi tulisan dua kali secara horizontal
+            // Satu tulisan mengelilingi globe
             textUV.x =
                 fract(
-                    textUV.x *
-                    2.0 +
+                    textUV.x +
                     windRot *
                     0.04
                 );
 
-            // Satu area texture secara vertikal
+            // Karena asset berisi tiga BABE vertikal,
+            // ambil hanya baris pertama.
             textUV.y =
+                textUV.y /
+                3.0;
+
+            textUV =
                 clamp(
-                    textUV.y *
-                    1.15 -
-                    0.075,
-                    0.001,
-                    0.999
+                    textUV,
+                    vec2(
+                        0.001,
+                        0.001
+                    ),
+                    vec2(
+                        0.999,
+                        0.332
+                    )
                 );
 
-            // Baca babe_info.png
             vec4 textPixel =
                 texture(
                     textTexture,
                     textUV
                 );
 
-            // Alpha berasal dari PNG
-            float babeTextAlpha =
-                textPixel.a;
-
-            babeTextAlpha =
+            float textAlpha =
                 smoothstep(
-                    0.01,
+                    0.015,
                     0.12,
-                    babeTextAlpha
+                    textPixel.a
                 );
 
-            // Warna tulisan
-            vec3 babeTextColor =
+            // Teks emas terang
+            vec3 textColor =
                 vec3(
                     1.0,
-                    0.92,
-                    0.30
+                    0.82,
+                    0.25
                 );
 
-            // Lighting tulisan
-            float babeTextLighting =
-                0.75 +
+            float textLight =
+                0.80 +
                 diffuse *
-                0.60;
+                0.65;
 
-            // Tempelkan BABE.INFO ke globe
             globeColor =
                 mix(
                     globeColor,
-                    babeTextColor *
-                    babeTextLighting,
-                    babeTextAlpha
+                    textColor *
+                    textLight,
+                    textAlpha *
+                    0.96
                 );
 
             // --------------------------------------------------
-            // EFEK PETIR DI PERMUKAAN
+            // PETIR MEMANTUL PADA PERMUKAAN
             // --------------------------------------------------
 
             globeColor +=
                 vec3(
                     1.0,
-                    0.35,
-                    0.01
-                ) *
-                bolt *
-                0.22;
-
-            globeColor +=
-                vec3(
-                    1.0,
-                    0.75,
-                    0.22
-                ) *
-                flash *
-                0.42;
-
-            // Rim globe
-            globeColor +=
-                vec3(
-                    1.0,
-                    0.24,
+                    0.20,
                     0.005
                 ) *
+                bolt *
+                0.30;
+
+            globeColor +=
+                vec3(
+                    1.0,
+                    0.72,
+                    0.16
+                ) *
+                flash *
+                0.48;
+
+            // Rim emas
+            globeColor +=
+                vec3(
+                    1.0,
+                    0.18,
+                    0.002
+                ) *
                 rim *
-                1.4;
+                1.55;
 
             color =
                 globeColor;
@@ -763,7 +774,7 @@ void main() {
     }
 
     // --------------------------------------------------
-    // VIGNETTE
+    // VIGNETTE DAN COLOR GRADING
     // --------------------------------------------------
 
     float vignette =
@@ -772,7 +783,7 @@ void main() {
             p,
             p
         ) *
-        0.22;
+        0.20;
 
     color *=
         max(
@@ -787,7 +798,7 @@ void main() {
                 0.0
             ),
             vec3(
-                0.88
+                0.86
             )
         );
 
