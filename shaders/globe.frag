@@ -649,92 +649,102 @@ void main() {
             // --------------------------------------------------
 
             float longitude =
-                atan(
-                    rotatedXZ.x,
-                    rotatedXZ.y
-                );
+    atan(
+        rotatedXZ.x,
+        rotatedXZ.y
+    );
 
-            float latitude =
-                asin(
-                    clamp(
-                        normal.y,
-                        -1.0,
-                        1.0
-                    )
-                );
+float latitude =
+    asin(
+        clamp(
+            normal.y,
+            -1.0,
+            1.0
+        )
+    );
 
-            vec2 textUV =
-                vec2(
-                    longitude /
-                    TWO_PI +
-                    0.5,
+vec2 textUV =
+    vec2(
+        longitude /
+        TWO_PI +
+        0.5,
 
-                    latitude /
-                    PI +
-                    0.5
-                );
+        latitude /
+        PI +
+        0.5
+    );
 
-            // Satu tulisan mengelilingi globe
-            textUV.x =
-                fract(
-                    textUV.x +
-                    windRot *
-                    0.04
-                );
+// Satu rangkaian texture mengelilingi globe.
+// Gunakan 1.0 agar tidak terlalu banyak pengulangan.
+textUV.x =
+    fract(
+        textUV.x +
+        windRot *
+        0.04
+    );
 
-            // Karena asset berisi tiga BABE vertikal,
-            // ambil hanya baris pertama.
-            textUV.y =
-                textUV.y /
-                3.0;
+// Gunakan seluruh tinggi texture.
+// Karena PNG berisi:
+//
+// BABE
+// BABE
+// BABE
+//
+// ketiganya akan tampil vertikal pada globe.
+textUV.y =
+    clamp(
+        textUV.y,
+        0.001,
+        0.999
+    );
 
-            textUV =
-                clamp(
-                    textUV,
-                    vec2(
-                        0.001,
-                        0.001
-                    ),
-                    vec2(
-                        0.999,
-                        0.332
-                    )
-                );
+// Jika posisi tulisan terbalik atas-bawah,
+// gunakan baris ini sebagai pengganti baris di atas:
+//
+// textUV.y =
+//     clamp(
+//         1.0 - textUV.y,
+//         0.001,
+//         0.999
+//     );
 
-            vec4 textPixel =
-                texture(
-                    textTexture,
-                    textUV
-                );
+vec4 textPixel =
+    texture(
+        textTexture,
+        textUV
+    );
 
-            float textAlpha =
-                smoothstep(
-                    0.015,
-                    0.12,
-                    textPixel.a
-                );
+// Alpha berasal dari background transparan PNG
+float textAlpha =
+    smoothstep(
+        0.015,
+        0.12,
+        textPixel.a
+    );
 
-            // Teks emas terang
-            vec3 textColor =
-                vec3(
-                    1.0,
-                    0.82,
-                    0.25
-                );
+// Warna tulisan
+vec3 textColor =
+    vec3(
+        1.0,
+        0.82,
+        0.25
+    );
 
-            float textLight =
-                0.80 +
-                diffuse *
-                0.65;
+// Pencahayaan tulisan mengikuti permukaan globe
+float textLight =
+    0.80 +
+    diffuse *
+    0.65;
 
-            globeColor =
-                mix(
-                    globeColor,
-                    textColor *
-                    textLight,
-                    textAlpha *
-                    0.96
-                );
+globeColor =
+    mix(
+        globeColor,
+        textColor *
+        textLight,
+        textAlpha *
+        0.96
+    );
+
 
             // --------------------------------------------------
             // PETIR MEMANTUL PADA PERMUKAAN
