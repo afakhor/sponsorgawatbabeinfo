@@ -25,61 +25,51 @@ class GlobeShaderPainter extends CustomPainter {
     final ui.FragmentShader shader =
         program.fragmentShader();
 
-    // --------------------------------------------------
-    // FLOAT UNIFORMS
-    //
-    // globe.frag:
-    //
-    // uniform vec2 iResolution;
-    // uniform float iTime;
-    // uniform float rotY;
-    // uniform float windRot;
-    // uniform float glow;
-    // uniform sampler2D textTexture;
-    // --------------------------------------------------
-
-    // iResolution.x
-    
+    // 0, 1 = iResolution
     shader.setFloat(
-      0, 
-      size.width
-      );
-    // iResolution.y
-    shader.setFloat(
-      1, 
-      size.height
-      );
-
-    // iTime
-    shader.setFloat(
-      2, time
-      );
-
-    // Rotasi globe
-    shader.setFloat(
-      3, 
-      time * 0.55);
-
-    // Atmosfer, texture, dan petir bergerak
-    // berlawanan arah dengan globe
-    shader.setFloat(
-      4, 
-      -time * 1.20);
-
-    // Intensitas atmosfer
-    shader.setFloat(
-      5,
-      3.5,
+      0,
+      size.width,
     );
 
-    // --------------------------------------------------
-    // IMAGE SAMPLER
-    // --------------------------------------------------
+    shader.setFloat(
+      1,
+      size.height,
+    );
 
+    // 2 = iTime
+    shader.setFloat(
+      2,
+      time,
+    );
+
+    // 3 = rotY
+    //
+    // Nilai negatif membalik arah rotasi globe.
+    shader.setFloat(
+      3,
+      -time * 0.55,
+    );
+
+    // 4 = windRot
+    //
+    // Texture bergerak dengan arah relatif berlawanan
+    // terhadap rotasi globe.
+    shader.setFloat(
+      4,
+      time * 1.20,
+    );
+
+    // 5 = glow
+    shader.setFloat(
+      5,
+      4.0,
+    );
+
+    // Sampler texture BABE.INFO
     shader.setImageSampler(
       0,
       textTexture,
-      );
+    );
 
     final Paint paint =
         Paint()
