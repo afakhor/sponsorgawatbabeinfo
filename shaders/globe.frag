@@ -356,15 +356,24 @@ float lightningFlash(float time) {
 
 void main() {
 //debug
+    vec2 debugUV =
+        FlutterFragCoord().xy /
+        iResolution.xy;
+
+    vec4 debugPixel =
+        texture(
+            textTexture,
+            debugUV
+        );
+
     fragColor =
         vec4(
-            1.0,
-            0.0,
-            0.0,
+            debugPixel.rgb,
             1.0
         );
 
-return;
+    return;
+
 //debug
     vec2 fragCoord =
         FlutterFragCoord().xy;
