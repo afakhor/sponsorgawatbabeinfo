@@ -74,26 +74,13 @@ class _SponsorBabePageState
 
   Future<void> _loadResources() async {
     try {
-      debugPrint(
-        'DEBUG: mulai memuat shader',
-      );
-
       final ui.FragmentProgram program =
           await ui.FragmentProgram.fromAsset(
         'shaders/globe.frag',
       );
 
-      debugPrint(
-        'DEBUG: shader berhasil dimuat',
-      );
-
       final ui.Image texture =
           await _loadTextTexture();
-
-      debugPrint(
-        'BABE.INFO texture loaded: '
-        '${texture.width} x ${texture.height}',
-      );
 
       if (!mounted) {
         texture.dispose();
@@ -104,18 +91,7 @@ class _SponsorBabePageState
         fragmentProgram = program;
         textTexture = texture;
       });
-    } catch (
-      error,
-      stackTrace,
-    ) {
-      debugPrint(
-        'RESOURCE LOAD ERROR: $error',
-      );
-
-      debugPrintStack(
-        stackTrace: stackTrace,
-      );
-
+    } catch (error) {
       if (!mounted) {
         return;
       }
@@ -130,18 +106,9 @@ class _SponsorBabePageState
     const String assetPath =
         'assets/images/babe_info.png';
 
-    debugPrint(
-      'DEBUG 1: mulai memuat asset: '
-      '$assetPath',
-    );
-
     final ByteData data =
         await DefaultAssetBundle.of(context).load(
       assetPath,
-    );
-
-    debugPrint(
-      'DEBUG 2: asset berhasil dibaca',
     );
 
     final Uint8List bytes =
@@ -159,15 +126,7 @@ class _SponsorBabePageState
       final ui.FrameInfo frame =
           await codec.getNextFrame();
 
-      final ui.Image image =
-          frame.image;
-
-      debugPrint(
-        'DEBUG 3: texture berhasil dibuat: '
-        '${image.width} x ${image.height}',
-      );
-
-      return image;
+      return frame.image;
     } finally {
       codec.dispose();
     }
@@ -190,48 +149,49 @@ class _SponsorBabePageState
     final ui.Image? texture =
         textTexture;
 
-    late final Widget content;
-
     if (errorMessage != null) {
-      content = Center(
-        child: Padding(
-          padding: const EdgeInsets.all(
-            24.0,
-          ),
-          child: Text(
-            'Gagal memuat shader atau texture:\n\n'
-            '$errorMessage',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.redAccent,
-              fontSize: 14.0,
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(
+              24.0,
+            ),
+            child: Text(
+              'Gagal memuat shader atau texture:\n\n'
+              '$errorMessage',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.redAccent,
+                fontSize: 14.0,
+              ),
             ),
           ),
         ),
       );
-    } else if (
-        program == null ||
-        texture == null
-    ) {
-      content = const Center(
-        child: CircularProgressIndicator(
-          color: Color(
-            0xFFFFD21F,
+    }
+
+    if (program == null || texture == null) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Color(
+              0xFFFFD21F,
+            ),
           ),
         ),
-      );
-    } else {
-      content = GlobeShaderWidget(
-        program: program,
-        textTexture: texture,
-        time: time,
       );
     }
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: SizedBox.expand(
-        child: content,
+        child: GlobeShaderWidget(
+          program: program,
+          textTexture: texture,
+          time: time,
+        ),
       ),
     );
   }
