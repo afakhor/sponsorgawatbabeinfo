@@ -265,88 +265,92 @@ float globeAtmosphere(
             0.32
         );
 
-    // Glow lembut di sekitar permukaan globe
+    // Cahaya lembut di sekitar tepi globe
     float softGlow =
         exp(
             -edgeDistance *
-            32.0
+            30.0
         );
 
-    // Atmosfer bergerak berlawanan dengan globe
+    // Garis atmosfer bergerak berlawanan
+    // dengan rotasi globe
     float flow1 =
         sin(
-            angle * 6.0 +
-            time * 3.8 +
-            sin(angle * 2.0 - time * 1.4) * 0.8
+            angle * 7.0 +
+            time * 3.5 +
+            sin(
+                angle * 2.0 -
+                time * 1.2
+            ) *
+            0.7
         );
 
     float flow2 =
         sin(
-            angle * 13.0 +
-            time * 5.6 +
-            radius * 75.0
+            angle * 15.0 +
+            time * 5.0 +
+            radius * 80.0
         );
 
     float flow3 =
         sin(
-            angle * 25.0 +
-            time * 8.0 -
-            radius * 120.0
+            angle * 28.0 +
+            time * 7.5 -
+            radius * 135.0
         );
 
-    // Membentuk aliran panjang, bukan titik
-    float flowingAtmosphere =
-        flow1 * 0.50 +
+    float flowingLines =
+        flow1 * 0.55 +
         flow2 * 0.30 +
-        flow3 * 0.20;
+        flow3 * 0.15;
 
-    flowingAtmosphere =
-        flowingAtmosphere *
+    flowingLines =
+        flowingLines *
         0.5 +
         0.5;
 
-    flowingAtmosphere =
+    flowingLines =
         smoothstep(
-            0.52,
+            0.54,
             0.82,
-            flowingAtmosphere
+            flowingLines
         );
 
-    // Ring tipis di tepi globe
+    // Ring atmosfer yang tipis
     float sharpRing =
         exp(
             -abs(
                 radius -
-                0.325
+                0.326
             ) *
-            190.0
+            180.0
         );
 
-    // Hanya terlihat di luar dan sekitar permukaan
-    float outerMask =
+    // Membatasi atmosfer di dekat globe
+    float atmosphereMask =
         smoothstep(
-            0.24,
-            0.31,
+            0.245,
+            0.305,
             radius
         ) *
         (
             1.0 -
             smoothstep(
-                0.34,
-                0.49,
+                0.335,
+                0.47,
                 radius
             )
         );
 
     return (
         softGlow *
-        flowingAtmosphere *
-        0.75
+        flowingLines *
+        0.85
         +
         sharpRing *
-        0.95
+        1.10
     ) *
-    outerMask;
+    atmosphereMask;
 }
 
 // --------------------------------------------------
