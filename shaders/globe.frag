@@ -715,7 +715,7 @@ vec2 textUV =
 // Gunakan 1.0 agar tidak terlalu banyak pengulangan.
 textUV.x =
     fract(
-        textUV.x +
+        textUV.x -
         windRot *
         0.04
     );
