@@ -893,277 +893,316 @@ color +=
     // PERMUKAAN GLOBE 3D
     // --------------------------------------------------
 
-    if (radius < globeR) {
-        vec2 sphereUV =
-            delta /
-            globeR;
+   if (radius < globeR) {
+    vec2 sphereUV =
+        delta /
+        globeR;
+
+    float zSquared =
+        1.0 -
+        dot(
+            sphereUV,
+            sphereUV
+        );
+
+    if (zSquared > 0.0) {
+        float z =
+            sqrt(
+                zSquared
+            );
+
+        float c =
+            cos(
+                rotY
+            );
+
+        float s =
+            sin(
+                rotY
+            );
+
+        vec2 rotatedXZ =
+            vec2(
+                sphereUV.x * c -
+                z * s,
+
+                sphereUV.x * s +
+                z * c
+            );
+
+        vec3 normal =
+            normalize(
+                vec3(
+                    rotatedXZ.x,
+                    sphereUV.y,
+                    rotatedXZ.y
+                )
+            );
+
+        // ------------------------------------------
+        // LIGHTING
+        // ------------------------------------------
+
+        vec3 lightDirection =
+            normalize(
+                vec3(
+                    -0.65,
+                    0.40,
+                    0.90
+                )
+            );
+
+        float diffuse =
+            max(
+                0.0,
+                dot(
+                    normal,
+                    lightDirection
+                )
+            );
+
+        float frontLight =
+            smoothstep(
+                -0.20,
+                0.70,
+                normal.z
+            );
+
+        float rim =
+            pow(
+                1.0 -
+                max(
+                    0.0,
+                    normal.z
+                ),
+                3.0
+            );
+
+        // ------------------------------------------
+        // WARNA DASAR GLOBE
+        // ------------------------------------------
+
+        vec3 darkGold =
+            vec3(
+                0.055,
+                0.006,
+                0.001
+            );
+
+        vec3 gold =
+            vec3(
+                0.40,
+                0.075,
+                0.003
+            );
+
+        vec3 brightGold =
+            vec3(
+                1.0,
+                0.58,
+                0.045
+            );
+
+        vec3 globeColor =
+            mix(
+                darkGold,
+                gold,
+                diffuse
+            );
+
+        globeColor =
+            mix(
+                globeColor,
+                brightGold,
+                diffuse *
+                frontLight *
+                0.82
+            );
+
+        // ------------------------------------------
+        // PLASMA GLOBE
+        // ------------------------------------------
 
         vec3 plasma =
-    plasmaEffect(
-        sphereUV,
-        radius,
-        iTime
-    );
-
-
-        float zSquared =
-            1.0 -
-            dot(
+            plasmaEffect(
                 sphereUV,
+                radius,
+                iTime
+            );
+
+        float plasmaVisibility =
+            smoothstep(
+                -0.20,
+                0.60,
+                normal.z
+            );
+
+        globeColor +=
+            plasma *
+            plasmaVisibility *
+            0.75;
+
+        // ------------------------------------------
+        // INTI PLASMA DI TENGAH
+        // ------------------------------------------
+
+        float centerDistance =
+            length(
                 sphereUV
             );
 
-        if (zSquared > 0.0) {
-            float z =
-                sqrt(
-                    zSquared
-                );
+        float centerOrb =
+            exp(
+                -centerDistance *
+                15.0
+            );
 
-            float c =
-                cos(
-                    rotY
-                );
-
-            float s =
-                sin(
-                    rotY
-                );
-
-            // Rotasi globe
-            vec2 rotatedXZ =
-                vec2(
-                    sphereUV.x * c -
-                    z * s,
-
-                    sphereUV.x * s +
-                    z * c
-                );
-
-            vec3 normal =
-                normalize(
-                    vec3(
-                        rotatedXZ.x,
-                        sphereUV.y,
-                        rotatedXZ.y
-                    )
-                );
-    
-            vec3 plasma =
-    plasmaEffect(
-        sphereUV,
-        radius,
-        iTime
-    );
-
-
-            vec3 lightDirection =
-                normalize(
-                    vec3(
-                        -0.65,
-                        0.40,
-                        0.90
-                    )
-                );
-
-            float diffuse =
-                max(
-                    0.0,
-                    dot(
-                        normal,
-                        lightDirection
-                    )
-                );
-
-            float frontLight =
-                smoothstep(
-                    -0.20,
-                    0.70,
-                    normal.z
-                );
-
-            float rim =
-                pow(
-                    1.0 -
-                    max(
-                        0.0,
-                        normal.z
-                    ),
-                    3.0
-                );
-
-            // Warna emas globe
-            vec3 darkGold =
-                vec3(
-                    0.055,
-                    0.006,
-                    0.001
-                );
-
-            vec3 gold =
-                vec3(
-                    0.40,
-                    0.075,
-                    0.003
-                );
-
-            vec3 brightGold =
-                vec3(
-                    1.0,
-                    0.58,
-                    0.045
-                );
-
-            vec3 globeColor =
-                mix(
-                    darkGold,
-                    gold,
-                    diffuse
-                );
-
-         globeColor =
-                mix(
-                    globeColor,
-                    brightGold,
-                    diffuse *
-                    frontLight *
-                    0.82
-                );
-
-// Plasma terlihat lebih kuat pada sisi depan globe
-float plasmaVisibility =
-    smoothstep(
-        -0.20,
-        0.60,
-        normal.z
-    );
-
-globeColor +=
-    plasma *
-    plasmaVisibility *
-    0.75;
-
-
-      
-     
-            // --------------------------------------------------
-            // TEXTURE BABE.INFO
-            // --------------------------------------------------
-
-            float longitude =
-    atan(
-        rotatedXZ.x,
-        rotatedXZ.y
-    );
-
-float latitude =
-    asin(
-        clamp(
-            normal.y,
-            -1.0,
-            1.0
-        )
-    );
-
-vec2 textUV =
-    vec2(
-        longitude /
-        TWO_PI +
-        0.5,
-
-        latitude /
-        PI +
-        0.5
-    );
-
-// Arah texture berlawanan dari gerakan windRot
-textUV.x =
-    fract(
-        textUV.x -
-        windRot *
-        0.04
-    );
-
-// PNG berisi tiga BABE vertikal.
-// Ambil seluruh texture agar tiga tulisan terlihat.
-textUV.y =
-    clamp(
-        textUV.y,
-        0.001,
-        0.999
-    );
-
-vec4 textPixel =
-    texture(
-        textTexture,
-        textUV
-    );
-
-float textAlpha =
-    smoothstep(
-        0.015,
-        0.12,
-        textPixel.a
-    );
-
-vec3 textColor =
-    vec3(
-        1.0,
-        0.82,
-        0.25
-    );
-
-float textLight =
-    0.80 +
-    diffuse *
-    0.65;
-
-globeColor =
-    mix(
-        globeColor,
-        textColor *
-        textLight,
-        textAlpha *
-        0.96
-    );
-
-
-
-            // --------------------------------------------------
-            // PETIR MEMANTUL PADA PERMUKAAN
-            // --------------------------------------------------
-
-            globeColor +=
-                vec3(
-                    1.0,
-                    0.20,
-                    0.005
+        float centerOrbRing =
+            exp(
+                -abs(
+                    centerDistance -
+                    0.13
                 ) *
-                bolt *
-                0.30;
+                70.0
+            );
 
-            globeColor +=
-                vec3(
-                    1.0,
-                    0.72,
-                    0.16
-                ) *
-                flash *
-                0.48;
+        vec3 centerOrbColor =
+            vec3(
+                1.0,
+                0.04,
+                0.60
+            ) *
+            centerOrb *
+            2.4;
 
-            // Rim emas
-            globeColor +=
-                vec3(
-                    1.0,
-                    0.18,
-                    0.002
-                ) *
-                rim *
-                1.55;
+        centerOrbColor +=
+            vec3(
+                0.20,
+                0.50,
+                1.0
+            ) *
+            centerOrbRing *
+            1.7;
 
-            color =
-                globeColor;
-        }
+        globeColor +=
+            centerOrbColor *
+            plasmaVisibility;
+
+        // ------------------------------------------
+        // TEXTURE BABE.INFO
+        // ------------------------------------------
+
+        float longitude =
+            atan(
+                rotatedXZ.x,
+                rotatedXZ.y
+            );
+
+        float latitude =
+            asin(
+                clamp(
+                    normal.y,
+                    -1.0,
+                    1.0
+                )
+            );
+
+        vec2 textUV =
+            vec2(
+                longitude /
+                TWO_PI +
+                0.5,
+
+                latitude /
+                PI +
+                0.5
+            );
+
+        textUV.x =
+            fract(
+                textUV.x -
+                windRot *
+                0.04
+            );
+
+        textUV.y =
+            clamp(
+                textUV.y,
+                0.001,
+                0.999
+            );
+
+        vec4 textPixel =
+            texture(
+                textTexture,
+                textUV
+            );
+
+        float textAlpha =
+            smoothstep(
+                0.015,
+                0.12,
+                textPixel.a
+            );
+
+        vec3 textColor =
+            vec3(
+                1.0,
+                0.82,
+                0.25
+            );
+
+        float textLight =
+            0.80 +
+            diffuse *
+            0.65;
+
+        globeColor =
+            mix(
+                globeColor,
+                textColor *
+                textLight,
+                textAlpha *
+                0.96
+            );
+
+        // ------------------------------------------
+        // PETIR PADA PERMUKAAN
+        // ------------------------------------------
+
+        globeColor +=
+            vec3(
+                1.0,
+                0.20,
+                0.005
+            ) *
+            bolt *
+            0.30;
+
+        globeColor +=
+            vec3(
+                1.0,
+                0.72,
+                0.16
+            ) *
+            flash *
+            0.48;
+
+        // Rim globe
+        globeColor +=
+            vec3(
+                1.0,
+                0.18,
+                0.002
+            ) *
+            rim *
+            1.55;
+
+        color =
+            globeColor;
     }
+}
+
 
     // --------------------------------------------------
     // VIGNETTE DAN COLOR GRADING
