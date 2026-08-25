@@ -45,209 +45,186 @@ float wrappingLightning(
     float radius,
     float time
 ) {
-    float total = 0.0;
+    float globeRadius =
+        0.32;
 
-    // Petir berada di sekitar tepi globe
-    float surfaceMask =
-        smoothstep(
-            0.275,
-            0.315,
-            radius
+    float total =
+        0.0;
+
+    // Area utama di bibir globe
+    float distanceFromEdge =
+        radius -
+        globeRadius;
+
+    float edgeMask =
+        exp(
+            -abs(
+                distanceFromEdge
+            ) *
+            110.0
         );
 
+    // Area duri ke luar globe
     float outerMask =
-        1.0 -
         smoothstep(
-            0.315,
-            0.43,
-            radius
-        );
-
-    float wrapMask =
-        surfaceMask *
-        outerMask;
-
-    for (float i = 0.0; i < 10.0; i += 1.0) {
-        float seed =
-            i * 23.731;
-
-        float speed =
-            0.35 +
-            i * 0.11;
-
-        float strike =
-            floor(
-                time * speed +
-                seed
-            );
-
-        float chance =
-            hash1(
-                strike +
-                seed
-            );
-
-        // Mengatur jumlah sambaran
-        if (chance > 0.30) {
-            float baseAngle =
-                hash1(
-                    strike +
-                    seed +
-                    4.0
-                ) *
-                TWO_PI;
-
-            float phase =
-                fract(
-                    time * speed +
-                    seed
-                );
-
-            // Denyut pendek seperti kilatan
-            float pulse =
-                exp(
-                    -phase * 13.0
-                );
-
-            // Jalur utama zig-zag
-            float path =
-                sin(
-                    radius * 160.0 +
-                    time * 17.0 +
-                    seed
-                ) * 0.070
-              + sin(
-                    radius * 290.0 -
-                    time * 29.0 +
-                    seed * 1.7
-                ) * 0.040
-              + sin(
-                    radius * 470.0 +
-                    time * 43.0 +
-                    seed * 2.2
-                ) * 0.020;
-
-            float lightningAngle =
-                baseAngle +
-                path;
-
-            float distanceMain =
-                angularDistance(
-                    angle,
-                    lightningAngle
-                );
-
-            // Inti petir
-            float core =
-                smoothstep(
-                    0.020,
-                    0.0,
-                    distanceMain
-                );
-
-            // Cahaya aura
-            float aura =
-                smoothstep(
-                    0.105,
-                    0.0,
-                    distanceMain
-                );
-
-            // Cabang petir
-            float branchWave1 =
-                sin(
-                    angle * 34.0 +
-                    radius * 210.0 +
-                    seed
-                ) * 0.5 + 0.5;
-
-            float branch1 =
-                pow(
-                    branchWave1,
-                    18.0
-                ) *
-                aura;
-
-            float branchWave2 =
-                sin(
-                    angle * 57.0 -
-                    radius * 330.0 +
-                    seed * 2.0
-                ) * 0.5 + 0.5;
-
-            float branch2 =
-                pow(
-                    branchWave2,
-                    23.0
-                ) *
-                aura;
-
-            // Ekor memanjang mengikuti lengkungan globe
-            float tailWave =
-                sin(
-                    angle * 15.0 +
-                    radius * 95.0 -
-                    time * 20.0 +
-                    seed
-                ) * 0.5 + 0.5;
-
-            float tail =
-                pow(
-                    tailWave,
-                    12.0
-                ) *
-                smoothstep(
-                    0.095,
-                    0.0,
-                    distanceMain
-                );
-
-            total +=
-                (
-                    core * 7.0 +
-                    aura * 1.25 +
-                    branch1 * 3.0 +
-                    branch2 * 2.0 +
-                    tail * 1.5
-                ) *
-                pulse;
-        }
-    }
-
-    // Aliran listrik tipis tambahan
-    float electricBand =
-        sin(
-            angle * 22.0 +
-            radius * 115.0 -
-            time * 15.0
-        ) * 0.5 + 0.5;
-
-    electricBand =
-        pow(
-            electricBand,
-            22.0
-        );
-
-    electricBand *=
-        smoothstep(
-            0.285,
-            0.32,
-            radius
+            -0.01,
+            0.015,
+            distanceFromEdge
         ) *
         (
             1.0 -
             smoothstep(
-                0.32,
-                0.39,
-                radius
+                0.12,
+                0.22,
+                distanceFromEdge
             )
         );
 
-    total +=
-        electricBand *
-        2.0;
+    // Gelombang duri besar
+    float spikePattern1 =
+        sin(
+            angle * 48.0 -
+            time * 4.0
+        ) *
+        0.5 +
+        0.5;
 
-    return total * wrapMask;
+    float spikePattern2 =
+        sin(
+            angle * 83.0 +
+            time * 6.0
+        ) *
+        0.5 +
+        0.5;
+
+    float spikePattern3 =
+        sin(
+            angle * 137.0 -
+            time * 8.0
+        ) *
+        0.5 +
+        0.5;
+
+    // Gabungan bentuk duri
+    float spikes =
+        spikePattern1 *
+        0.50
+        +
+        spikePattern2 *
+        0.30
+        +
+        spikePattern3 *
+        0.20;
+
+    spikes =
+        smoothstep(
+            0.56,
+            0.84,
+            spikes
+        );
+
+    // Membuat sebagian duri lebih panjang
+    float longSpikes =
+        pow(
+            spikePattern2,
+            8.0
+        ) *
+        smoothstep(
+            0.65,
+            0.90,
+            spikePattern1
+        );
+
+    // Bentuk duri memanjang keluar dari permukaan
+    float spikeShape =
+        exp(
+            -max(
+                distanceFromEdge,
+                0.0
+            ) *
+            25.0
+        );
+
+    // Jalur listrik utama yang bergerak
+    float flowingPath =
+        sin(
+            angle * 14.0 -
+            time * 5.0 +
+            radius * 90.0
+        ) *
+        0.5 +
+        0.5;
+
+    flowingPath =
+        smoothstep(
+            0.44,
+            0.80,
+            flowingPath
+        );
+
+    // Inti duri terang
+    float spikeCore =
+        spikes *
+        spikeShape *
+        outerMask *
+        flowingPath;
+
+    // Aura duri
+    float spikeAura =
+        spikes *
+        exp(
+            -max(
+                distanceFromEdge,
+                0.0
+            ) *
+            12.0
+        ) *
+        outerMask;
+
+    // Beberapa duri panjang seperti pentol
+    float largeSpike =
+        longSpikes *
+        exp(
+            -max(
+                distanceFromEdge,
+                0.0
+            ) *
+            18.0
+        ) *
+        outerMask;
+
+    total +=
+        spikeCore *
+        5.5;
+
+    total +=
+        spikeAura *
+        1.45;
+
+    total +=
+        largeSpike *
+        3.0;
+
+    // Ring tipis sebagai bibir mangkok
+    float rim =
+        exp(
+            -abs(
+                distanceFromEdge
+            ) *
+            190.0
+        );
+
+    total +=
+        rim *
+        0.85;
+
+    // Petir menempel pada permukaan globe
+    total +=
+        edgeMask *
+        spikes *
+        1.5;
+
+    return total;
 }
 
 // --------------------------------------------------
@@ -259,99 +236,130 @@ float globeAtmosphere(
     float angle,
     float time
 ) {
-    float edgeDistance =
-        abs(
-            radius -
-            0.32
-        );
+    float globeRadius =
+        0.32;
 
-    // Cahaya lembut di sekitar tepi globe
-    float softGlow =
+    float distanceFromGlobe =
+        radius -
+        globeRadius;
+
+    // Atmosfer melebar ke segala arah
+    float wideSmoke =
         exp(
-            -edgeDistance *
-            30.0
-        );
-
-    // Garis atmosfer bergerak berlawanan
-    // dengan rotasi globe
-    float flow1 =
-        sin(
-            angle * 7.0 +
-            time * 3.5 +
-            sin(
-                angle * 2.0 -
-                time * 1.2
+            -max(
+                distanceFromGlobe,
+                0.0
             ) *
-            0.7
+            9.5
         );
 
-    float flow2 =
+    // Asap padat dekat permukaan
+    float denseSmoke =
+        exp(
+            -abs(
+                distanceFromGlobe
+            ) *
+            23.0
+        );
+
+    // Gumpalan asap besar
+    float cloud1 =
         sin(
-            angle * 15.0 +
-            time * 5.0 +
-            radius * 80.0
-        );
-
-    float flow3 =
-        sin(
-            angle * 28.0 +
-            time * 7.5 -
-            radius * 135.0
-        );
-
-    float flowingLines =
-        flow1 * 0.55 +
-        flow2 * 0.30 +
-        flow3 * 0.15;
-
-    flowingLines =
-        flowingLines *
+            angle * 3.0 +
+            time * 1.8 +
+            radius * 17.0
+        ) *
         0.5 +
         0.5;
 
-    flowingLines =
+    float cloud2 =
+        sin(
+            angle * 6.0 -
+            time * 2.7 +
+            radius * 31.0
+        ) *
+        0.5 +
+        0.5;
+
+    float cloud3 =
+        sin(
+            angle * 11.0 +
+            time * 4.4 -
+            radius * 54.0
+        ) *
+        0.5 +
+        0.5;
+
+    float cloud4 =
+        sin(
+            angle * 19.0 -
+            time * 6.2 +
+            radius * 83.0
+        ) *
+        0.5 +
+        0.5;
+
+    // Noise asap bertingkat
+    float smokeNoise =
+        cloud1 * 0.40 +
+        cloud2 * 0.28 +
+        cloud3 * 0.20 +
+        cloud4 * 0.12;
+
+    smokeNoise =
         smoothstep(
-            0.54,
-            0.82,
-            flowingLines
+            0.28,
+            0.76,
+            smokeNoise
         );
 
-    // Ring atmosfer yang tipis
-    float sharpRing =
+    // Asap lebih padat dan menyatu
+    float packedSmoke =
+        wideSmoke *
+        smokeNoise;
+
+    // Lapisan asap kedua agar atmosfer tidak kosong
+    float secondarySmoke =
+        denseSmoke *
+        smoothstep(
+            0.22,
+            0.72,
+            cloud1 * 0.65 +
+            cloud2 * 0.35
+        );
+
+    // Ring atmosfer lembut
+    float softRing =
         exp(
             -abs(
                 radius -
-                0.326
+                0.335
             ) *
-            180.0
+            90.0
         );
 
-    // Membatasi atmosfer di dekat globe
-    float atmosphereMask =
+    // Batas penyebaran atmosfer
+    float spreadMask =
+        1.0 -
         smoothstep(
-            0.245,
-            0.305,
+            0.40,
+            0.62,
             radius
-        ) *
-        (
-            1.0 -
-            smoothstep(
-                0.335,
-                0.47,
-                radius
-            )
         );
 
     return (
-        softGlow *
-        flowingLines *
-        0.85
+        packedSmoke *
+        1.70
         +
-        sharpRing *
+        secondarySmoke *
         1.10
+        +
+        softRing *
+        0.85
     ) *
-    atmosphereMask;
+    spreadMask;
 }
+
 
 // --------------------------------------------------
 // FLASH GLOBAL
@@ -489,17 +497,18 @@ void main() {
         );
 
     vec3 atmosphereColor =
-        vec3(
-            1.0,
-            0.19,
-            0.005
-        );
+    vec3(
+        1.0,
+        0.24,
+        0.008
+    );
 
-    color +=
-        atmosphereColor *
-        atmosphere *
-        glow *
-        0.95;
+color +=
+    atmosphereColor *
+    atmosphere *
+    glow *
+    1.45;
+
 
     // --------------------------------------------------
     // PETIR DI LUAR GLOBE
@@ -513,20 +522,21 @@ void main() {
         );
 
     vec3 boltAura =
-        vec3(
-            1.0,
-            0.16,
-            0.002
-        ) *
-        bolt *
-        1.85;
+    vec3(
+        1.0,
+        0.12,
+        0.002
+    ) *
+    bolt *
+    2.10;
+
 
     vec3 boltCore =
-        vec3(
-            1.0,
-            0.96,
-            0.62
-        ) *
+    vec3(
+        1.0,
+        0.88,
+        0.38
+    ) *
         pow(
             max(
                 bolt,
@@ -711,8 +721,7 @@ vec2 textUV =
         0.5
     );
 
-// Satu rangkaian texture mengelilingi globe.
-// Gunakan 1.0 agar tidak terlalu banyak pengulangan.
+// Arah texture berlawanan dari gerakan windRot
 textUV.x =
     fract(
         textUV.x -
@@ -720,14 +729,8 @@ textUV.x =
         0.04
     );
 
-// Gunakan seluruh tinggi texture.
-// Karena PNG berisi:
-//
-// BABE
-// BABE
-// BABE
-//
-// ketiganya akan tampil vertikal pada globe.
+// PNG berisi tiga BABE vertikal.
+// Ambil seluruh texture agar tiga tulisan terlihat.
 textUV.y =
     clamp(
         textUV.y,
@@ -735,23 +738,12 @@ textUV.y =
         0.999
     );
 
-// Jika posisi tulisan terbalik atas-bawah,
-// gunakan baris ini sebagai pengganti baris di atas:
-//
-// textUV.y =
-//     clamp(
-//         1.0 - textUV.y,
-//         0.001,
-//         0.999
-//     );
-
 vec4 textPixel =
     texture(
         textTexture,
         textUV
     );
 
-// Alpha berasal dari background transparan PNG
 float textAlpha =
     smoothstep(
         0.015,
@@ -759,7 +751,6 @@ float textAlpha =
         textPixel.a
     );
 
-// Warna tulisan
 vec3 textColor =
     vec3(
         1.0,
@@ -767,7 +758,6 @@ vec3 textColor =
         0.25
     );
 
-// Pencahayaan tulisan mengikuti permukaan globe
 float textLight =
     0.80 +
     diffuse *
@@ -781,6 +771,7 @@ globeColor =
         textAlpha *
         0.96
     );
+
 
 
             // --------------------------------------------------
