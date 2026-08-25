@@ -45,187 +45,279 @@ float wrappingLightning(
     float radius,
     float time
 ) {
-    float globeRadius =
+    const float globeRadius =
         0.32;
 
     float total =
         0.0;
 
-    // Area utama di bibir globe
-    float distanceFromEdge =
+    float distanceFromGlobe =
         radius -
         globeRadius;
 
-    float edgeMask =
-        exp(
-            -abs(
-                distanceFromEdge
-            ) *
-            110.0
-        );
-
-    // Area duri ke luar globe
-    float outerMask =
+    // Area pusaran dari permukaan sampai ke luar globe
+    float vortexArea =
         smoothstep(
-            -0.01,
+            -0.025,
             0.015,
-            distanceFromEdge
+            distanceFromGlobe
         ) *
         (
             1.0 -
-            smoothstep(
-                0.12,
-                0.22,
-                distanceFromEdge
-            )
+smoothstep(
+    0.24,
+    0.52,
+    distanceFromGlobe
+)
         );
 
-    // Gelombang duri besar
-    float spikePattern1 =
+    // Arah gerakan pusaran
+    float vortexTime =
+        -time * 2.2;
+
+    // Radius memengaruhi posisi sudut.
+    // Ini yang membuat garis menjadi spiral.
+    float spiralAngle =
+        angle
+        + distanceFromGlobe * 28.0
+        - vortexTime;
+
+    for (float i = 0.0; i < 9.0; i += 1.0) {
+        float seed =
+            i * 19.731;
+
+        float speed =
+            0.45 +
+            i * 0.085;
+
+        float strikeId =
+            floor(
+                time * speed +
+                seed
+            );
+
+        float chance =
+            hash1(
+                strikeId +
+                seed
+            );
+
+        if (chance > 0.28) {
+            float baseAngle =
+                hash1(
+                    strikeId +
+                    seed +
+                    4.0
+                ) *
+                TWO_PI;
+
+            float pulsePhase =
+                fract(
+                    time * speed +
+                    seed
+                );
+
+            // Kilatan dimulai dari luar,
+            // lalu terasa tersedot ke arah globe
+            float suction =
+                1.0 -
+                smoothstep(
+                    0.0,
+                    1.0,
+                    pulsePhase
+                );
+
+            float pulse =
+                exp(
+                    -pulsePhase *
+                    8.5
+                );
+
+            // Gangguan zig-zag pada jalur spiral
+            float distortion =
+                sin(
+                    radius * 125.0 +
+                    time * 18.0 +
+                    seed
+                ) *
+                0.050
+              + sin(
+                    radius * 240.0 -
+                    time * 27.0 +
+                    seed * 1.7
+                ) *
+                0.028
+              + sin(
+                    radius * 410.0 +
+                    time * 41.0 +
+                    seed * 2.4
+                ) *
+                0.014;
+
+            // Setiap petir memiliki spiral yang sedikit berbeda
+            float localSpiralAngle =
+                spiralAngle
+                + baseAngle
+                + distortion
+                + suction *
+                0.35;
+
+            // Jarak sudut dari jalur spiral
+            float pathDistance =
+                abs(
+                    sin(
+                        (
+                            localSpiralAngle
+                        ) *
+                        0.5
+                    )
+                );
+
+            // Jalur utama spiral
+            float mainPath =
+                smoothstep(
+                    0.075,
+                    0.0,
+                    pathDistance
+                );
+
+            // Garis inti yang sangat tipis
+            float core =
+                smoothstep(
+                    0.022,
+                    0.0,
+                    pathDistance
+                );
+
+            // Cabang-cabang listrik
+            float branchWave1 =
+                sin(
+                    angle * 42.0 +
+                    radius * 170.0 +
+                    seed -
+                    time * 5.0
+                ) *
+                0.5 +
+                0.5;
+
+            float branchWave2 =
+                sin(
+                    angle * 71.0 -
+                    radius * 280.0 +
+                    seed * 2.0 +
+                    time * 7.0
+                ) *
+                0.5 +
+                0.5;
+
+            float branches =
+                pow(
+                    branchWave1,
+                    18.0
+                ) *
+                mainPath *
+                1.4;
+
+            branches +=
+                pow(
+                    branchWave2,
+                    24.0
+                ) *
+                mainPath *
+                1.0;
+
+            // Efek penarikan menuju permukaan globe
+            float suctionMask =
+                exp(
+                    -abs(
+                        distanceFromGlobe
+                    ) *
+                    18.0
+                );
+
+            // Jalur listrik luar
+            float outerPath =
+                mainPath *
+                vortexArea *
+                (
+                    0.45 +
+                    suctionMask *
+                    1.8
+                );
+
+            // Inti listrik
+            float electricCore =
+                core *
+                vortexArea *
+                suction *
+                4.5;
+
+            // Aura besar di sekeliling jalur
+            float electricAura =
+                mainPath *
+                vortexArea *
+                1.2;
+
+            total +=
+                (
+                    electricCore +
+                    electricAura +
+                    branches *
+                    0.8 +
+                    outerPath
+                ) *
+                pulse;
+        }
+    }
+
+    // Pita spiral tambahan agar pusaran lebih penuh
+    float broadSpiral =
         sin(
-            angle * 48.0 -
+            angle * 11.0 +
+            distanceFromGlobe * 38.0 -
             time * 4.0
         ) *
         0.5 +
         0.5;
 
-    float spikePattern2 =
-        sin(
-            angle * 83.0 +
-            time * 6.0
-        ) *
-        0.5 +
-        0.5;
-
-    float spikePattern3 =
-        sin(
-            angle * 137.0 -
-            time * 8.0
-        ) *
-        0.5 +
-        0.5;
-
-    // Gabungan bentuk duri
-    float spikes =
-        spikePattern1 *
-        0.50
-        +
-        spikePattern2 *
-        0.30
-        +
-        spikePattern3 *
-        0.20;
-
-    spikes =
+    broadSpiral =
         smoothstep(
-            0.56,
-            0.84,
-            spikes
-        );
-
-    // Membuat sebagian duri lebih panjang
-    float longSpikes =
-        pow(
-            spikePattern2,
-            8.0
-        ) *
-        smoothstep(
-            0.65,
+            0.62,
             0.90,
-            spikePattern1
+            broadSpiral
         );
 
-    // Bentuk duri memanjang keluar dari permukaan
-    float spikeShape =
+    broadSpiral *=
+        vortexArea *
         exp(
             -max(
-                distanceFromEdge,
+                distanceFromGlobe,
                 0.0
             ) *
-            25.0
+            5.5
         );
 
-    // Jalur listrik utama yang bergerak
-    float flowingPath =
-        sin(
-            angle * 14.0 -
-            time * 5.0 +
-            radius * 90.0
-        ) *
-        0.5 +
-        0.5;
-
-    flowingPath =
-        smoothstep(
-            0.44,
-            0.80,
-            flowingPath
-        );
-
-    // Inti duri terang
-    float spikeCore =
-        spikes *
-        spikeShape *
-        outerMask *
-        flowingPath;
-
-    // Aura duri
-    float spikeAura =
-        spikes *
-        exp(
-            -max(
-                distanceFromEdge,
-                0.0
-            ) *
-            12.0
-        ) *
-        outerMask;
-
-    // Beberapa duri panjang seperti pentol
-    float largeSpike =
-        longSpikes *
-        exp(
-            -max(
-                distanceFromEdge,
-                0.0
-            ) *
-            18.0
-        ) *
-        outerMask;
-
     total +=
-        spikeCore *
-        5.5;
+        broadSpiral *
+        1.35;
 
-    total +=
-        spikeAura *
-        1.45;
-
-    total +=
-        largeSpike *
-        3.0;
-
-    // Ring tipis sebagai bibir mangkok
-    float rim =
+    // Cincin kuat di bibir globe,
+    // seperti pusaran sedang menelan permukaan
+    float globeRim =
         exp(
             -abs(
-                distanceFromEdge
+                distanceFromGlobe
             ) *
-            190.0
+            145.0
         );
 
     total +=
-        rim *
-        0.85;
-
-    // Petir menempel pada permukaan globe
-    total +=
-        edgeMask *
-        spikes *
-        1.5;
+        globeRim *
+        1.4;
 
     return total;
 }
+
 
 // --------------------------------------------------
 // ATMOSFER BERLAWANAN ARAH DENGAN GLOBE
@@ -408,6 +500,216 @@ float lightningFlash(float time) {
 }
 
 // --------------------------------------------------
+// PLASMA RADIAL GLOBE
+// --------------------------------------------------
+
+float plasmaNoise(
+    float value
+) {
+    return sin(value) * 0.5 + 0.5;
+}
+
+vec3 plasmaEffect(
+    vec2 localUV,
+    float radius,
+    float time
+) {
+    // localUV berada pada area -1.0 sampai 1.0
+    float localRadius =
+        length(localUV);
+
+    float localAngle =
+        atan(
+            localUV.y,
+            localUV.x
+        );
+
+    // Banyak jalur plasma radial
+    float ray1 =
+        sin(
+            localAngle * 24.0
+            + sin(localAngle * 5.0 + time * 2.0) * 1.4
+            + time * 2.5
+            + localRadius * 13.0
+        );
+
+    float ray2 =
+        sin(
+            localAngle * 39.0
+            - sin(localAngle * 8.0 - time * 2.8) * 1.0
+            - time * 3.2
+            + localRadius * 27.0
+        );
+
+    float ray3 =
+        sin(
+            localAngle * 67.0
+            + time * 4.5
+            - localRadius * 42.0
+        );
+
+    // Gabungan cabang plasma
+    float plasmaRays =
+        ray1 * 0.48
+        +
+        ray2 * 0.32
+        +
+        ray3 * 0.20;
+
+    plasmaRays =
+        plasmaRays *
+        0.5 +
+        0.5;
+
+    // Menjadikan sinyal seperti garis tipis
+    float sharpRays =
+        smoothstep(
+            0.60,
+            0.93,
+            plasmaRays
+        );
+
+    // Gangguan zig-zag sepanjang cabang
+    float branchNoise =
+        sin(
+            localAngle * 91.0
+            + localRadius * 150.0
+            - time * 11.0
+        ) *
+        0.5 +
+        0.5;
+
+    branchNoise =
+        smoothstep(
+            0.48,
+            0.78,
+            branchNoise
+        );
+
+    // Plasma lebih tipis di pusat dan lebih jelas
+    // ketika menjalar keluar
+    float radialMask =
+        smoothstep(
+            0.10,
+            0.28,
+            localRadius
+        ) *
+        (
+            1.0 -
+            smoothstep(
+                0.88,
+                1.02,
+                localRadius
+            )
+        );
+
+    // Cahaya cabang utama
+    float branches =
+        sharpRays *
+        (
+            0.35 +
+            branchNoise * 0.85
+        ) *
+        radialMask;
+
+    // Aura plasma yang lebih lebar
+    float plasmaAura =
+        smoothstep(
+            0.38,
+            0.68,
+            plasmaRays
+        ) *
+        radialMask *
+        0.55;
+
+    // Cahaya radial tipis seperti jalur listrik
+    float radialWave =
+        sin(
+            localRadius * 26.0
+            - time * 5.0
+        ) *
+        0.5 +
+        0.5;
+
+    radialWave =
+        smoothstep(
+            0.62,
+            0.92,
+            radialWave
+        );
+
+    // Inti plasma di tengah
+    float centerCore =
+        exp(
+            -localRadius *
+            7.5
+        );
+
+    float centerHotspot =
+        exp(
+            -localRadius *
+            20.0
+        );
+
+    vec3 purpleColor =
+        vec3(
+            0.40,
+            0.015,
+            1.0
+        );
+
+    vec3 magentaColor =
+        vec3(
+            1.0,
+            0.025,
+            0.55
+        );
+
+    vec3 blueColor =
+        vec3(
+            0.10,
+            0.30,
+            1.0
+        );
+
+    vec3 whiteColor =
+        vec3(
+            1.0,
+            0.92,
+            1.0
+        );
+
+    vec3 plasmaColor =
+        purpleColor *
+        branches *
+        1.6;
+
+    plasmaColor +=
+        magentaColor *
+        plasmaAura *
+        1.8;
+
+    plasmaColor +=
+        blueColor *
+        branches *
+        radialWave *
+        2.2;
+
+    plasmaColor +=
+        purpleColor *
+        centerCore *
+        2.0;
+
+    plasmaColor +=
+        whiteColor *
+        centerHotspot *
+        3.2;
+
+    return plasmaColor;
+}
+
+
+// --------------------------------------------------
 // MAIN
 // --------------------------------------------------
 
@@ -524,33 +826,53 @@ color +=
     vec3 boltAura =
     vec3(
         1.0,
-        0.12,
-        0.002
+        0.10,
+        0.001
     ) *
     bolt *
-    2.10;
+    2.2;
 
-
-    vec3 boltCore =
+vec3 boltCore =
     vec3(
         1.0,
         0.88,
-        0.38
+        0.40
     ) *
-        pow(
-            max(
-                bolt,
-                0.0
-            ),
-            1.35
-        ) *
-        4.8;
+    pow(
+        max(
+            bolt,
+            0.0
+        ),
+        1.25
+    ) *
+    5.5;
 
-    color +=
-        boltAura;
+color +=
+    boltAura;
 
-    color +=
-        boltCore;
+color +=
+    boltCore;
+
+float vortexCenter =
+    exp(
+        -radius *
+        7.0
+    ) *
+    smoothstep(
+        0.32,
+        0.0,
+        radius
+    );
+
+color +=
+    vec3(
+        1.0,
+        0.16,
+        0.002
+    ) *
+    vortexCenter *
+    0.22;
+
 
     // Kilatan global
     float flash =
@@ -575,6 +897,14 @@ color +=
         vec2 sphereUV =
             delta /
             globeR;
+
+        vec3 plasma =
+    plasmaEffect(
+        sphereUV,
+        radius,
+        iTime
+    );
+
 
         float zSquared =
             1.0 -
@@ -617,6 +947,14 @@ color +=
                         rotatedXZ.y
                     )
                 );
+    
+            vec3 plasma =
+    plasmaEffect(
+        sphereUV,
+        radius,
+        iTime
+    );
+
 
             vec3 lightDirection =
                 normalize(
@@ -682,7 +1020,7 @@ color +=
                     diffuse
                 );
 
-            globeColor =
+         globeColor =
                 mix(
                     globeColor,
                     brightGold,
@@ -691,6 +1029,22 @@ color +=
                     0.82
                 );
 
+// Plasma terlihat lebih kuat pada sisi depan globe
+float plasmaVisibility =
+    smoothstep(
+        -0.20,
+        0.60,
+        normal.z
+    );
+
+globeColor +=
+    plasma *
+    plasmaVisibility *
+    0.75;
+
+
+      
+     
             // --------------------------------------------------
             // TEXTURE BABE.INFO
             // --------------------------------------------------
