@@ -186,11 +186,37 @@ class _SponsorBabePageState
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SizedBox.expand(
-        child: GlobeShaderWidget(
-          program: program,
-          textTexture: texture,
-          time: time,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // =================================================
+            // BAGIAN ATAS: 2/3 LAYAR UNTUK GLOBE
+            // =================================================
+            Expanded(
+              flex: 2,
+              child: SizedBox(
+                width: double.infinity,
+                child: Center(
+                  child: AspectRatio(
+                    aspectRatio: 1.0,
+                    child: GlobeShaderWidget(
+                      program: program,
+                      textTexture: texture,
+                      time: time,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // =================================================
+            // BAGIAN BAWAH: 1/3 LAYAR KOSONG
+            // =================================================
+            const Expanded(
+              flex: 1,
+              child: SizedBox(),
+            ),
+          ],
         ),
       ),
     );
