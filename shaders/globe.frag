@@ -356,17 +356,14 @@ float lightningFlash(float time) {
 
 void main() {
 //debug
-vec4 debugPixel =
-    texture(
-        textTexture,
-        vec2(0.5, 0.5)
-    );
-
-fragColor =
-    vec4(
-        debugPixel.rgb,
-        1.0
-    );
+void main() {
+    fragColor =
+        vec4(
+            1.0,
+            0.0,
+            0.0,
+            1.0
+        );
 
 return;
 //debug
