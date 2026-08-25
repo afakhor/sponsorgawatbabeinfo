@@ -39,35 +39,32 @@ class GlobeShaderPainter extends CustomPainter {
     // --------------------------------------------------
 
     // iResolution.x
+    
     shader.setFloat(
-      0,
-      size.width,
-    );
-
+      0, 
+      size.width
+      );
     // iResolution.y
     shader.setFloat(
-      1,
-      size.height,
-    );
+      1, 
+      size.height
+      );
 
     // iTime
     shader.setFloat(
-      2,
-      time,
-    );
+      2, time
+      );
 
     // Rotasi globe
     shader.setFloat(
-      3,
-      time * 0.55,
-    );
+      3, 
+      time * 0.55);
 
     // Atmosfer, texture, dan petir bergerak
     // berlawanan arah dengan globe
     shader.setFloat(
-      4,
-      -time * 1.20,
-    );
+      4, 
+      -time * 1.20);
 
     // Intensitas atmosfer
     shader.setFloat(
@@ -82,7 +79,7 @@ class GlobeShaderPainter extends CustomPainter {
     shader.setImageSampler(
       0,
       textTexture,
-    );
+      );
 
     final Paint paint =
         Paint()
