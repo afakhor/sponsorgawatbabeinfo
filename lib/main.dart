@@ -16,7 +16,9 @@ void main() {
 }
 
 class SponsorBabePage extends StatefulWidget {
-  const SponsorBabePage({super.key});
+  const SponsorBabePage({
+    super.key,
+  });
 
   @override
   State<SponsorBabePage> createState() {
@@ -24,7 +26,8 @@ class SponsorBabePage extends StatefulWidget {
   }
 }
 
-class _SponsorBabePageState extends State<SponsorBabePage>
+class _SponsorBabePageState
+    extends State<SponsorBabePage>
     with SingleTickerProviderStateMixin {
   ui.FragmentProgram? fragmentProgram;
   ui.Image? textTexture;
@@ -39,25 +42,31 @@ class _SponsorBabePageState extends State<SponsorBabePage>
   void initState() {
     super.initState();
 
-    ticker = createTicker((Duration elapsed) {
-      if (previousElapsed == null) {
+    ticker = createTicker(
+      (Duration elapsed) {
+        if (previousElapsed == null) {
+          previousElapsed = elapsed;
+          return;
+        }
+
+        final double delta =
+            (elapsed - previousElapsed!).inMicroseconds /
+            1000000.0;
+
         previousElapsed = elapsed;
-        return;
-      }
 
-      final double delta =
-          (elapsed - previousElapsed!).inMicroseconds / 1000000.0;
+        if (!mounted) {
+          return;
+        }
 
-      previousElapsed = elapsed;
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        time += delta.clamp(0.0, 0.05);
-      });
-    });
+        setState(() {
+          time += delta.clamp(
+            0.0,
+            0.05,
+          );
+        });
+      },
+    );
 
     ticker.start();
     _loadResources();
@@ -65,9 +74,17 @@ class _SponsorBabePageState extends State<SponsorBabePage>
 
   Future<void> _loadResources() async {
     try {
+      debugPrint(
+        'DEBUG: mulai memuat shader',
+      );
+
       final ui.FragmentProgram program =
           await ui.FragmentProgram.fromAsset(
         'shaders/globe.frag',
+      );
+
+      debugPrint(
+        'DEBUG: shader berhasil dimuat',
       );
 
       final ui.Image texture =
@@ -87,9 +104,17 @@ class _SponsorBabePageState extends State<SponsorBabePage>
         fragmentProgram = program;
         textTexture = texture;
       });
-    } catch (error, stackTrace) {
-      debugPrint('RESOURCE LOAD ERROR: $error');
-      debugPrintStack(stackTrace: stackTrace);
+    } catch (
+      error,
+      stackTrace,
+    ) {
+      debugPrint(
+        'RESOURCE LOAD ERROR: $error',
+      );
+
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
 
       if (!mounted) {
         return;
@@ -102,43 +127,51 @@ class _SponsorBabePageState extends State<SponsorBabePage>
   }
 
   Future<ui.Image> _loadTextTexture() async {
-  const String assetPath =
-      'assets/images/babe_info.png';
+    const String assetPath =
+        'assets/images/babe_info.png';
 
-  debugPrint(
-    'DEBUG 1: mulai memuat asset: $assetPath',
-  );
+    debugPrint(
+      'DEBUG 1: mulai memuat asset: '
+      '$assetPath',
+    );
 
-  final ByteData data =
-      await DefaultAssetBundle.of(context).load(
-    assetPath,
-  );
+    final ByteData data =
+        await DefaultAssetBundle.of(context).load(
+      assetPath,
+    );
 
-  debugPrint(
-    'DEBUG 2: asset berhasil dibaca',
-  );
+    debugPrint(
+      'DEBUG 2: asset berhasil dibaca',
+    );
 
-  final Uint8List bytes =
-      data.buffer.asUint8List(
-    data.offsetInBytes,
-    data.lengthInBytes,
-  );
+    final Uint8List bytes =
+        data.buffer.asUint8List(
+      data.offsetInBytes,
+      data.lengthInBytes,
+    );
 
-  final ui.Codec codec =
-      await ui.instantiateImageCodec(bytes);
+    final ui.Codec codec =
+        await ui.instantiateImageCodec(
+      bytes,
+    );
 
-  final ui.FrameInfo frame =
-      await codec.getNextFrame();
+    try {
+      final ui.FrameInfo frame =
+          await codec.getNextFrame();
 
-  debugPrint(
-    'DEBUG 3: texture berhasil dibuat: '
-    '${frame.image.width} x ${frame.image.height}',
-  );
+      final ui.Image image =
+          frame.image;
 
-  return frame.image;
-}
+      debugPrint(
+        'DEBUG 3: texture berhasil dibuat: '
+        '${image.width} x ${image.height}',
+      );
 
-
+      return image;
+    } finally {
+      codec.dispose();
+    }
+  }
 
   @override
   void dispose() {
@@ -148,30 +181,43 @@ class _SponsorBabePageState extends State<SponsorBabePage>
   }
 
   @override
-  Widget build(BuildContext context) {
-    final ui.FragmentProgram? program = fragmentProgram;
-    final ui.Image? texture = textTexture;
+  Widget build(
+    BuildContext context,
+  ) {
+    final ui.FragmentProgram? program =
+        fragmentProgram;
+
+    final ui.Image? texture =
+        textTexture;
 
     late final Widget content;
 
     if (errorMessage != null) {
       content = Center(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(
+            24.0,
+          ),
           child: Text(
-            'Gagal memuat shader atau texture:\n\n$errorMessage',
+            'Gagal memuat shader atau texture:\n\n'
+            '$errorMessage',
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Colors.redAccent,
-              fontSize: 14,
+              fontSize: 14.0,
             ),
           ),
         ),
       );
-    } else if (program == null || texture == null) {
+    } else if (
+        program == null ||
+        texture == null
+    ) {
       content = const Center(
         child: CircularProgressIndicator(
-          color: Color(0xFFFFD21F),
+          color: Color(
+            0xFFFFD21F,
+          ),
         ),
       );
     } else {
