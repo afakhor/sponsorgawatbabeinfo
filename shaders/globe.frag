@@ -452,6 +452,325 @@ float globeAtmosphere(
     spreadMask;
 }
 
+// --------------------------------------------------
+// PLASMA AKTIF DI DALAM GLOBE
+// --------------------------------------------------
+
+vec3 plasmaEffect(
+    vec2 localUV,
+    float radius,
+    float time
+) {
+    // Posisi dari pusat globe
+    float localRadius =
+        length(
+            localUV
+        );
+
+    float localAngle =
+        atan(
+            localUV.y,
+            localUV.x
+        );
+
+    // Membuat bentuk plasma tidak simetris
+    float distortion =
+        sin(
+            localAngle * 5.0 +
+            time * 2.0
+        ) *
+        0.10;
+
+    distortion +=
+        sin(
+            localAngle * 11.0 -
+            time * 3.0
+        ) *
+        0.055;
+
+    // Jalur plasma utama
+    float ray1 =
+        sin(
+            localAngle * 24.0
+            + distortion * 18.0
+            + time * 2.5
+            + localRadius * 13.0
+        );
+
+    // Jalur plasma kedua
+    float ray2 =
+        sin(
+            localAngle * 39.0
+            - distortion * 22.0
+            - time * 3.2
+            + localRadius * 27.0
+        );
+
+    // Jalur plasma kecil dan tajam
+    float ray3 =
+        sin(
+            localAngle * 67.0
+            + time * 4.5
+            - localRadius * 42.0
+        );
+
+    // Gabungkan semua jalur
+    float plasmaRays =
+        ray1 * 0.48
+        +
+        ray2 * 0.32
+        +
+        ray3 * 0.20;
+
+    plasmaRays =
+        plasmaRays *
+        0.5 +
+        0.5;
+
+    // Membuat jalur menjadi lebih padat
+    float sharpRays =
+        smoothstep(
+            0.54,
+            0.88,
+            plasmaRays
+        );
+
+    // Noise cabang plasma
+    float branchNoise =
+        sin(
+            localAngle * 91.0
+            + localRadius * 150.0
+            - time * 11.0
+        ) *
+        0.5 +
+        0.5;
+
+    branchNoise =
+        smoothstep(
+            0.42,
+            0.76,
+            branchNoise
+        );
+
+    // Noise cabang kedua
+    float branchNoise2 =
+        sin(
+            localAngle * 137.0
+            - localRadius * 230.0
+            + time * 8.0
+        ) *
+        0.5 +
+        0.5;
+
+    branchNoise2 =
+        smoothstep(
+            0.48,
+            0.82,
+            branchNoise2
+        );
+
+    // Plasma dibuat lebih kuat dari bagian tengah
+    // menuju pinggiran globe
+    float radialMask =
+        smoothstep(
+            0.035,
+            0.18,
+            localRadius
+        ) *
+        (
+            1.0 -
+            smoothstep(
+                0.84,
+                1.02,
+                localRadius
+            )
+        );
+
+    // Cabang utama
+    float branches =
+        sharpRays *
+        (
+            0.40 +
+            branchNoise *
+            0.75 +
+            branchNoise2 *
+            0.35
+        ) *
+        radialMask;
+
+    // Aura plasma yang lebih lebar
+    float plasmaAura =
+        smoothstep(
+            0.32,
+            0.70,
+            plasmaRays
+        ) *
+        radialMask *
+        0.72;
+
+    // Gelombang radial yang berdenyut
+    float radialWave =
+        sin(
+            localRadius * 30.0
+            - time * 5.5
+        ) *
+        0.5 +
+        0.5;
+
+    radialWave =
+        smoothstep(
+            0.52,
+            0.88,
+            radialWave
+        );
+
+    // Gelombang kedua agar plasma lebih hidup
+    float radialWave2 =
+        sin(
+            localRadius * 58.0
+            + time * 7.0
+        ) *
+        0.5 +
+        0.5;
+
+    radialWave2 =
+        smoothstep(
+            0.60,
+            0.92,
+            radialWave2
+        );
+
+    // Plasma membentuk spiral ringan
+    float spiral =
+        sin(
+            localAngle * 8.0
+            + localRadius * 20.0
+            - time * 3.0
+        ) *
+        0.5 +
+        0.5;
+
+    spiral =
+        smoothstep(
+            0.50,
+            0.86,
+            spiral
+        );
+
+    // Inti plasma
+    float centerCore =
+        exp(
+            -localRadius *
+            7.5
+        );
+
+    // Titik panas di pusat
+    float centerHotspot =
+        exp(
+            -localRadius *
+            20.0
+        );
+
+    // Cincin energi di sekitar pusat
+    float centerRing =
+        exp(
+            -abs(
+                localRadius -
+                0.16
+            ) *
+            55.0
+        );
+
+    // Warna plasma
+    vec3 purpleColor =
+        vec3(
+            0.40,
+            0.015,
+            1.0
+        );
+
+    vec3 magentaColor =
+        vec3(
+            1.0,
+            0.025,
+            0.55
+        );
+
+    vec3 blueColor =
+        vec3(
+            0.08,
+            0.28,
+            1.0
+        );
+
+    vec3 cyanColor =
+        vec3(
+            0.10,
+            0.75,
+            1.0
+        );
+
+    vec3 whiteColor =
+        vec3(
+            1.0,
+            0.92,
+            1.0
+        );
+
+    vec3 plasmaColor =
+        vec3(
+            0.0
+        );
+
+    // Cahaya ungu pada cabang utama
+    plasmaColor +=
+        purpleColor *
+        branches *
+        1.75;
+
+    // Aura magenta
+    plasmaColor +=
+        magentaColor *
+        plasmaAura *
+        2.10;
+
+    // Biru pada jalur yang berdenyut
+    plasmaColor +=
+        blueColor *
+        branches *
+        radialWave *
+        2.25;
+
+    // Cyan pada sebagian jalur
+    plasmaColor +=
+        cyanColor *
+        branches *
+        radialWave2 *
+        spiral *
+        1.45;
+
+    // Cahaya ungu dari inti
+    plasmaColor +=
+        purpleColor *
+        centerCore *
+        2.2;
+
+    // Cincin energi di sekitar inti
+    plasmaColor +=
+        magentaColor *
+        centerRing *
+        2.0;
+
+    // Titik putih panas di pusat
+    plasmaColor +=
+        whiteColor *
+        centerHotspot *
+        4.2;
+
+    return plasmaColor;
+}
+
+
 
 // --------------------------------------------------
 // FLASH GLOBAL
@@ -499,214 +818,7 @@ float lightningFlash(float time) {
     return flash;
 }
 
-// --------------------------------------------------
-// PLASMA RADIAL GLOBE
-// --------------------------------------------------
 
-float plasmaNoise(
-    float value
-) {
-    return sin(value) * 0.5 + 0.5;
-}
-
-vec3 plasmaEffect(
-    vec2 localUV,
-    float radius,
-    float time
-) {
-    // localUV berada pada area -1.0 sampai 1.0
-    float localRadius =
-        length(localUV);
-
-    float localAngle =
-        atan(
-            localUV.y,
-            localUV.x
-        );
-
-    // Banyak jalur plasma radial
-    float ray1 =
-        sin(
-            localAngle * 24.0
-            + sin(localAngle * 5.0 + time * 2.0) * 1.4
-            + time * 2.5
-            + localRadius * 13.0
-        );
-
-    float ray2 =
-        sin(
-            localAngle * 39.0
-            - sin(localAngle * 8.0 - time * 2.8) * 1.0
-            - time * 3.2
-            + localRadius * 27.0
-        );
-
-    float ray3 =
-        sin(
-            localAngle * 67.0
-            + time * 4.5
-            - localRadius * 42.0
-        );
-
-    // Gabungan cabang plasma
-    float plasmaRays =
-        ray1 * 0.48
-        +
-        ray2 * 0.32
-        +
-        ray3 * 0.20;
-
-    plasmaRays =
-        plasmaRays *
-        0.5 +
-        0.5;
-
-    // Menjadikan sinyal seperti garis tipis
-    float sharpRays =
-        smoothstep(
-            0.60,
-            0.93,
-            plasmaRays
-        );
-
-    // Gangguan zig-zag sepanjang cabang
-    float branchNoise =
-        sin(
-            localAngle * 91.0
-            + localRadius * 150.0
-            - time * 11.0
-        ) *
-        0.5 +
-        0.5;
-
-    branchNoise =
-        smoothstep(
-            0.48,
-            0.78,
-            branchNoise
-        );
-
-    // Plasma lebih tipis di pusat dan lebih jelas
-    // ketika menjalar keluar
-    float radialMask =
-        smoothstep(
-            0.10,
-            0.28,
-            localRadius
-        ) *
-        (
-            1.0 -
-            smoothstep(
-                0.88,
-                1.02,
-                localRadius
-            )
-        );
-
-    // Cahaya cabang utama
-    float branches =
-        sharpRays *
-        (
-            0.35 +
-            branchNoise * 0.85
-        ) *
-        radialMask;
-
-    // Aura plasma yang lebih lebar
-    float plasmaAura =
-        smoothstep(
-            0.38,
-            0.68,
-            plasmaRays
-        ) *
-        radialMask *
-        0.55;
-
-    // Cahaya radial tipis seperti jalur listrik
-    float radialWave =
-        sin(
-            localRadius * 26.0
-            - time * 5.0
-        ) *
-        0.5 +
-        0.5;
-
-    radialWave =
-        smoothstep(
-            0.62,
-            0.92,
-            radialWave
-        );
-
-    // Inti plasma di tengah
-    float centerCore =
-        exp(
-            -localRadius *
-            7.5
-        );
-
-    float centerHotspot =
-        exp(
-            -localRadius *
-            20.0
-        );
-
-    vec3 purpleColor =
-        vec3(
-            0.40,
-            0.015,
-            1.0
-        );
-
-    vec3 magentaColor =
-        vec3(
-            1.0,
-            0.025,
-            0.55
-        );
-
-    vec3 blueColor =
-        vec3(
-            0.10,
-            0.30,
-            1.0
-        );
-
-    vec3 whiteColor =
-        vec3(
-            1.0,
-            0.92,
-            1.0
-        );
-
-    vec3 plasmaColor =
-        purpleColor *
-        branches *
-        1.6;
-
-    plasmaColor +=
-        magentaColor *
-        plasmaAura *
-        1.8;
-
-    plasmaColor +=
-        blueColor *
-        branches *
-        radialWave *
-        2.2;
-
-    plasmaColor +=
-        purpleColor *
-        centerCore *
-        2.0;
-
-    plasmaColor +=
-        whiteColor *
-        centerHotspot *
-        3.2;
-
-    return plasmaColor;
-}
 
 
 // --------------------------------------------------
@@ -939,6 +1051,15 @@ color +=
                 )
             );
 
+
+vec3 plasma =
+    plasmaEffect(
+        sphereUV,
+        radius,
+        iTime
+    );
+
+
         // ------------------------------------------
         // LIGHTING
         // ------------------------------------------
@@ -1022,13 +1143,6 @@ color +=
         // ------------------------------------------
         // PLASMA GLOBE
         // ------------------------------------------
-
-        vec3 plasma =
-            plasmaEffect(
-                sphereUV,
-                radius,
-                iTime
-            );
 
         float plasmaVisibility =
             smoothstep(
