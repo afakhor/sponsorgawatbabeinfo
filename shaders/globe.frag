@@ -265,55 +265,88 @@ float globeAtmosphere(
             0.32
         );
 
-    float broadGlow =
+    // Glow lembut di sekitar permukaan globe
+    float softGlow =
         exp(
             -edgeDistance *
-            25.0
+            32.0
         );
 
-    // Atmosfer bergerak berlawanan arah
-    float movingWave =
-        0.72 +
-        0.28 *
+    // Atmosfer bergerak berlawanan dengan globe
+    float flow1 =
         sin(
-            angle * 8.0 +
-            time * 5.0
+            angle * 6.0 +
+            time * 3.8 +
+            sin(angle * 2.0 - time * 1.4) * 0.8
         );
 
+    float flow2 =
+        sin(
+            angle * 13.0 +
+            time * 5.6 +
+            radius * 75.0
+        );
+
+    float flow3 =
+        sin(
+            angle * 25.0 +
+            time * 8.0 -
+            radius * 120.0
+        );
+
+    // Membentuk aliran panjang, bukan titik
+    float flowingAtmosphere =
+        flow1 * 0.50 +
+        flow2 * 0.30 +
+        flow3 * 0.20;
+
+    flowingAtmosphere =
+        flowingAtmosphere *
+        0.5 +
+        0.5;
+
+    flowingAtmosphere =
+        smoothstep(
+            0.52,
+            0.82,
+            flowingAtmosphere
+        );
+
+    // Ring tipis di tepi globe
     float sharpRing =
         exp(
             -abs(
                 radius -
-                0.335
+                0.325
             ) *
-            125.0
+            190.0
         );
 
-    float outerGlow =
-        exp(
-            -max(
-                radius -
-                0.32,
-                0.0
-            ) *
-            20.0
-        ) *
+    // Hanya terlihat di luar dan sekitar permukaan
+    float outerMask =
         smoothstep(
-            0.68,
-            0.27,
+            0.24,
+            0.31,
             radius
+        ) *
+        (
+            1.0 -
+            smoothstep(
+                0.34,
+                0.49,
+                radius
+            )
         );
 
-    return
-        broadGlow *
-        movingWave *
-        0.65
+    return (
+        softGlow *
+        flowingAtmosphere *
+        0.75
         +
         sharpRing *
-        1.25
-        +
-        outerGlow *
-        0.85;
+        0.95
+    ) *
+    outerMask;
 }
 
 // --------------------------------------------------
