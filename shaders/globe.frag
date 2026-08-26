@@ -18,7 +18,7 @@ const float GLOBE_RADIUS = 0.27;
 // Jarak kosong antara globe dan atmosfer
 const float ATMOSPHERE_GAP = 0.045;
 
- Ketebalan atmosfer setelah jarak kosong
+ //Ketebalan atmosfer setelah jarak kosong
 const float ATMOSPHERE_THICKNESS = 0.070;
 
 // --------------------------------------------------
