@@ -38,39 +38,53 @@ class _SponsorBabePageState
   Duration? previousElapsed;
   String? errorMessage;
 
-  @override
-  void initState() {
-    super.initState();
+@override
+void initState() {
+  super.initState();
 
-    ticker = createTicker(
-      (Duration elapsed) {
-        if (previousElapsed == null) {
-          previousElapsed = elapsed;
-          return;
-        }
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+  );
 
-        final double delta =
-            (elapsed - previousElapsed!).inMicroseconds /
-            1000000.0;
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.black,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ),
+  );
 
+  ticker = createTicker(
+    (Duration elapsed) {
+      if (previousElapsed == null) {
         previousElapsed = elapsed;
+        return;
+      }
 
-        if (!mounted) {
-          return;
-        }
+      final double delta =
+          (elapsed - previousElapsed!).inMicroseconds /
+          1000000.0;
 
-        setState(() {
-          time += delta.clamp(
-            0.0,
-            0.05,
-          );
-        });
-      },
-    );
+      previousElapsed = elapsed;
 
-    ticker.start();
-    _loadResources();
-  }
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        time += delta.clamp(
+          0.0,
+          0.05,
+        );
+      });
+    },
+  );
+
+  ticker.start();
+  _loadResources();
+}
+
 
   Future<void> _loadResources() async {
     try {
@@ -140,62 +154,73 @@ class _SponsorBabePageState
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final ui.FragmentProgram? program =
-        fragmentProgram;
+Widget build(
+  BuildContext context,
+) {
+  final ui.FragmentProgram? program =
+      fragmentProgram;
 
-    final ui.Image? texture =
-        textTexture;
+  final ui.Image? texture =
+      textTexture;
 
-    if (errorMessage != null) {
-      return Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(
-              24.0,
-            ),
-            child: Text(
-              'Gagal memuat shader atau texture:\n\n'
-              '$errorMessage',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.redAccent,
-                fontSize: 14.0,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (program == null || texture == null) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(
-          child: CircularProgressIndicator(
-            color: Color(
-              0xFFFFD21F,
-            ),
-          ),
-        ),
-      );
-    }
-
+  if (errorMessage != null) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(
+            24.0,
+          ),
+          child: Text(
+            'Gagal memuat shader atau texture:\n\n'
+            '$errorMessage',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.redAccent,
+              fontSize: 14.0,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  if (program == null || texture == null) {
+    return const Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: CircularProgressIndicator(
+          color: Color(
+            0xFFFFD21F,
+          ),
+        ),
+      ),
+    );
+  }
+
+  return Scaffold(
+    backgroundColor: Colors.black,
+    body: LayoutBuilder(
+      builder: (
+        BuildContext context,
+        BoxConstraints constraints,
+      ) {
+        final double screenHeight =
+            MediaQuery.of(context).size.height;
+
+        final double statusBarHeight =
+            MediaQuery.of(context).padding.top;
+
+        return Column(
           children: [
-            // =================================================
-            // BAGIAN ATAS: 2/3 LAYAR UNTUK GLOBE
-            // =================================================
-            Expanded(
-              flex: 2,
-              child: SizedBox(
-                width: double.infinity,
+            // 3/5 layar bagian atas
+            SizedBox(
+              width: double.infinity,
+              height: screenHeight * 3.0 / 5.0,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  top: statusBarHeight,
+                ),
                 child: Center(
                   child: AspectRatio(
                     aspectRatio: 1.0,
@@ -209,16 +234,14 @@ class _SponsorBabePageState
               ),
             ),
 
-            // =================================================
-            // BAGIAN BAWAH: 1/3 LAYAR KOSONG
-            // =================================================
-            const Expanded(
-              flex: 1,
-              child: SizedBox(),
+            // 2/5 layar bagian bawah kosong
+            SizedBox(
+              width: double.infinity,
+              height: screenHeight * 2.0 / 5.0,
             ),
           ],
-        ),
-      ),
-    );
-  }
+        );
+      },
+    ),
+  );
 }
