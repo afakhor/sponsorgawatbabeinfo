@@ -16,10 +16,10 @@ const float TWO_PI = 6.28318530718;
 const float GLOBE_RADIUS = 0.27;
 
 // Jarak kosong antara globe dan atmosfer
-const float ATMOSPHERE_GAP = 0.045;
+const float ATMOSPHERE_GAP = 0.010;
 
  //Ketebalan atmosfer setelah jarak kosong
-const float ATMOSPHERE_THICKNESS = 0.070;
+const float ATMOSPHERE_THICKNESS = 0.180;
 
 // --------------------------------------------------
 // RANDOM
@@ -636,12 +636,8 @@ smoothstep(
 }
 
 
-// --------------------------------------------------
-// ATMOSFER BERLAWANAN ARAH DENGAN GLOBE
-// --------------------------------------------------
-
-// --------------------------------------------------
-// ATMOSFER BERJARAK DARI GLOBE
+// // --------------------------------------------------
+// ATMOSFER BERJARAK, TEBAL, DAN MENYEBAR
 // --------------------------------------------------
 
 float globeAtmosphere(
@@ -652,38 +648,69 @@ float globeAtmosphere(
     float globeRadius =
         GLOBE_RADIUS;
 
+    // Jarak titik dari permukaan globe.
+    //
+    // Nilai:
+    // negatif  = berada di dalam globe
+    // 0.0      = tepat di permukaan globe
+    // positif  = berada di luar globe
     float distanceFromGlobe =
         radius -
         globeRadius;
 
-    // Atmosfer baru mulai setelah ruang kosong.
-    // Saat distanceFromGlobe masih di bawah gap,
-    // mask bernilai 0 sehingga tidak menyentuh globe.
+    // --------------------------------------------------
+    // JARAK KOSONG ANTARA GLOBE DAN ATMOSFER
+    // --------------------------------------------------
+
+    // Atmosfer belum terlihat selama jaraknya
+    // masih lebih kecil dari ATMOSPHERE_GAP.
+    float atmosphereStart =
+        ATMOSPHERE_GAP;
+
+    float atmosphereStartSoftness =
+        0.012;
+
     float startMask =
         smoothstep(
-            ATMOSPHERE_GAP,
-            ATMOSPHERE_GAP + 0.018,
+            atmosphereStart,
+            atmosphereStart +
+            atmosphereStartSoftness,
             distanceFromGlobe
         );
 
-    // Atmosfer menghilang setelah ketebalan tertentu.
-    float endDistance =
+    // --------------------------------------------------
+    // BATAS LUAR ATMOSFER
+    // --------------------------------------------------
+
+    float atmosphereEnd =
         ATMOSPHERE_GAP +
         ATMOSPHERE_THICKNESS;
+
+    float atmosphereEndSoftness =
+        0.035;
 
     float endMask =
         1.0 -
         smoothstep(
-            endDistance - 0.025,
-            endDistance,
+            atmosphereEnd -
+            atmosphereEndSoftness,
+            atmosphereEnd,
             distanceFromGlobe
         );
 
+    // Mask akhir atmosfer.
+    // Atmosfer hanya muncul di antara batas awal
+    // dan batas akhir.
     float shellMask =
         startMask *
         endMask;
 
-    // Asap hanya dihitung di area atmosfer.
+    // --------------------------------------------------
+    // JARAK EFEKTIF ASAP
+    // --------------------------------------------------
+
+    // Asap dihitung mulai dari awal atmosfer,
+    // bukan dari permukaan globe.
     float atmosphericDistance =
         max(
             distanceFromGlobe -
@@ -691,19 +718,24 @@ float globeAtmosphere(
             0.0
         );
 
+    // Angka lebih kecil membuat asap lebih menyebar.
     float wideSmoke =
         exp(
             -atmosphericDistance *
-            15.0
+            4.5
         );
 
+    // Asap bagian dalam lebih pekat.
     float denseSmoke =
         exp(
             -atmosphericDistance *
-            38.0
+            16.0
         );
 
-    // Gumpalan asap besar
+    // --------------------------------------------------
+    // GUMPALAN ASAP ANIMASI
+    // --------------------------------------------------
+
     float cloud1 =
         sin(
             angle * 3.0 +
@@ -740,6 +772,7 @@ float globeAtmosphere(
         0.5 +
         0.5;
 
+    // Gabungan noise asap.
     float smokeNoise =
         cloud1 * 0.40 +
         cloud2 * 0.28 +
@@ -748,27 +781,36 @@ float globeAtmosphere(
 
     smokeNoise =
         smoothstep(
-            0.28,
-            0.76,
+            0.25,
+            0.72,
             smokeNoise
         );
 
+    // Asap utama yang menyebar.
     float packedSmoke =
         wideSmoke *
         smokeNoise;
 
-    float secondarySmoke =
-        denseSmoke *
+    // Lapisan asap yang lebih pekat dekat bagian dalam.
+    float secondaryNoise =
         smoothstep(
-            0.22,
-            0.72,
+            0.20,
+            0.70,
             cloud1 * 0.65 +
             cloud2 * 0.35
         );
 
-    // Ring lembut di tengah atmosfer,
-    // bukan di permukaan globe.
-    float ringRadius =
+    float secondarySmoke =
+        denseSmoke *
+        secondaryNoise;
+
+    // --------------------------------------------------
+    // RING ATMOSFER
+    // --------------------------------------------------
+
+    // Ring diletakkan di tengah lapisan atmosfer,
+    // bukan menempel pada permukaan globe.
+    float ringDistance =
         ATMOSPHERE_GAP +
         ATMOSPHERE_THICKNESS *
         0.48;
@@ -777,23 +819,28 @@ float globeAtmosphere(
         exp(
             -abs(
                 distanceFromGlobe -
-                ringRadius
+                ringDistance
             ) *
-            75.0
+            55.0
         );
+
+    // --------------------------------------------------
+    // GABUNGKAN SEMUA KOMPONEN ATMOSFER
+    // --------------------------------------------------
 
     float result =
         packedSmoke *
-        1.45;
+        1.65;
 
     result +=
         secondarySmoke *
-        0.85;
+        1.05;
 
     result +=
         softRing *
-        0.65;
+        0.85;
 
+    // Terapkan batas awal dan batas akhir atmosfer.
     return result *
         shellMask;
 }
