@@ -12,6 +12,14 @@ out vec4 fragColor;
 
 const float PI = 3.14159265359;
 const float TWO_PI = 6.28318530718;
+// Ukuran globe
+const float GLOBE_RADIUS = 0.27;
+
+// Jarak kosong antara globe dan atmosfer
+const float ATMOSPHERE_GAP = 0.045;
+
+ Ketebalan atmosfer setelah jarak kosong
+const float ATMOSPHERE_THICKNESS = 0.070;
 
 // --------------------------------------------------
 // RANDOM
@@ -355,7 +363,7 @@ float wrappingLightning(
     float time
 ) {
     const float globeRadius =
-        0.32;
+    GLOBE_RADIUS;
 
     float total =
         0.0;
@@ -632,35 +640,67 @@ smoothstep(
 // ATMOSFER BERLAWANAN ARAH DENGAN GLOBE
 // --------------------------------------------------
 
+// --------------------------------------------------
+// ATMOSFER BERJARAK DARI GLOBE
+// --------------------------------------------------
+
 float globeAtmosphere(
     float radius,
     float angle,
     float time
 ) {
     float globeRadius =
-        0.32;
+        GLOBE_RADIUS;
 
     float distanceFromGlobe =
         radius -
         globeRadius;
 
-    // Atmosfer melebar ke segala arah
-    float wideSmoke =
-        exp(
-            -max(
-                distanceFromGlobe,
-                0.0
-            ) *
-            9.5
+    // Atmosfer baru mulai setelah ruang kosong.
+    // Saat distanceFromGlobe masih di bawah gap,
+    // mask bernilai 0 sehingga tidak menyentuh globe.
+    float startMask =
+        smoothstep(
+            ATMOSPHERE_GAP,
+            ATMOSPHERE_GAP + 0.018,
+            distanceFromGlobe
         );
 
-    // Asap padat dekat permukaan
+    // Atmosfer menghilang setelah ketebalan tertentu.
+    float endDistance =
+        ATMOSPHERE_GAP +
+        ATMOSPHERE_THICKNESS;
+
+    float endMask =
+        1.0 -
+        smoothstep(
+            endDistance - 0.025,
+            endDistance,
+            distanceFromGlobe
+        );
+
+    float shellMask =
+        startMask *
+        endMask;
+
+    // Asap hanya dihitung di area atmosfer.
+    float atmosphericDistance =
+        max(
+            distanceFromGlobe -
+            ATMOSPHERE_GAP,
+            0.0
+        );
+
+    float wideSmoke =
+        exp(
+            -atmosphericDistance *
+            15.0
+        );
+
     float denseSmoke =
         exp(
-            -abs(
-                distanceFromGlobe
-            ) *
-            23.0
+            -atmosphericDistance *
+            38.0
         );
 
     // Gumpalan asap besar
@@ -700,7 +740,6 @@ float globeAtmosphere(
         0.5 +
         0.5;
 
-    // Noise asap bertingkat
     float smokeNoise =
         cloud1 * 0.40 +
         cloud2 * 0.28 +
@@ -714,12 +753,10 @@ float globeAtmosphere(
             smokeNoise
         );
 
-    // Asap lebih padat dan menyatu
     float packedSmoke =
         wideSmoke *
         smokeNoise;
 
-    // Lapisan asap kedua agar atmosfer tidak kosong
     float secondarySmoke =
         denseSmoke *
         smoothstep(
@@ -729,37 +766,38 @@ float globeAtmosphere(
             cloud2 * 0.35
         );
 
-    // Ring atmosfer lembut
+    // Ring lembut di tengah atmosfer,
+    // bukan di permukaan globe.
+    float ringRadius =
+        ATMOSPHERE_GAP +
+        ATMOSPHERE_THICKNESS *
+        0.48;
+
     float softRing =
         exp(
             -abs(
-                radius -
-                0.335
+                distanceFromGlobe -
+                ringRadius
             ) *
-            90.0
+            75.0
         );
 
-    // Batas penyebaran atmosfer
-    float spreadMask =
-        1.0 -
-        smoothstep(
-            0.40,
-            0.62,
-            radius
-        );
-
-    return (
+    float result =
         packedSmoke *
-        1.70
-        +
+        1.45;
+
+    result +=
         secondarySmoke *
-        1.10
-        +
+        0.85;
+
+    result +=
         softRing *
-        0.85
-    ) *
-    spreadMask;
+        0.65;
+
+    return result *
+        shellMask;
 }
+
 
 // --------------------------------------------------
 // PLASMA AKTIF DI DALAM GLOBE
@@ -1172,7 +1210,7 @@ void main() {
         );
 
     float globeR =
-        0.32;
+    GLOBE_RADIUS;
 
     
     // --------------------------------------------------
@@ -1224,17 +1262,39 @@ color +=
     // --------------------------------------------------
 
     float atmosphere =
-        globeAtmosphere(
-            radius,
-            angle,
-            iTime
-        );
+    globeAtmosphere(
+        radius,
+        angle,
+        iTime
+    );
 
-    vec3 atmosphereColor =
+float lowerBowl =
+    1.0 -
+    smoothstep(
+        -0.18,
+        0.35,
+        delta.y
+    );
+
+vec3 blueAtmosphere =
+    vec3(
+        0.015,
+        0.32,
+        1.0
+    );
+
+vec3 orangeAtmosphere =
     vec3(
         1.0,
-        0.24,
+        0.16,
         0.008
+    );
+
+vec3 atmosphereColor =
+    mix(
+        blueAtmosphere,
+        orangeAtmosphere,
+        lowerBowl
     );
 
 color +=
@@ -1633,7 +1693,12 @@ vec3 plasma =
             1.55;
 
         color =
-            globeColor;
+    mix(
+        color,
+        globeColor,
+        1.0
+    );
+
     }
 }
 
@@ -1672,4 +1737,11 @@ vec3 plasma =
             color,
             1.0
         );
+float globeMask =
+    smoothstep(
+        globeR,
+        globeR - 0.008,
+        radius
+    );
+
 }
