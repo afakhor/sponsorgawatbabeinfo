@@ -37,6 +37,315 @@ float angularDistance(float a, float b) {
 }
 
 // --------------------------------------------------
+// BUIH NEBULA LOOPING
+// --------------------------------------------------
+
+vec3 spaceBubbles(
+    vec2 p,
+    float time
+) {
+    // p adalah koordinat yang sudah dipusatkan.
+    // Ukuran grid dibuat berdasarkan tinggi layar.
+    vec2 grid =
+        p *
+        7.5;
+
+    vec2 baseCell =
+        floor(
+            grid
+        );
+
+    vec3 bubbleColor =
+        vec3(
+            0.0
+        );
+
+    // Beberapa lapisan agar terlihat seperti nebula
+    for (
+        float layer = 0.0;
+        layer < 3.0;
+        layer += 1.0
+    ) {
+        vec2 cell =
+            baseCell +
+            vec2(
+                layer * 19.17,
+                layer * 37.41
+            );
+
+        float seed =
+            hash2(
+                cell
+            );
+
+        // Tidak semua cell memiliki buih
+        float exists =
+            step(
+                0.72,
+                seed
+            );
+
+        // Posisi acak buih di dalam cell
+        vec2 randomPosition =
+            vec2(
+                hash2(
+                    cell +
+                    vec2(
+                        13.1,
+                        4.7
+                    )
+                ),
+                hash2(
+                    cell +
+                    vec2(
+                        7.3,
+                        21.8
+                    )
+                )
+            ) -
+            0.5;
+
+        // Posisi lokal cell
+        vec2 localPosition =
+            fract(
+                grid
+            ) -
+            0.5;
+
+        // Satu siklus penuh:
+        // kecil -> besar -> putih -> kecil -> hilang
+        float cycleLength =
+            3.5 +
+            hash2(
+                cell +
+                vec2(
+                    44.2,
+                    16.8
+                )
+            ) *
+            3.0;
+
+        float phase =
+            fract(
+                time /
+                cycleLength +
+                seed
+            );
+
+        // Gerakan perlahan ke atas
+        vec2 bubblePosition =
+            localPosition -
+            randomPosition;
+
+        bubblePosition.y +=
+            phase *
+            0.55;
+
+        // Goyangan horizontal halus
+        bubblePosition.x +=
+            sin(
+                phase *
+                TWO_PI +
+                seed *
+                18.0
+            ) *
+            0.045;
+
+        float distanceToBubble =
+            length(
+                bubblePosition
+            );
+
+        // 0 -> kecil, 1 -> besar, 0 -> mengecil
+        float grow =
+            sin(
+                phase *
+                PI
+            );
+
+        // Ukuran buih berubah selama siklus
+        float bubbleSize =
+            mix(
+                0.018,
+                0.105,
+                grow
+            );
+
+        // Bentuk kabut lembut
+        float bubble =
+            1.0 -
+            smoothstep(
+                bubbleSize * 0.25,
+                bubbleSize,
+                distanceToBubble
+            );
+
+        // Cincin luar agar tampak seperti buih
+        float bubbleRing =
+            1.0 -
+            smoothstep(
+                bubbleSize * 0.72,
+                bubbleSize * 1.05,
+                distanceToBubble
+            );
+
+        bubbleRing *=
+            smoothstep(
+                bubbleSize * 0.35,
+                bubbleSize * 0.72,
+                distanceToBubble
+            );
+
+        // Cahaya naik saat membesar,
+        // paling terang saat fase tengah
+        float brightness =
+            smoothstep(
+                0.04,
+                0.22,
+                grow
+            ) *
+            (
+                0.20 +
+                grow *
+                0.80
+            );
+
+        // Membuat warna berubah selama siklus:
+        // merah -> jingga -> emas -> biru kehijauan -> putih
+        vec3 redColor =
+            vec3(
+                0.95,
+                0.015,
+                0.003
+            );
+
+        vec3 orangeColor =
+            vec3(
+                1.0,
+                0.16,
+                0.015
+            );
+
+        vec3 goldColor =
+            vec3(
+                1.0,
+                0.62,
+                0.045
+            );
+
+        vec3 cyanColor =
+            vec3(
+                0.03,
+                0.80,
+                0.72
+            );
+
+        vec3 whiteColor =
+            vec3(
+                1.0,
+                0.98,
+                0.90
+            );
+
+        vec3 colorPhase;
+
+        if (
+            grow < 0.25
+        ) {
+            colorPhase =
+                mix(
+                    redColor,
+                    orangeColor,
+                    grow /
+                    0.25
+                );
+        } else if (
+            grow < 0.50
+        ) {
+            colorPhase =
+                mix(
+                    orangeColor,
+                    goldColor,
+                    (
+                        grow -
+                        0.25
+                    ) /
+                    0.25
+                );
+        } else if (
+            grow < 0.78
+        ) {
+            colorPhase =
+                mix(
+                    goldColor,
+                    cyanColor,
+                    (
+                        grow -
+                        0.50
+                    ) /
+                    0.28
+                );
+        } else {
+            colorPhase =
+                mix(
+                    cyanColor,
+                    whiteColor,
+                    (
+                        grow -
+                        0.78
+                    ) /
+                    0.22
+                );
+        }
+
+        // Buih utama
+        bubbleColor +=
+            colorPhase *
+            bubble *
+            brightness *
+            exists *
+            (
+                0.45 +
+                layer *
+                0.18
+            );
+
+        // Lingkaran pinggir berwarna lebih terang
+        bubbleColor +=
+            whiteColor *
+            bubbleRing *
+            brightness *
+            exists *
+            0.85;
+
+        // Titik pusat putih
+        float whiteCenter =
+            1.0 -
+            smoothstep(
+                bubbleSize * 0.02,
+                bubbleSize * 0.34,
+                distanceToBubble
+            );
+
+        whiteCenter *=
+            smoothstep(
+                0.48,
+                0.82,
+                grow
+            );
+
+        bubbleColor +=
+            whiteColor *
+            whiteCenter *
+            brightness *
+            exists *
+            1.35;
+    }
+
+    return bubbleColor;
+}
+
+// --------------------------------------------------
 // PETIR YANG MENYELIMUTI GLOBE
 // --------------------------------------------------
 
@@ -865,39 +1174,50 @@ void main() {
     float globeR =
         0.32;
 
+    
     // --------------------------------------------------
-    // BACKGROUND
-    // --------------------------------------------------
+// BACKGROUND
+// --------------------------------------------------
 
-    vec3 color =
-        vec3(
-            0.001,
-            0.0015,
-            0.003
-        );
+vec3 color =
+    vec3(
+        0.001,
+        0.0015,
+        0.003
+    );
 
-    // Partikel kecil di background
-    float stars =
-        hash2(
-            floor(
-                p * 110.0
-            )
-        );
+// Buih nebula berada paling belakang
+color +=
+    spaceBubbles(
+        p,
+        iTime
+    ) *
+    1.25;
 
-    float starMask =
-        step(
-            0.985,
-            stars
-        );
+// Bintang kecil tambahan
+float stars =
+    hash2(
+        floor(
+            p *
+            110.0
+        )
+    );
 
-    color +=
-        vec3(
-            1.0,
-            0.40,
-            0.05
-        ) *
-        starMask *
-        0.45;
+float starMask =
+    step(
+        0.992,
+        stars
+    );
+
+color +=
+    vec3(
+        0.70,
+        0.85,
+        1.0
+    ) *
+    starMask *
+    0.30;
+
 
     // --------------------------------------------------
     // ATMOSFER LUAR
