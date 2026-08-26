@@ -48,7 +48,7 @@ vec3 spaceBubbles(
     // Ukuran grid dibuat berdasarkan tinggi layar.
     vec2 grid =
         p *
-        7.5;
+        9.5;
 
     vec2 baseCell =
         floor(
@@ -1176,7 +1176,7 @@ void main() {
 
     
     // --------------------------------------------------
-// BACKGROUND
+// BUIH NEBULA LOOPING
 // --------------------------------------------------
 
 vec3 color =
@@ -1192,7 +1192,7 @@ color +=
         p,
         iTime
     ) *
-    1.25;
+    1.8;
 
 // Bintang kecil tambahan
 float stars =
