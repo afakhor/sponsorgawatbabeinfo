@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 
 import 'globes/globe.dart';
 
@@ -38,53 +39,52 @@ class _SponsorBabePageState
   Duration? previousElapsed;
   String? errorMessage;
 
-@override
-void initState() {
-  super.initState();
+  @override
+  void initState() {
+    super.initState();
 
-  SystemChrome.setEnabledSystemUIMode(
-    SystemUiMode.edgeToEdge,
-  );
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.edgeToEdge,
+    );
 
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      systemNavigationBarColor: Colors.black,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarIconBrightness: Brightness.light,
-    ),
-  );
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.black,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
 
-  ticker = createTicker(
-    (Duration elapsed) {
-      if (previousElapsed == null) {
+    ticker = createTicker(
+      (Duration elapsed) {
+        if (previousElapsed == null) {
+          previousElapsed = elapsed;
+          return;
+        }
+
+        final double delta =
+            (elapsed - previousElapsed!).inMicroseconds /
+            1000000.0;
+
         previousElapsed = elapsed;
-        return;
-      }
 
-      final double delta =
-          (elapsed - previousElapsed!).inMicroseconds /
-          1000000.0;
+        if (!mounted) {
+          return;
+        }
 
-      previousElapsed = elapsed;
+        setState(() {
+          time += delta.clamp(
+            0.0,
+            0.05,
+          );
+        });
+      },
+    );
 
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        time += delta.clamp(
-          0.0,
-          0.05,
-        );
-      });
-    },
-  );
-
-  ticker.start();
-  _loadResources();
-}
-
+    ticker.start();
+    _loadResources();
+  }
 
   Future<void> _loadResources() async {
     try {
@@ -154,94 +154,100 @@ void initState() {
   }
 
   @override
-Widget build(
-  BuildContext context,
-) {
-  final ui.FragmentProgram? program =
-      fragmentProgram;
+  Widget build(
+    BuildContext context,
+  ) {
+    final ui.FragmentProgram? program =
+        fragmentProgram;
 
-  final ui.Image? texture =
-      textTexture;
+    final ui.Image? texture =
+        textTexture;
 
-  if (errorMessage != null) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(
-            24.0,
-          ),
-          child: Text(
-            'Gagal memuat shader atau texture:\n\n'
-            '$errorMessage',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.redAccent,
-              fontSize: 14.0,
+    if (errorMessage != null) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(
+              24.0,
+            ),
+            child: Text(
+              'Gagal memuat shader atau texture:\n\n'
+              '$errorMessage',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.redAccent,
+                fontSize: 14.0,
+              ),
             ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
-  if (program == null || texture == null) {
-    return const Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: CircularProgressIndicator(
-          color: Color(
-            0xFFFFD21F,
+    if (program == null || texture == null) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Color(
+              0xFFFFD21F,
+            ),
           ),
         ),
-      ),
-    );
-  }
+      );
+    }
 
-  return Scaffold(
-    backgroundColor: Colors.black,
-    body: LayoutBuilder(
-      builder: (
-        BuildContext context,
-        BoxConstraints constraints,
-      ) {
-        final double screenHeight =
-            MediaQuery.of(context).size.height;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: LayoutBuilder(
+        builder: (
+          BuildContext context,
+          BoxConstraints constraints,
+        ) {
+          final double screenHeight =
+              MediaQuery.of(context).size.height;
 
-        final double statusBarHeight =
-            MediaQuery.of(context).padding.top;
+          final double statusBarHeight =
+              MediaQuery.of(context).padding.top;
 
-        return Column(
-          children: [
-            // 3/5 layar bagian atas
-            SizedBox(
-              width: double.infinity,
-              height: screenHeight * 3.0 / 5.0,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  top: statusBarHeight,
-                ),
-                child: Center(
-                  child: AspectRatio(
-                    aspectRatio: 1.0,
-                    child: GlobeShaderWidget(
-                      program: program,
-                      textTexture: texture,
-                      time: time,
+          return Column(
+            children: [
+              // =========================================
+              // 3/5 BAGIAN ATAS UNTUK GLOBE
+              // =========================================
+              SizedBox(
+                width: double.infinity,
+                height: screenHeight * 3.0 / 5.0,
+                child: Padding(
+                  // Memberi ruang agar globe tidak tertutup status bar
+                  padding: EdgeInsets.only(
+                    top: statusBarHeight,
+                  ),
+                  child: Center(
+                    child: AspectRatio(
+                      aspectRatio: 1.0,
+                      child: GlobeShaderWidget(
+                        program: program,
+                        textTexture: texture,
+                        time: time,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
 
-            // 2/5 layar bagian bawah kosong
-            SizedBox(
-              width: double.infinity,
-              height: screenHeight * 2.0 / 5.0,
-            ),
-          ],
-        );
-      },
-    ),
-  );
+              // =========================================
+              // 2/5 BAGIAN BAWAH KOSONG
+              // =========================================
+              SizedBox(
+                width: double.infinity,
+                height: screenHeight * 2.0 / 5.0,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
