@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import 'globes/globe.dart';
+import 'music/music.dart';
 
 void main() {
   runApp(
@@ -34,6 +35,7 @@ class _SponsorBabePageState
   ui.Image? textTexture;
 
   late final Ticker ticker;
+  late final MusicController musicController;
 
   double time = 0.0;
   Duration? previousElapsed;
@@ -42,6 +44,8 @@ class _SponsorBabePageState
   @override
   void initState() {
     super.initState();
+
+    musicController = MusicController();
 
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.edgeToEdge,
@@ -52,7 +56,8 @@ class _SponsorBabePageState
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: Colors.black,
         statusBarIconBrightness: Brightness.light,
-        systemNavigationBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness:
+            Brightness.light,
       ),
     );
 
@@ -150,13 +155,12 @@ class _SponsorBabePageState
   void dispose() {
     ticker.dispose();
     textTexture?.dispose();
+    musicController.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     final ui.FragmentProgram? program =
         fragmentProgram;
 
@@ -169,9 +173,7 @@ class _SponsorBabePageState
         body: SafeArea(
           child: Center(
             child: Padding(
-              padding: const EdgeInsets.all(
-                24.0,
-              ),
+              padding: const EdgeInsets.all(24.0),
               child: Text(
                 'Gagal memuat shader atau texture:\n\n'
                 '$errorMessage',
@@ -193,9 +195,7 @@ class _SponsorBabePageState
         body: SafeArea(
           child: Center(
             child: CircularProgressIndicator(
-              color: Color(
-                0xFFFFD21F,
-              ),
+              color: Color(0xFFFFD21F),
             ),
           ),
         ),
@@ -204,16 +204,17 @@ class _SponsorBabePageState
 
     return Scaffold(
       backgroundColor: Colors.black,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         top: true,
         bottom: false,
         child: Column(
           children: [
             // =========================================
-            // AREA SHADER: 3 BAGIAN
+            // AREA GLOBE: 4 BAGIAN
             // =========================================
             Expanded(
-              flex: 3,
+              flex: 4,
               child: SizedBox.expand(
                 child: GlobeShaderWidget(
                   program: program,
@@ -224,11 +225,13 @@ class _SponsorBabePageState
             ),
 
             // =========================================
-            // AREA BAWAH: 1 BAGIAN
+            // AREA MUSIK: 1 BAGIAN
             // =========================================
-            const Expanded(
+            Expanded(
               flex: 1,
-              child: SizedBox.expand(),
+              child: MusicPanel(
+                controller: musicController,
+              ),
             ),
           ],
         ),
