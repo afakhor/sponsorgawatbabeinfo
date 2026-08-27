@@ -115,16 +115,14 @@ class MusicController extends ChangeNotifier {
     position=safe; notifyListeners();
   }
 
-  Future<void> startRecord() async {
+    Future<void> startRecord() async {
     try{
       await _req();
-      // FIX UTAMA: SEMBUNYIKAN JAM,SINYAL,BATERAI BIAR GAK KE-RECORD
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      
-      final dir=await getTemporaryDirectory();
       isRecording=true; recordSeconds=0; recordedPath=null; notifyListeners();
       final fileName='babe_${DateTime.now().millisecondsSinceEpoch}';
-      await FlutterScreenRecording.startRecordScreen(fileName, dirPath: dir.path, audioEnable: true);
+      // API v2.0.25
+      await FlutterScreenRecording.startRecordScreen(fileName, title: fileName);
       recordTimer?.cancel();
       recordTimer=Timer.periodic(const Duration(seconds:1), (t){
         recordSeconds++; notifyListeners();
@@ -141,14 +139,7 @@ class MusicController extends ChangeNotifier {
       recordTimer?.cancel();
       recordedPath = await FlutterScreenRecording.stopRecordScreen;
       isRecording=false;
-      // BALIKIN SYSTEM UI BIAR JAM MUNCUL LAGI
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        systemNavigationBarColor: Colors.black,
-        statusBarIconBrightness: Brightness.light,
-        systemNavigationBarIconBrightness: Brightness.light,
-      ));
       notifyListeners();
     }catch(e){
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
