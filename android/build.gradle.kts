@@ -35,7 +35,7 @@ subprojects {
     configurations.all {
         resolutionStrategy.eachDependency {
             if (requested.group == "org.jetbrains.kotlin") {
-                useVersion("2.0.0") // FIX GAWAT - DARI 1.9.22 KE 2.0.0 BIAR SUPPORT NDK 28
+                useVersion("2.0.0")
             }
         }
     }
@@ -46,8 +46,8 @@ subprojects {
     }
 
     tasks.withType<KotlinCompile>().configureEach {
-        kotlinOptions {
-            jvmTarget = "17"
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
     }
 
@@ -61,12 +61,6 @@ subprojects {
                 }
                 androidExt.compileOptions.sourceCompatibility = JavaVersion.VERSION_17
                 androidExt.compileOptions.targetCompatibility = JavaVersion.VERSION_17
-                // TAMBAHAN FIX UNTUK NDK 28 - BIAR PLUGIN LAMA GAK MINTA NDK 27
-                if (androidExt.hasProperty("ndkVersion")) {
-                    try {
-                        androidExt.extra.set("ndkVersion", "28.2.13676358")
-                    } catch (_: Exception) {}
-                }
             }
         }
     }
