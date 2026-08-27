@@ -219,7 +219,7 @@ class _SponsorBabePageState
             // AREA GLOBE
             // =========================================
             Expanded(
-              flex: 3,
+              flex: 4,
               child: SizedBox(
                 width: double.infinity,
                 child: Align(
@@ -240,7 +240,7 @@ class _SponsorBabePageState
             // AREA BAWAH
             // =========================================
             const Expanded(
-              flex: 2,
+              flex: 1,
               child: SizedBox(),
             ),
           ],
