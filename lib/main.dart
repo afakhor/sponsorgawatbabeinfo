@@ -43,8 +43,6 @@ class _SponsorBabePageState
   void initState() {
     super.initState();
 
-    // Membuat area aplikasi dapat menggunakan seluruh layar,
-    // tetapi SafeArea di bawah akan melindungi globe dari status bar.
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.edgeToEdge,
     );
@@ -165,7 +163,6 @@ class _SponsorBabePageState
     final ui.Image? texture =
         textTexture;
 
-    // Tampilan jika shader atau texture gagal dimuat.
     if (errorMessage != null) {
       return Scaffold(
         backgroundColor: Colors.black,
@@ -190,7 +187,6 @@ class _SponsorBabePageState
       );
     }
 
-    // Tampilan loading.
     if (program == null || texture == null) {
       return const Scaffold(
         backgroundColor: Colors.black,
@@ -208,40 +204,31 @@ class _SponsorBabePageState
 
     return Scaffold(
       backgroundColor: Colors.black,
-
-      // SafeArea membuat isi dimulai di bawah status bar.
       body: SafeArea(
         top: true,
         bottom: false,
         child: Column(
           children: [
             // =========================================
-            // AREA GLOBE
+            // AREA SHADER: 4 BAGIAN
             // =========================================
             Expanded(
               flex: 4,
-              child: SizedBox(
-                width: double.infinity,
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: AspectRatio(
-                    aspectRatio: 1.0,
-                    child: GlobeShaderWidget(
-                      program: program,
-                      textTexture: texture,
-                      time: time,
-                    ),
-                  ),
+              child: SizedBox.expand(
+                child: GlobeShaderWidget(
+                  program: program,
+                  textTexture: texture,
+                  time: time,
                 ),
               ),
             ),
 
             // =========================================
-            // AREA BAWAH
+            // AREA BAWAH: 1 BAGIAN
             // =========================================
             const Expanded(
               flex: 1,
-              child: SizedBox(),
+              child: SizedBox.expand(),
             ),
           ],
         ),
