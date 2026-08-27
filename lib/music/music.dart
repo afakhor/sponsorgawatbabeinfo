@@ -4,10 +4,11 @@ import 'dart:io';
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:just_audio/just_audio.dart' as ja;
 
 class MusicController extends ChangeNotifier {
-  final AudioPlayer audioPlayer = AudioPlayer();
+  final ja.AudioPlayer audioPlayer =
+      ja.AudioPlayer();
 
   final PlayerController waveformController =
       PlayerController();
@@ -22,9 +23,14 @@ class MusicController extends ChangeNotifier {
   bool isLoading = false;
   String? errorMessage;
 
-  StreamSubscription<Duration>? positionSubscription;
-  StreamSubscription<Duration?>? durationSubscription;
-  StreamSubscription<PlayerState>? playerStateSubscription;
+  StreamSubscription<Duration>?
+      positionSubscription;
+
+  StreamSubscription<Duration?>?
+      durationSubscription;
+
+  StreamSubscription<ja.PlayerState>?
+      playerStateSubscription;
 
   MusicController() {
     positionSubscription =
@@ -47,12 +53,11 @@ class MusicController extends ChangeNotifier {
 
     playerStateSubscription =
         audioPlayer.playerStateStream.listen(
-      (PlayerState state) {
+      (ja.PlayerState state) {
         isPlaying = state.playing;
 
-        // Jika lagu selesai, kembalikan status ke awal.
         if (state.processingState ==
-            ProcessingState.completed) {
+            ja.ProcessingState.completed) {
           isPlaying = false;
           position = Duration.zero;
         }
@@ -61,6 +66,7 @@ class MusicController extends ChangeNotifier {
       },
     );
   }
+
 
   Future<void> pickMusic() async {
     try {
@@ -120,94 +126,98 @@ class MusicController extends ChangeNotifier {
     }
   }
 
-  Future<void> togglePlay() async {
-    if (selectedMusicFile == null) {
-      return;
-    }
-
-    try {
-      errorMessage = null;
-
-      if (audioPlayer.playing) {
-        await audioPlayer.pause();
-
-        try {
-          await waveformController.pausePlayer();
-        } catch (_) {}
-      } else {
-        await audioPlayer.play();
-
-        try {
-          await waveformController.startPlayer();
-        } catch (_) {}
-      }
-    } catch (error) {
-      errorMessage = error.toString();
-      notifyListeners();
-    }
+Future<void> togglePlay() async {
+  if (selectedMusicFile == null) {
+    return;
   }
 
-  Future<void> seekTo(Duration value) async {
-    if (duration == Duration.zero) {
-      return;
-    }
+  try {
+    errorMessage = null;
 
-    final Duration safeValue;
-
-    if (value < Duration.zero) {
-      safeValue = Duration.zero;
-    } else if (value > duration) {
-      safeValue = duration;
-    } else {
-      safeValue = value;
-    }
-
-    await audioPlayer.seek(safeValue);
-
-    // audio_waveforms menggunakan nilai progres 0 sampai 1.
-    if (duration.inMilliseconds > 0) {
-      final double progress =
-          safeValue.inMilliseconds /
-          duration.inMilliseconds;
+    if (audioPlayer.playing) {
+      await audioPlayer.pause();
 
       try {
-        await waveformController.seekTo(
-          progress.clamp(0.0, 1.0),
+        await waveformController.pausePlayer();
+      } catch (error) {
+        debugPrint(
+          'Waveform pause gagal: $error',
         );
-      } catch (_) {}
-    }
+      }
+    } else {
+      await audioPlayer.play();
 
+      try {
+        await waveformController.startPlayer();
+      } catch (error) {
+        debugPrint(
+          'Waveform start gagal: $error',
+        );
+      }
+    }
+  } catch (error) {
+    errorMessage = error.toString();
     notifyListeners();
   }
+}
+
+
+  Future<void> seekTo(Duration value) async {
+  if (duration == Duration.zero) {
+    return;
+  }
+
+  final Duration safeValue;
+
+  if (value < Duration.zero) {
+    safeValue = Duration.zero;
+  } else if (value > duration) {
+    safeValue = duration;
+  } else {
+    safeValue = value;
+  }
+
+  await audioPlayer.seek(safeValue);
+
+  try {
+    // audio_waveforms 2.0.2 menerima posisi integer
+    // dalam milidetik.
+    await waveformController.seekTo(
+      safeValue.inMilliseconds,
+    );
+  } catch (error) {
+    debugPrint(
+      'Waveform seek gagal: $error',
+    );
+  }
+
+  notifyListeners();
+}
+
 
   Future<void> stopMusic() async {
+  try {
     await audioPlayer.stop();
-
-    try {
-      await waveformController.stopPlayer();
-    } catch (_) {}
-
-    position = Duration.zero;
-    isPlaying = false;
-
-    notifyListeners();
+  } catch (error) {
+    debugPrint(
+      'Audio stop gagal: $error',
+    );
   }
 
-  String formatDuration(Duration value) {
-    final String minutes =
-        value.inMinutes
-            .remainder(60)
-            .toString()
-            .padLeft(2, '0');
-
-    final String seconds =
-        value.inSeconds
-            .remainder(60)
-            .toString()
-            .padLeft(2, '0');
-
-    return '$minutes:$seconds';
+  try {
+    await waveformController.stopPlayer();
+  } catch (error) {
+    debugPrint(
+      'Waveform stop gagal: $error',
+    );
   }
+
+  position = Duration.zero;
+  isPlaying = false;
+
+  notifyListeners();
+}
+
 
   @override
   void dispose() {
