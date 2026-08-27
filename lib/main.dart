@@ -97,14 +97,14 @@ class _SponsorBabePageState extends State<SponsorBabePage> with SingleTickerProv
           children: [
             // GLOBE - sekarang cuma 40% layar
             Expanded(
-              flex: 2,
+              flex: 5,
               child: SizedBox.expand(
                 child: GlobeShaderWidget(program: program, textTexture: texture, time: time),
               ),
             ),
             // MUSIC - sekarang 60% layar, cukup untuk semua kontrol
             Expanded(
-              flex: 3,
+              flex: 2,
               child: Container(
                 width: double.infinity,
                 color: const Color(0xFF080811),
