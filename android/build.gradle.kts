@@ -19,6 +19,7 @@ rootProject.layout.buildDirectory.value(newBuildDir)
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
+    project.evaluationDependsOn(":app")
 
     repositories {
         google()
@@ -34,7 +35,7 @@ subprojects {
     configurations.all {
         resolutionStrategy.eachDependency {
             if (requested.group == "org.jetbrains.kotlin") {
-                useVersion("2.0.0") // FIX GAWAT - DARI 1.9.22 KE 2.0.0
+                useVersion("2.0.0") // FIX GAWAT - DARI 1.9.22 KE 2.0.0 BIAR SUPPORT NDK 28
             }
         }
     }
@@ -60,13 +61,15 @@ subprojects {
                 }
                 androidExt.compileOptions.sourceCompatibility = JavaVersion.VERSION_17
                 androidExt.compileOptions.targetCompatibility = JavaVersion.VERSION_17
+                // TAMBAHAN FIX UNTUK NDK 28 - BIAR PLUGIN LAMA GAK MINTA NDK 27
+                if (androidExt.hasProperty("ndkVersion")) {
+                    try {
+                        androidExt.extra.set("ndkVersion", "28.2.13676358")
+                    } catch (_: Exception) {}
+                }
             }
         }
     }
-}
-
-subprojects {
-    project.evaluationDependsOn(":app")
 }
 
 tasks.register<Delete>("clean") {
