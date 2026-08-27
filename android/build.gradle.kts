@@ -50,20 +50,6 @@ subprojects {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
     }
-
-    afterEvaluate {
-        if (project.plugins.hasPlugin("com.android.library")) {
-            val androidExt = project.extensions.findByName("android")
-            if (androidExt is com.android.build.gradle.BaseExtension) {
-                if (androidExt.namespace == null) {
-                    val cleanName = project.name.replace("-", "_").replace(".", "_")
-                    androidExt.namespace = "com.plugin.$cleanName"
-                }
-                androidExt.compileOptions.sourceCompatibility = JavaVersion.VERSION_17
-                androidExt.compileOptions.targetCompatibility = JavaVersion.VERSION_17
-            }
-        }
-    }
 }
 
 tasks.register<Delete>("clean") {
