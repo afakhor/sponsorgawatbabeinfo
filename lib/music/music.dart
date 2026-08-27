@@ -121,8 +121,12 @@ class MusicController extends ChangeNotifier {
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       isRecording=true; recordSeconds=0; recordedPath=null; notifyListeners();
       final fileName='babe_${DateTime.now().millisecondsSinceEpoch}';
-      // API v2.0.25
-      await FlutterScreenRecording.startRecordScreen(fileName, title: fileName);
+      // API v2.0.25 YANG BENER
+      await FlutterScreenRecording.startRecordScreen(
+        fileName,
+        titleNotification: "Babe Info Gawat REC",
+        messageNotification: "Merekam globe 60 detik tanpa jam/sinyal"
+      );
       recordTimer?.cancel();
       recordTimer=Timer.periodic(const Duration(seconds:1), (t){
         recordSeconds++; notifyListeners();
