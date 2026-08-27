@@ -9,12 +9,31 @@ import 'globes/globe.dart';
 import 'music/music.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
   runApp(
-    const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: SponsorBabePage(),
-    ),
+    const SponsorBabeApp(),
   );
+}
+
+class SponsorBabeApp extends StatelessWidget {
+  const SponsorBabeApp({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Sponsor Babe',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: Colors.black,
+        useMaterial3: true,
+      ),
+      home: const SponsorBabePage(),
+    );
+  }
 }
 
 class SponsorBabePage extends StatefulWidget {
@@ -62,33 +81,35 @@ class _SponsorBabePageState
     );
 
     ticker = createTicker(
-      (Duration elapsed) {
-        if (previousElapsed == null) {
-          previousElapsed = elapsed;
-          return;
-        }
-
-        final double delta =
-            (elapsed - previousElapsed!).inMicroseconds /
-            1000000.0;
-
-        previousElapsed = elapsed;
-
-        if (!mounted) {
-          return;
-        }
-
-        setState(() {
-          time += delta.clamp(
-            0.0,
-            0.05,
-          );
-        });
-      },
+      _onTick,
     );
 
     ticker.start();
+
     _loadResources();
+  }
+
+  void _onTick(Duration elapsed) {
+    if (previousElapsed == null) {
+      previousElapsed = elapsed;
+      return;
+    }
+
+    final Duration difference =
+        elapsed - previousElapsed!;
+
+    previousElapsed = elapsed;
+
+    final double delta =
+        difference.inMicroseconds / 1000000.0;
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      time += delta.clamp(0.0, 0.05).toDouble();
+    });
   }
 
   Future<void> _loadResources() async {
@@ -110,7 +131,15 @@ class _SponsorBabePageState
         fragmentProgram = program;
         textTexture = texture;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
+      debugPrint(
+        'Resource loading error: $error',
+      );
+
+      debugPrintStack(
+        stackTrace: stackTrace,
+      );
+
       if (!mounted) {
         return;
       }
@@ -126,9 +155,7 @@ class _SponsorBabePageState
         'assets/images/babe_info.png';
 
     final ByteData data =
-        await DefaultAssetBundle.of(context).load(
-      assetPath,
-    );
+        await rootBundle.load(assetPath);
 
     final Uint8List bytes =
         data.buffer.asUint8List(
@@ -137,9 +164,7 @@ class _SponsorBabePageState
     );
 
     final ui.Codec codec =
-        await ui.instantiateImageCodec(
-      bytes,
-    );
+        await ui.instantiateImageCodec(bytes);
 
     try {
       final ui.FrameInfo frame =
@@ -156,6 +181,7 @@ class _SponsorBabePageState
     ticker.dispose();
     textTexture?.dispose();
     musicController.dispose();
+
     super.dispose();
   }
 
@@ -168,38 +194,11 @@ class _SponsorBabePageState
         textTexture;
 
     if (errorMessage != null) {
-      return Scaffold(
-        backgroundColor: Colors.black,
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Text(
-                'Gagal memuat shader atau texture:\n\n'
-                '$errorMessage',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.redAccent,
-                  fontSize: 14.0,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
+      return _buildErrorPage();
     }
 
     if (program == null || texture == null) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: SafeArea(
-          child: Center(
-            child: CircularProgressIndicator(
-              color: Color(0xFFFFD21F),
-            ),
-          ),
-        ),
-      );
+      return _buildLoadingPage();
     }
 
     return Scaffold(
@@ -210,11 +209,9 @@ class _SponsorBabePageState
         bottom: false,
         child: Column(
           children: [
-            // =========================================
-            // AREA GLOBE: 4 BAGIAN
-            // =========================================
+            // Area globe.
             Expanded(
-              flex: 4,
+              flex: 3,
               child: SizedBox.expand(
                 child: GlobeShaderWidget(
                   program: program,
@@ -224,16 +221,56 @@ class _SponsorBabePageState
               ),
             ),
 
-            // =========================================
-            // AREA MUSIK: 1 BAGIAN
-            // =========================================
+            // Area music.
             Expanded(
-              flex: 1,
-              child: MusicPanel(
-                controller: musicController,
+              flex: ,
+              child: Container(
+                width: double.infinity,
+                color: const Color(0xFF080811),
+                child: SingleChildScrollView(
+                  physics:
+                      const ClampingScrollPhysics(),
+                  child: MusicPanel(
+                    controller: musicController,
+                  ),
+                ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingPage() {
+    return const Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFFFFD21F),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorPage() {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Text(
+              'Gagal memuat globe:\n\n$errorMessage',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.redAccent,
+                fontSize: 14.0,
+              ),
+            ),
+          ),
         ),
       ),
     );
