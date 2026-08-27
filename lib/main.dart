@@ -223,7 +223,7 @@ class _SponsorBabePageState
 
             // Area music.
             Expanded(
-              flex: ,
+              flex: 1,
               child: Container(
                 width: double.infinity,
                 color: const Color(0xFF080811),
