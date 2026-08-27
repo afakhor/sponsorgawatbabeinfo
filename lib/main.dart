@@ -14,7 +14,12 @@ void main() {
 class SponsorBabeApp extends StatelessWidget {
   const SponsorBabeApp({super.key});
   @override Widget build(BuildContext context) {
-    return MaterialApp(debugShowCheckedModeBanner: false, title: 'Sponsor Babe', theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: Colors.black, useMaterial3: true), home: const SponsorBabePage());
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Sponsor Babe',
+      theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: Colors.black, useMaterial3: true),
+      home: const SponsorBabePage(),
+    );
   }
 }
 
@@ -37,11 +42,21 @@ class _SponsorBabePageState extends State<SponsorBabePage> with SingleTickerProv
     super.initState();
     musicController = MusicController();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.black,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
     ticker = createTicker((elapsed) {
       if (prev == null) { prev = elapsed; return; }
-      final d = (elapsed - prev!).inMicroseconds / 1000000.0;
+      final diff = elapsed - prev!;
       prev = elapsed;
-      if (mounted) setState(() => time += d.clamp(0.0, 0.05));
+      final delta = diff.inMicroseconds / 1000000.0;
+      double safe = delta;
+      if (safe < 0) safe = 0;
+      if (safe > 0.05) safe = 0.05;
+      if (mounted) setState(() => time += safe);
     })..start();
     _load();
   }
@@ -59,24 +74,37 @@ class _SponsorBabePageState extends State<SponsorBabePage> with SingleTickerProv
     } catch (e) { setState(() => error = e.toString()); }
   }
 
-  @override void dispose() { ticker.dispose(); textTexture?.dispose(); musicController.dispose(); sheetController.dispose(); super.dispose(); }
+  @override void dispose() {
+    ticker.dispose();
+    textTexture?.dispose();
+    musicController.dispose();
+    sheetController.dispose();
+    super.dispose();
+  }
 
   @override Widget build(BuildContext context) {
-    if (error != null) return Scaffold(backgroundColor: Colors.black, body: Center(child: Text(error!, style: const TextStyle(color: Colors.redAccent))));
-    if (fragmentProgram == null || textTexture == null) return const Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator(color: Color(0xFFFFD21F))));
+    if (error != null) return Scaffold(backgroundColor: Colors.black, body: Center(child: Text('Error globe:\n$error', style: const TextStyle(color: Colors.redAccent))));
+    if (fragmentProgram == null || textTexture == null) {
+      return const Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator(color: Color(0xFFFFD21F))));
+    }
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(children: [
+        // GLOBE DOMINAN a:b = 3:1 = 75% globe
         Positioned.fill(child: GlobeShaderWidget(program: fragmentProgram!, textTexture: textTexture!, time: time)),
         DraggableScrollableSheet(
           controller: sheetController,
-          initialChildSize: 0.34,
-          minChildSize: 0.22,
-          maxChildSize: 0.82,
+          initialChildSize: 0.32, // music 32% middle
+          minChildSize: 0.20, // minim cuma ▶️ kiri ⏸️ kanan
+          maxChildSize: 0.85, // geser atas full muncul 📁 & slider
           snap: true,
-          snapSizes: const [0.22, 0.34, 0.82],
+          snapSizes: const [0.20, 0.32, 0.85],
           builder: (ctx, scrollCtrl) => Container(
-            decoration: const BoxDecoration(color: Color(0xFF0F0F14), borderRadius: BorderRadius.vertical(top: Radius.circular(22)), border: Border(top: BorderSide(color: Colors.white12))),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0F0F14),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+              border: Border(top: BorderSide(color: Colors.white12)),
+            ),
             child: MusicPanel(controller: musicController, scrollController: scrollCtrl, sheetController: sheetController),
           ),
         ),
