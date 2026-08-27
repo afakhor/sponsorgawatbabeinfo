@@ -140,7 +140,7 @@ class MusicController extends ChangeNotifier {
   Future<void> startRecordWithTrim(BuildContext context) async {
     double tempStart=trimStartSec;
     double tempEnd=trimEndSec;
-    final maxDur = duration.inSeconds>0 ? duration.inSeconds.toDouble() : 120;
+        final maxDur = duration.inSeconds>0 ? duration.inSeconds.toDouble() : 120.0;
 
     final result = await showDialog<Map<String,double>>(
       context: context,
@@ -151,7 +151,7 @@ class MusicController extends ChangeNotifier {
           Text('Durasi: ${(tempEnd-tempStart).toInt()}s (max 60s)', style: const TextStyle(color: Colors.white70, fontSize: 12)),
           const SizedBox(height: 12),
           RangeSlider(
-            min: 0, max: maxDur,
+            min: 0.0, max: maxDur,
             divisions: maxDur.toInt(),
             labels: RangeLabels('${tempStart.toInt()}s','${tempEnd.toInt()}s'),
             values: RangeValues(tempStart, tempEnd.clamp(tempStart+1, tempStart+60)),
