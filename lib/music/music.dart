@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:ed_screen_recorder/ed_screen_recorder.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screen_recording/flutter_screen_recording.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -23,7 +23,7 @@ class _RunningTextState extends State<RunningText> with SingleTickerProviderStat
   @override Widget build(BuildContext c){
     if(widget.text.isEmpty) return const SizedBox(height:18);
     return SizedBox(height:18, child: ClipRect(child: AnimatedBuilder(animation:_c, builder:(ctx,_){
-      return Transform.translate(offset: Offset(120 - (_c.value*350),0), child: Text(widget.text, maxLines:1, style: TextStyle(color:widget.color,fontSize:14,fontWeight:FontWeight.w600,letterSpacing:0.3)));
+      return Transform.translate(offset: Offset(120 - (_c.value*350),0), child: Text(widget.text, maxLines:1, style: TextStyle(color:widget.color,fontSize:14,fontWeight:FontWeight.w600)));
     })));
   }
 }
@@ -31,7 +31,6 @@ class _RunningTextState extends State<RunningText> with SingleTickerProviderStat
 class MusicController extends ChangeNotifier {
   final ja.AudioPlayer audioPlayer=ja.AudioPlayer();
   final PlayerController waveformController=PlayerController();
-  final EdScreenRecorder recorder=EdScreenRecorder();
 
   File? selectedMusicFile;
   String musicName='Belum ada musik';
@@ -52,7 +51,7 @@ class MusicController extends ChangeNotifier {
         int idx = ((v.inSeconds / duration.inSeconds) * lyricLines.length).floor();
         if(idx<0) idx=0;
         if(idx>=lyricLines.length) idx=lyricLines.length-1;
-        if(idx!=currentLyricIndex){ currentLyricIndex=idx; }
+        if(idx!=currentLyricIndex) currentLyricIndex=idx;
       }
       notifyListeners();
     });
@@ -120,18 +119,13 @@ class MusicController extends ChangeNotifier {
       await _req();
       final dir=await getTemporaryDirectory();
       isRecording=true; recordSeconds=0; recordedPath=null; notifyListeners();
-      // FIX: WAJIB KASIH height + width di v0.0.15
-      await recorder.startRecordScreen(
-        fileName: 'babe_${DateTime.now().millisecondsSinceEpoch}',
-        dirPathToSave: dir.path,
-        height: 1920,
-        width: 1080,
-        audioEnable: true,
-      );
+      final fileName='babe_${DateTime.now().millisecondsSinceEpoch}';
+      // API BARU - gak butuh height
+      await FlutterScreenRecording.startRecordScreen(fileName, dirPath: dir.path, audioEnable: true);
       recordTimer?.cancel();
       recordTimer=Timer.periodic(const Duration(seconds:1), (t){
         recordSeconds++; notifyListeners();
-        if(recordSeconds>=60){ stopRecord(); }
+        if(recordSeconds>=60) stopRecord();
       });
     }catch(e){ isRecording=false; errorMessage='Record gagal: $e'; notifyListeners(); }
   }
@@ -139,11 +133,9 @@ class MusicController extends ChangeNotifier {
   Future<void> stopRecord() async {
     try{
       recordTimer?.cancel();
-      final RecordOutput result = await recorder.stopRecord();
-      // FIX: result bukan Map, tapi object RecordOutput
+      // API BARU - return String path langsung
+      recordedPath = await FlutterScreenRecording.stopRecordScreen;
       isRecording=false;
-      recordedPath = result.file?.path;
-      if(recordedPath==null){ errorMessage='File record null: ${result.eventName}'; }
       notifyListeners();
     }catch(e){ isRecording=false; errorMessage='Stop gagal: $e'; notifyListeners(); }
   }
@@ -193,81 +185,31 @@ class _MusicPanelState extends State<MusicPanel> {
       builder: (context,_){
         final ctrl=widget.controller;
         final showPicker=isSheetExpanded;
-        final showSlider=isSheetExpanded;
         return ListView(
           controller: widget.scrollController,
           padding: const EdgeInsets.fromLTRB(12,10,12,16),
           children: [
             Center(child: Container(width:42,height:5,decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)))),
             const SizedBox(height:10),
-            AnimatedCrossFade(
-              duration: const Duration(milliseconds:250),
-              firstChild: const SizedBox.shrink(),
-              secondChild: Container(
-                padding: const EdgeInsets.symmetric(horizontal:10,vertical:8),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.withOpacity(0.3))),
-                child: Row(children:[
-                  const Icon(Icons.music_note,color:Colors.amber,size:20),
-                  const SizedBox(width:8),
-                  Expanded(child: Text(ctrl.musicName, maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:13,fontWeight:FontWeight.bold))),
-                  if(ctrl.isLoading) const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.amber)),
-                  const SizedBox(width:8),
-                  InkWell(onTap: ctrl.pickMusic, child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.folder_open,color:Colors.black,size:22))),
-                ]),
-              ),
-              crossFadeState: showPicker ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            ),
+            AnimatedCrossFade(duration: const Duration(milliseconds:250), firstChild: const SizedBox.shrink(), secondChild: Container(padding: const EdgeInsets.symmetric(horizontal:10,vertical:8), decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(children:[const Icon(Icons.music_note,color:Colors.amber,size:20), const SizedBox(width:8), Expanded(child: Text(ctrl.musicName, maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:13,fontWeight:FontWeight.bold))), if(ctrl.isLoading) const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.amber)), const SizedBox(width:8), InkWell(onTap: ctrl.pickMusic, child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.folder_open,color:Colors.black,size:22)))]),), crossFadeState: showPicker ? CrossFadeState.showSecond : CrossFadeState.showFirst),
             if(ctrl.errorMessage!=null) Padding(padding: const EdgeInsets.only(top:6), child: Text(ctrl.errorMessage!, style: const TextStyle(color:Colors.redAccent,fontSize:11))),
             const SizedBox(height:10),
             InkWell(onTap: _editTitle, child: Container(width:double.infinity, padding: const EdgeInsets.symmetric(horizontal:10,vertical:6), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.14), borderRadius: BorderRadius.circular(8)), child: Row(children:[const Icon(Icons.edit,size:14,color:Colors.amber), const SizedBox(width:6), Expanded(child: RunningText(text: ctrl.editableTitle))]))),
             const SizedBox(height:8),
             Container(height:52, decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ctrl.selectedMusicFile==null ? const Center(child: Text('Waveform / Equalizer', style: TextStyle(color:Colors.white24,fontSize:11))) : AudioFileWaveforms(size: Size(MediaQuery.of(context).size.width-24,52), playerController: ctrl.waveformController, enableSeekGesture:true, waveformType: WaveformType.fitWidth, playerWaveStyle: const PlayerWaveStyle(fixedWaveColor:Colors.white24,liveWaveColor:Colors.amber,spacing:3,waveThickness:2))),
             const SizedBox(height:8),
-            GestureDetector(
-              onTap: ()=>setState(()=>lyricExpanded=!lyricExpanded),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds:250),
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                child: lyricExpanded
-                  ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: ctrl.lyricLines.asMap().entries.map((e){
-                      final isActive = e.key==ctrl.currentLyricIndex;
-                      return AnimatedContainer(duration: const Duration(milliseconds:200), padding: const EdgeInsets.symmetric(vertical:2), child: Text(e.value, style: TextStyle(color: isActive?Colors.amber:Colors.white54, fontSize: isActive?14:12, fontWeight: isActive?FontWeight.bold:FontWeight.normal)));
-                    }).toList())
-                  : RunningText(text: ctrl.lyricLines.isNotEmpty ? ctrl.lyricLines[ctrl.currentLyricIndex] : '', color: Colors.white70),
-              ),
-            ),
+            GestureDetector(onTap: ()=>setState(()=>lyricExpanded=!lyricExpanded), child: AnimatedContainer(duration: const Duration(milliseconds:250), width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: lyricExpanded ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: ctrl.lyricLines.asMap().entries.map((e){ final isActive = e.key==ctrl.currentLyricIndex; return AnimatedContainer(duration: const Duration(milliseconds:200), padding: const EdgeInsets.symmetric(vertical:2), child: Text(e.value, style: TextStyle(color: isActive?Colors.amber:Colors.white54, fontSize: isActive?14:12, fontWeight: isActive?FontWeight.bold:FontWeight.normal))); }).toList()) : RunningText(text: ctrl.lyricLines.isNotEmpty ? ctrl.lyricLines[ctrl.currentLyricIndex] : '', color: Colors.white70),)),
             const SizedBox(height:12),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[
               Container(decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle), child: IconButton(onPressed: ctrl.togglePlay, icon: const Icon(Icons.play_arrow_rounded,color:Colors.black,size:36))),
-              GestureDetector(
-                onTap: ctrl.isRecording ? ctrl.stopRecord : ctrl.startRecord,
-                child: Container(padding: const EdgeInsets.symmetric(horizontal:14,vertical:8), decoration: BoxDecoration(color: ctrl.isRecording?Colors.red:Colors.white12, borderRadius: BorderRadius.circular(20)), child: Row(children:[Icon(ctrl.isRecording?Icons.stop:Icons.fiber_manual_record, color: ctrl.isRecording?Colors.white:Colors.red, size:16), const SizedBox(width:6), Text(ctrl.isRecording?'${ctrl.recordSeconds}s / 60s':'REC', style: TextStyle(color: ctrl.isRecording?Colors.white:Colors.white70,fontSize:12,fontWeight:FontWeight.bold))])),
+              GestureDetector(onTap: ctrl.isRecording ? ctrl.stopRecord : ctrl.startRecord, child: Container(padding: const EdgeInsets.symmetric(horizontal:14,vertical:8), decoration: BoxDecoration(color: ctrl.isRecording?Colors.red:Colors.white12, borderRadius: BorderRadius.circular(20)), child: Row(children:[Icon(ctrl.isRecording?Icons.stop:Icons.fiber_manual_record, color: ctrl.isRecording?Colors.white:Colors.red, size:16), const SizedBox(width:6), Text(ctrl.isRecording?'${ctrl.recordSeconds}s / 60s':'REC', style: TextStyle(color: ctrl.isRecording?Colors.white:Colors.white70,fontSize:12,fontWeight:FontWeight.bold))])),
               ),
               Container(decoration: BoxDecoration(color: Colors.white12, shape: BoxShape.circle, border: Border.all(color: Colors.white24)), child: IconButton(onPressed: () async { if(ctrl.audioPlayer.playing){ await ctrl.audioPlayer.pause(); try{await ctrl.waveformController.pausePlayer();}catch(_){} } }, icon: const Icon(Icons.pause_rounded,color:Colors.white,size:32))),
             ]),
             const SizedBox(height:10),
-            AnimatedCrossFade(
-              duration: const Duration(milliseconds:250),
-              firstChild: const SizedBox.shrink(),
-              secondChild: Column(children:[
-                SliderTheme(data: SliderTheme.of(context).copyWith(trackHeight:3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius:8)), child: Slider(value: ctrl.val(), min:0, max:ctrl.max(), activeColor:Colors.amber, inactiveColor:Colors.white24, onChanged: ctrl.duration==Duration.zero?null:(v)=>ctrl.seekTo(Duration(milliseconds:v.toInt())))),
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[Text(ctrl.fmt(ctrl.position),style: const TextStyle(color:Colors.white60,fontSize:11)), Text(ctrl.fmt(ctrl.duration),style: const TextStyle(color:Colors.white60,fontSize:11))]),
-              ]),
-              crossFadeState: showSlider ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-            ),
+            AnimatedCrossFade(duration: const Duration(milliseconds:250), firstChild: const SizedBox.shrink(), secondChild: Column(children:[SliderTheme(data: SliderTheme.of(context).copyWith(trackHeight:3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius:8)), child: Slider(value: ctrl.val(), min:0, max:ctrl.max(), activeColor:Colors.amber, inactiveColor:Colors.white24, onChanged: ctrl.duration==Duration.zero?null:(v)=>ctrl.seekTo(Duration(milliseconds:v.toInt())))), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[Text(ctrl.fmt(ctrl.position),style: const TextStyle(color:Colors.white60,fontSize:11)), Text(ctrl.fmt(ctrl.duration),style: const TextStyle(color:Colors.white60,fontSize:11))]),]), crossFadeState: showPicker ? CrossFadeState.showSecond : CrossFadeState.showFirst),
             const SizedBox(height:12),
-            if(ctrl.recordedPath!=null)
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: Colors.green.withOpacity(0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.3))),
-                child: Column(children:[
-                  Row(children:[const Icon(Icons.check_circle,color:Colors.green,size:18), const SizedBox(width:6), Expanded(child: Text('Video: ${ctrl.recordedPath!.split('/').last}', maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:11)))]),
-                  const SizedBox(height:8),
-                  SizedBox(width:double.infinity, child: ElevatedButton.icon(onPressed: ctrl.shareToWhatsApp, icon: const Icon(Icons.share,color:Colors.white,size:18), label: const Text('Preview & Share ke WhatsApp 1 menit', style: TextStyle(fontSize:13)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
-                ]),
-              ),
+            if(ctrl.recordedPath!=null) Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.green.withOpacity(0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.3))), child: Column(children:[Row(children:[const Icon(Icons.check_circle,color:Colors.green,size:18), const SizedBox(width:6), Expanded(child: Text('Video: ${ctrl.recordedPath!.split('/').last}', maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:11)))]), const SizedBox(height:8), SizedBox(width:double.infinity, child: ElevatedButton.icon(onPressed: ctrl.shareToWhatsApp, icon: const Icon(Icons.share,color:Colors.white,size:18), label: const Text('Preview & Share ke WhatsApp 1 menit', style: TextStyle(fontSize:13)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),]),),
             const SizedBox(height:10),
             Center(child: Text(showPicker?'▼ Geser bawah hide':'▲ Geser atas untuk 📁 & slider & REC', style: const TextStyle(color:Colors.white24,fontSize:11))),
           ],
