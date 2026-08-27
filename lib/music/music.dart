@@ -7,8 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 
 class MusicController extends ChangeNotifier {
-  final ja.AudioPlayer audioPlayer =
-      ja.AudioPlayer();
+  final ja.AudioPlayer audioPlayer = ja.AudioPlayer();
 
   final PlayerController waveformController =
       PlayerController();
@@ -23,12 +22,8 @@ class MusicController extends ChangeNotifier {
   bool isLoading = false;
   String? errorMessage;
 
-  StreamSubscription<Duration>?
-      positionSubscription;
-
-  StreamSubscription<Duration?>?
-      durationSubscription;
-
+  StreamSubscription<Duration>? positionSubscription;
+  StreamSubscription<Duration?>? durationSubscription;
   StreamSubscription<ja.PlayerState>?
       playerStateSubscription;
 
@@ -67,7 +62,6 @@ class MusicController extends ChangeNotifier {
     );
   }
 
-
   Future<void> pickMusic() async {
     try {
       errorMessage = null;
@@ -91,15 +85,21 @@ class MusicController extends ChangeNotifier {
       musicName = result.files.single.name;
 
       isLoading = true;
+      position = Duration.zero;
+      duration = Duration.zero;
+      isPlaying = false;
       notifyListeners();
 
-      // Hentikan lagu sebelumnya.
+      // Hentikan audio sebelumnya.
       await audioPlayer.stop();
 
-      // Muat file musik lokal ke just_audio.
+      // Muat audio lokal.
       await audioPlayer.setFilePath(path);
 
-      // Buat waveform dari file audio.
+      duration =
+          audioPlayer.duration ?? Duration.zero;
+
+      // Buat waveform.
       try {
         await waveformController.preparePlayer(
           path: path,
@@ -108,116 +108,159 @@ class MusicController extends ChangeNotifier {
         );
 
         await waveformController.stopPlayer();
-      } catch (waveformError) {
-        // Jika waveform gagal, musik tetap bisa diputar.
+      } catch (error) {
         debugPrint(
-          'Waveform gagal dibuat: $waveformError',
+          'Waveform gagal dibuat: $error',
         );
-      }
 
-      position = Duration.zero;
-      duration =
-          audioPlayer.duration ?? Duration.zero;
+        // Musik tetap dapat diputar meskipun
+        // waveform gagal dibuat.
+      }
     } catch (error) {
       errorMessage = error.toString();
+      debugPrint('Pick music error: $error');
     } finally {
       isLoading = false;
       notifyListeners();
     }
   }
 
-Future<void> togglePlay() async {
-  if (selectedMusicFile == null) {
-    return;
-  }
-
-  try {
-    errorMessage = null;
-
-    if (audioPlayer.playing) {
-      await audioPlayer.pause();
-
-      try {
-        await waveformController.pausePlayer();
-      } catch (error) {
-        debugPrint(
-          'Waveform pause gagal: $error',
-        );
-      }
-    } else {
-      await audioPlayer.play();
-
-      try {
-        await waveformController.startPlayer();
-      } catch (error) {
-        debugPrint(
-          'Waveform start gagal: $error',
-        );
-      }
+  Future<void> togglePlay() async {
+    if (selectedMusicFile == null) {
+      return;
     }
-  } catch (error) {
-    errorMessage = error.toString();
-    notifyListeners();
-  }
-}
 
+    try {
+      errorMessage = null;
+
+      if (audioPlayer.playing) {
+        await audioPlayer.pause();
+
+        try {
+          await waveformController.pausePlayer();
+        } catch (error) {
+          debugPrint(
+            'Waveform pause gagal: $error',
+          );
+        }
+      } else {
+        await audioPlayer.play();
+
+        try {
+          await waveformController.startPlayer();
+        } catch (error) {
+          debugPrint(
+            'Waveform start gagal: $error',
+          );
+        }
+      }
+    } catch (error) {
+      errorMessage = error.toString();
+      debugPrint('Toggle play error: $error');
+      notifyListeners();
+    }
+  }
 
   Future<void> seekTo(Duration value) async {
-  if (duration == Duration.zero) {
-    return;
+    if (duration == Duration.zero) {
+      return;
+    }
+
+    Duration safeValue;
+
+    if (value < Duration.zero) {
+      safeValue = Duration.zero;
+    } else if (value > duration) {
+      safeValue = duration;
+    } else {
+      safeValue = value;
+    }
+
+    try {
+      // Seek audio utama.
+      await audioPlayer.seek(safeValue);
+    } catch (error) {
+      debugPrint(
+        'Audio seek gagal: $error',
+      );
+    }
+
+    try {
+      // audio_waveforms 2.0.2 membutuhkan int,
+      // bukan double progress.
+      await waveformController.seekTo(
+        safeValue.inMilliseconds,
+      );
+    } catch (error) {
+      debugPrint(
+        'Waveform seek gagal: $error',
+      );
+    }
+
+    position = safeValue;
+    notifyListeners();
   }
-
-  final Duration safeValue;
-
-  if (value < Duration.zero) {
-    safeValue = Duration.zero;
-  } else if (value > duration) {
-    safeValue = duration;
-  } else {
-    safeValue = value;
-  }
-
-  await audioPlayer.seek(safeValue);
-
-  try {
-    // audio_waveforms 2.0.2 menerima posisi integer
-    // dalam milidetik.
-    await waveformController.seekTo(
-      safeValue.inMilliseconds,
-    );
-  } catch (error) {
-    debugPrint(
-      'Waveform seek gagal: $error',
-    );
-  }
-
-  notifyListeners();
-}
-
 
   Future<void> stopMusic() async {
-  try {
-    await audioPlayer.stop();
-  } catch (error) {
-    debugPrint(
-      'Audio stop gagal: $error',
-    );
+    try {
+      await audioPlayer.stop();
+    } catch (error) {
+      debugPrint(
+        'Audio stop gagal: $error',
+      );
+    }
+
+    try {
+      await waveformController.stopPlayer();
+    } catch (error) {
+      debugPrint(
+        'Waveform stop gagal: $error',
+      );
+    }
+
+    position = Duration.zero;
+    isPlaying = false;
+
+    notifyListeners();
   }
 
-  try {
-    await waveformController.stopPlayer();
-  } catch (error) {
-    debugPrint(
-      'Waveform stop gagal: $error',
-    );
+  String formatDuration(Duration value) {
+    final String minutes = value.inMinutes
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+
+    final String seconds = value.inSeconds
+        .remainder(60)
+        .toString()
+        .padLeft(2, '0');
+
+    return '$minutes:$seconds';
   }
 
-  position = Duration.zero;
-  isPlaying = false;
+  double sliderMaximum() {
+    if (duration.inMilliseconds <= 0) {
+      return 1.0;
+    }
 
-  notifyListeners();
-}
+    return duration.inMilliseconds.toDouble();
+  }
 
+  double sliderValue() {
+    if (duration.inMilliseconds <= 0) {
+      return 0.0;
+    }
+
+    final double currentValue =
+        position.inMilliseconds.toDouble();
+
+    return currentValue
+        .clamp(
+          0.0,
+          duration.inMilliseconds.toDouble(),
+        )
+        .toDouble();
+  }
 
   @override
   void dispose() {
@@ -260,195 +303,12 @@ class MusicPanel extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.music_note,
-                    color: Colors.amber,
-                    size: 20.0,
-                  ),
-                  const SizedBox(width: 6.0),
-
-                  Expanded(
-                    child: Text(
-                      controller.musicName ??
-                          'Belum ada musik',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12.0,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-
-                  if (controller.isLoading)
-                    const SizedBox(
-                      width: 18.0,
-                      height: 18.0,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.0,
-                        color: Colors.amber,
-                      ),
-                    ),
-
-                  IconButton(
-                    onPressed: controller.isLoading
-                        ? null
-                        : controller.pickMusic,
-                    icon: const Icon(
-                      Icons.upload_file,
-                      color: Colors.amber,
-                    ),
-                    tooltip: 'Pilih musik',
-                  ),
-                ],
-              ),
-
-              if (controller.errorMessage != null)
-                Padding(
-                  padding:
-                      const EdgeInsets.only(bottom: 4.0),
-                  child: Text(
-                    controller.errorMessage!,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.redAccent,
-                      fontSize: 10.0,
-                    ),
-                  ),
-                ),
-
-              // Waveform musik.
-              SizedBox(
-                height: 38.0,
-                width: double.infinity,
-                child: controller.selectedMusicFile ==
-                        null
-                    ? const Center(
-                        child: Text(
-                          'Pilih file musik untuk membuat waveform',
-                          style: TextStyle(
-                            color: Colors.white38,
-                            fontSize: 10.0,
-                          ),
-                        ),
-                      )
-                    : AudioFileWaveforms(
-                        size: Size(
-                          MediaQuery.of(context).size.width,
-                          38.0,
-                        ),
-                        playerController:
-                            controller.waveformController,
-                        enableSeekGesture: true,
-                        waveformType:
-                            WaveformType.fitWidth,
-                        playerWaveStyle:
-                            const PlayerWaveStyle(
-                          fixedWaveColor:
-                              Colors.white24,
-                          liveWaveColor:
-                              Colors.amber,
-                          spacing: 3.0,
-                          waveThickness: 2.0,
-                        ),
-                      ),
-              ),
-
-              const SizedBox(height: 2.0),
-
-              // Slider posisi musik.
-              SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 2.0,
-                  thumbShape:
-                      const RoundSliderThumbShape(
-                    enabledThumbRadius: 5.0,
-                  ),
-                ),
-                child: Slider(
-                  value: _sliderValue(controller),
-                  min: 0.0,
-                  max: _sliderMax(controller),
-                  activeColor: Colors.amber,
-                  inactiveColor: Colors.white24,
-                  onChanged:
-                      controller.duration ==
-                              Duration.zero
-                          ? null
-                          : (double value) {
-                              controller.seekTo(
-                                Duration(
-                                  milliseconds:
-                                      value.toInt(),
-                                ),
-                              );
-                            },
-                ),
-              ),
-
-              Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    controller.formatDuration(
-                      controller.position,
-                    ),
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 10.0,
-                    ),
-                  ),
-                  Text(
-                    controller.formatDuration(
-                      controller.duration,
-                    ),
-                    style: const TextStyle(
-                      color: Colors.white60,
-                      fontSize: 10.0,
-                    ),
-                  ),
-                ],
-              ),
-
-              // Tombol kontrol.
-              Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    onPressed:
-                        controller.selectedMusicFile ==
-                                null
-                            ? null
-                            : controller.stopMusic,
-                    icon: const Icon(
-                      Icons.stop_circle,
-                      color: Colors.white70,
-                      size: 28.0,
-                    ),
-                  ),
-
-                  IconButton(
-                    onPressed:
-                        controller.selectedMusicFile ==
-                                null
-                            ? null
-                            : controller.togglePlay,
-                    icon: Icon(
-                      controller.isPlaying
-                          ? Icons.pause_circle
-                          : Icons.play_circle,
-                      color: Colors.amber,
-                      size: 44.0,
-                    ),
-                  ),
-                ],
-              ),
+              _buildHeader(),
+              _buildErrorMessage(),
+              _buildWaveform(context),
+              _buildSlider(),
+              _buildTimeLabels(),
+              _buildControlButtons(),
             ],
           ),
         );
@@ -456,30 +316,199 @@ class MusicPanel extends StatelessWidget {
     );
   }
 
-  double _sliderMax(
-    MusicController controller,
-  ) {
-    if (controller.duration.inMilliseconds <= 0) {
-      return 1.0;
-    }
-
-    return controller.duration.inMilliseconds
-        .toDouble();
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        const Icon(
+          Icons.music_note,
+          color: Colors.amber,
+          size: 20.0,
+        ),
+        const SizedBox(width: 6.0),
+        Expanded(
+          child: Text(
+            controller.musicName ??
+                'Belum ada musik',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12.0,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        if (controller.isLoading)
+          const SizedBox(
+            width: 18.0,
+            height: 18.0,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.0,
+              color: Colors.amber,
+            ),
+          ),
+        IconButton(
+          onPressed: controller.isLoading
+              ? null
+              : controller.pickMusic,
+          icon: const Icon(
+            Icons.upload_file,
+            color: Colors.amber,
+          ),
+          tooltip: 'Pilih musik',
+        ),
+      ],
+    );
   }
 
-  double _sliderValue(
-    MusicController controller,
-  ) {
-    if (controller.duration.inMilliseconds <= 0) {
-      return 0.0;
+  Widget _buildErrorMessage() {
+    if (controller.errorMessage == null) {
+      return const SizedBox.shrink();
     }
 
-    final double value =
-        controller.position.inMilliseconds.toDouble();
-
-    return value.clamp(
-      0.0,
-      controller.duration.inMilliseconds.toDouble(),
+    return Padding(
+      padding: const EdgeInsets.only(
+        bottom: 4.0,
+      ),
+      child: Text(
+        controller.errorMessage!,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Colors.redAccent,
+          fontSize: 10.0,
+        ),
+      ),
     );
+  }
+
+  Widget _buildWaveform(BuildContext context) {
+    return SizedBox(
+      height: 38.0,
+      width: double.infinity,
+      child: controller.selectedMusicFile == null
+          ? const Center(
+              child: Text(
+                'Pilih file musik untuk membuat waveform',
+                style: TextStyle(
+                  color: Colors.white38,
+                  fontSize: 10.0,
+                ),
+              ),
+            )
+          : AudioFileWaveforms(
+              size: Size(
+                MediaQuery.of(context).size.width,
+                38.0,
+              ),
+              playerController:
+                  controller.waveformController,
+              enableSeekGesture: true,
+              waveformType:
+                  WaveformType.fitWidth,
+              playerWaveStyle:
+                  const PlayerWaveStyle(
+                fixedWaveColor: Colors.white24,
+                liveWaveColor: Colors.amber,
+                spacing: 3.0,
+                waveThickness: 2.0,
+              ),
+            ),
+    );
+  }
+
+  Widget _buildSlider() {
+    return SliderTheme(
+      data: SliderTheme.of(_dummyContext()).copyWith(
+        trackHeight: 2.0,
+        thumbShape:
+            const RoundSliderThumbShape(
+          enabledThumbRadius: 5.0,
+        ),
+      ),
+      child: Slider(
+        value: controller.sliderValue(),
+        min: 0.0,
+        max: controller.sliderMaximum(),
+        activeColor: Colors.amber,
+        inactiveColor: Colors.white24,
+        onChanged: controller.duration ==
+                Duration.zero
+            ? null
+            : (double value) {
+                controller.seekTo(
+                  Duration(
+                    milliseconds: value.toInt(),
+                  ),
+                );
+              },
+      ),
+    );
+  }
+
+  Widget _buildTimeLabels() {
+    return Row(
+      mainAxisAlignment:
+          MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          controller.formatDuration(
+            controller.position,
+          ),
+          style: const TextStyle(
+            color: Colors.white60,
+            fontSize: 10.0,
+          ),
+        ),
+        Text(
+          controller.formatDuration(
+            controller.duration,
+          ),
+          style: const TextStyle(
+            color: Colors.white60,
+            fontSize: 10.0,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildControlButtons() {
+    return Row(
+      mainAxisAlignment:
+          MainAxisAlignment.center,
+      children: [
+        IconButton(
+          onPressed:
+              controller.selectedMusicFile == null
+                  ? null
+                  : controller.stopMusic,
+          icon: const Icon(
+            Icons.stop_circle,
+            color: Colors.white70,
+            size: 28.0,
+          ),
+        ),
+        IconButton(
+          onPressed:
+              controller.selectedMusicFile == null
+                  ? null
+                  : controller.togglePlay,
+          icon: Icon(
+            controller.isPlaying
+                ? Icons.pause_circle
+                : Icons.play_circle,
+            color: Colors.amber,
+            size: 44.0,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Context sederhana untuk SliderTheme.
+  // Tidak digunakan untuk membangun widget visual.
+  BuildContext _dummyContext() {
+    throw UnimplementedError();
   }
 }
