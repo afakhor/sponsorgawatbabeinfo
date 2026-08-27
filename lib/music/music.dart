@@ -136,11 +136,15 @@ class MusicController extends ChangeNotifier {
     position = Duration.zero; isPlaying = false; notifyListeners();
   }
 
-  Future<void> seekTo(Duration v) async {
-    final safe = v.clamp(Duration.zero, duration);
+    Future<void> seekTo(Duration v) async {
+    Duration safe = v;
+    if (safe < Duration.zero) safe = Duration.zero;
+    if (safe > duration) safe = duration;
+
     try { await audioPlayer.seek(safe); } catch (_) {}
     try { await waveformController.seekTo(safe.inMilliseconds); } catch (_) {}
-    position = safe; notifyListeners();
+    position = safe; 
+    notifyListeners();
   }
 
   String formatDuration(Duration v) => '${v.inMinutes.remainder(60).toString().padLeft(2,'0')}:${v.inSeconds.remainder(60).toString().padLeft(2,'0')}';
