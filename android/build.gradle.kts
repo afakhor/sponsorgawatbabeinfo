@@ -19,7 +19,6 @@ rootProject.layout.buildDirectory.value(newBuildDir)
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
-    project.evaluationDependsOn(":app")
 
     repositories {
         google()
@@ -40,25 +39,27 @@ subprojects {
         }
     }
 
-    // FIX UTAMA: PAKSA SEMUA JAVA JADI 17, BUKAN 1.8
-    tasks.withType<JavaCompile>().configureEach {
-        sourceCompatibility = JavaVersion.VERSION_17.toString()
-        targetCompatibility = JavaVersion.VERSION_17.toString()
-    }
-
-    tasks.withType<KotlinCompile>().configureEach {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    // PAKSA SEMUA JADI 17 SETELAH PACKAGE DI-EVALUATE (INI KUNCI BUAT audio_waveforms)
+    afterEvaluate {
+        tasks.withType<JavaCompile>().configureEach {
+            sourceCompatibility = JavaVersion.VERSION_17.toString()
+            targetCompatibility = JavaVersion.VERSION_17.toString()
         }
-    }
 
-    // FIX UNTUK audio_waveforms YANG MASIH SET 1.8 DI DALAMNYA
-    plugins.withId("com.android.library") {
-        extensions.configure<com.android.build.gradle.LibraryExtension> {
-            compileSdk = 36
-            compileOptions {
-                sourceCompatibility = JavaVersion.VERSION_17
-                targetCompatibility = JavaVersion.VERSION_17
+        tasks.withType<KotlinCompile>().configureEach {
+            compilerOptions {
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            }
+        }
+
+        // PAKSA JUGA ANDROID LIBRARY COMPILE OPTIONS
+        val androidExt = extensions.findByName("android")
+        if (androidExt is com.android.build.gradle.BaseExtension) {
+            androidExt.compileOptions.sourceCompatibility = JavaVersion.VERSION_17
+            androidExt.compileOptions.targetCompatibility = JavaVersion.VERSION_17
+            if (androidExt.namespace == null) {
+                val cleanName = project.name.replace("-", "_").replace(".", "_")
+                androidExt.namespace = "com.plugin.$cleanName"
             }
         }
     }
