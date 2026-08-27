@@ -48,7 +48,6 @@ class MusicController extends ChangeNotifier {
   MusicController(){
     audioPlayer.positionStream.listen((v){
       position=v;
-      // LYRIC MUNCUL PER KALIMAT FOLD IN OUT
       if(lyricLines.isNotEmpty && duration.inSeconds>2){
         int idx = ((v.inSeconds / duration.inSeconds) * lyricLines.length).floor();
         if(idx<0) idx=0;
@@ -121,11 +120,18 @@ class MusicController extends ChangeNotifier {
       await _req();
       final dir=await getTemporaryDirectory();
       isRecording=true; recordSeconds=0; recordedPath=null; notifyListeners();
-      await recorder.startRecordScreen(fileName: 'babe_${DateTime.now().millisecondsSinceEpoch}', dirPathToSave: dir.path, audioEnable: true);
+      // FIX: WAJIB KASIH height + width di v0.0.15
+      await recorder.startRecordScreen(
+        fileName: 'babe_${DateTime.now().millisecondsSinceEpoch}',
+        dirPathToSave: dir.path,
+        height: 1920,
+        width: 1080,
+        audioEnable: true,
+      );
       recordTimer?.cancel();
       recordTimer=Timer.periodic(const Duration(seconds:1), (t){
         recordSeconds++; notifyListeners();
-        if(recordSeconds>=60){ stopRecord(); } // 1 MENIT AUTO STOP
+        if(recordSeconds>=60){ stopRecord(); }
       });
     }catch(e){ isRecording=false; errorMessage='Record gagal: $e'; notifyListeners(); }
   }
@@ -133,11 +139,13 @@ class MusicController extends ChangeNotifier {
   Future<void> stopRecord() async {
     try{
       recordTimer?.cancel();
-      final result=await recorder.stopRecord();
+      final RecordOutput result = await recorder.stopRecord();
+      // FIX: result bukan Map, tapi object RecordOutput
       isRecording=false;
-      recordedPath=result['file'] as String?;
+      recordedPath = result.file?.path;
+      if(recordedPath==null){ errorMessage='File record null: ${result.eventName}'; }
       notifyListeners();
-    }catch(e){ isRecording=false; notifyListeners(); }
+    }catch(e){ isRecording=false; errorMessage='Stop gagal: $e'; notifyListeners(); }
   }
 
   Future<void> shareToWhatsApp() async {
@@ -192,7 +200,6 @@ class _MusicPanelState extends State<MusicPanel> {
           children: [
             Center(child: Container(width:42,height:5,decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)))),
             const SizedBox(height:10),
-
             AnimatedCrossFade(
               duration: const Duration(milliseconds:250),
               firstChild: const SizedBox.shrink(),
@@ -211,13 +218,10 @@ class _MusicPanelState extends State<MusicPanel> {
               crossFadeState: showPicker ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             ),
             if(ctrl.errorMessage!=null) Padding(padding: const EdgeInsets.only(top:6), child: Text(ctrl.errorMessage!, style: const TextStyle(color:Colors.redAccent,fontSize:11))),
-
             const SizedBox(height:10),
             InkWell(onTap: _editTitle, child: Container(width:double.infinity, padding: const EdgeInsets.symmetric(horizontal:10,vertical:6), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.14), borderRadius: BorderRadius.circular(8)), child: Row(children:[const Icon(Icons.edit,size:14,color:Colors.amber), const SizedBox(width:6), Expanded(child: RunningText(text: ctrl.editableTitle))]))),
-
             const SizedBox(height:8),
             Container(height:52, decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ctrl.selectedMusicFile==null ? const Center(child: Text('Waveform / Equalizer', style: TextStyle(color:Colors.white24,fontSize:11))) : AudioFileWaveforms(size: Size(MediaQuery.of(context).size.width-24,52), playerController: ctrl.waveformController, enableSeekGesture:true, waveformType: WaveformType.fitWidth, playerWaveStyle: const PlayerWaveStyle(fixedWaveColor:Colors.white24,liveWaveColor:Colors.amber,spacing:3,waveThickness:2))),
-
             const SizedBox(height:8),
             GestureDetector(
               onTap: ()=>setState(()=>lyricExpanded=!lyricExpanded),
@@ -234,9 +238,6 @@ class _MusicPanelState extends State<MusicPanel> {
                   : RunningText(text: ctrl.lyricLines.isNotEmpty ? ctrl.lyricLines[ctrl.currentLyricIndex] : '', color: Colors.white70),
               ),
             ),
-            const SizedBox(height:4),
-            Center(child: Text(lyricExpanded?'Tap lyric fold in':'Tap lyric fold out per kalimat', style: const TextStyle(color:Colors.white24,fontSize:10))),
-
             const SizedBox(height:12),
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[
               Container(decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle), child: IconButton(onPressed: ctrl.togglePlay, icon: const Icon(Icons.play_arrow_rounded,color:Colors.black,size:36))),
@@ -246,7 +247,6 @@ class _MusicPanelState extends State<MusicPanel> {
               ),
               Container(decoration: BoxDecoration(color: Colors.white12, shape: BoxShape.circle, border: Border.all(color: Colors.white24)), child: IconButton(onPressed: () async { if(ctrl.audioPlayer.playing){ await ctrl.audioPlayer.pause(); try{await ctrl.waveformController.pausePlayer();}catch(_){} } }, icon: const Icon(Icons.pause_rounded,color:Colors.white,size:32))),
             ]),
-
             const SizedBox(height:10),
             AnimatedCrossFade(
               duration: const Duration(milliseconds:250),
@@ -257,7 +257,6 @@ class _MusicPanelState extends State<MusicPanel> {
               ]),
               crossFadeState: showSlider ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             ),
-
             const SizedBox(height:12),
             if(ctrl.recordedPath!=null)
               Container(
@@ -269,9 +268,8 @@ class _MusicPanelState extends State<MusicPanel> {
                   SizedBox(width:double.infinity, child: ElevatedButton.icon(onPressed: ctrl.shareToWhatsApp, icon: const Icon(Icons.share,color:Colors.white,size:18), label: const Text('Preview & Share ke WhatsApp 1 menit', style: TextStyle(fontSize:13)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
                 ]),
               ),
-
             const SizedBox(height:10),
-            Center(child: Text(showPicker?'▼ Geser bawah hide 📁 & slider':'▲ Geser atas untuk 📁 & slider & REC', style: const TextStyle(color:Colors.white24,fontSize:11))),
+            Center(child: Text(showPicker?'▼ Geser bawah hide':'▲ Geser atas untuk 📁 & slider & REC', style: const TextStyle(color:Colors.white24,fontSize:11))),
           ],
         );
       },
