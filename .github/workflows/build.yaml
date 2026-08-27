@@ -25,11 +25,11 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Accept Licenses & Install NDK + CMake + SDK 36
+      - name: Accept Licenses & Install NDK 28 + SDK 36
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.0.12077973" "platforms;android-36" "cmake;3.22.1" "cmake;3.31.4" "build-tools;36.0.0" || true
-          ls $ANDROID_HOME/cmake/ || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;28.2.13676358" "platforms;android-36" "platforms;android-33" "build-tools;36.0.0" "cmake;3.22.1" || true
+          ls $ANDROID_HOME/ndk/ || true
 
       - name: Fix Gradle Wrapper URL
         run: |
@@ -49,12 +49,42 @@ jobs:
           flutter clean
           flutter pub get
 
-      - name: Build APK - Blackhole Gawat
-        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation
+      - name: Buat patch HD 1080p + Audio
+        run: |
+          cat > android/patch_hd.sh << 'EOS'
+          #!/bin/bash
+          echo "Patching flutter_screen_recording for HD + Audio..."
+          FILE=$(find $HOME/.pub-cache -path "*flutter_screen_recording-2.0.25/android/src/main/java/com/foregroundservice/RecordService.java" | head -1)
+          if [ -f "$FILE" ]; then
+            echo "Found: $FILE"
+            # Naikin bitrate 5Mbps -> 12Mbps biar HD gak burik pas upload WA
+            sed -i 's/setVideoEncodingBitRate.*/setVideoEncodingBitRate(12000000);/' "$FILE" || true
+            sed -i 's/VIDEO_BITRATE.*/VIDEO_BITRATE = 12000000;/' "$FILE" || true
+            # Frame 30fps
+            sed -i 's/setVideoFrameRate.*/setVideoFrameRate(30);/' "$FILE" || true
+            # Paksa 1080p kalau ada setVideoSize
+            sed -i 's/setVideoSize.*/setVideoSize(1080, 1920);/' "$FILE" || true
+            cat "$FILE" | grep -E "BitRate|FrameRate|VideoSize"
+            echo "Patched to 1080p HD 12Mbps"
+          else
+            echo "RecordService.java not found, skip patch HD"
+          fi
+          # Pastikan permission RECORD_AUDIO ada
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if ! grep -q "RECORD_AUDIO" "$MANIFEST"; then
+            echo "Adding RECORD_AUDIO permission..."
+            sed -i '/<uses-permission android:name="android.permission.INTERNET/a \    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />' "$MANIFEST"
+          fi
+          EOS
+          chmod +x android/patch_hd.sh
+          bash android/patch_hd.sh
+
+      - name: Build APK - Blackhole Gawat HD Bersuara
+        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation --no-tree-shake-icons
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BABE-INFO-Blackhole-APK-${{ github.run_number }}
+          name: BABE-INFO-Blackhole-HD-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/*.apk
           retention-days: 30
