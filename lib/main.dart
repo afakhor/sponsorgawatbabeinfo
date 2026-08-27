@@ -210,10 +210,10 @@ class _SponsorBabePageState
         child: Column(
           children: [
             // =========================================
-            // AREA SHADER: 4 BAGIAN
+            // AREA SHADER: 3 BAGIAN
             // =========================================
             Expanded(
-              flex: 4,
+              flex: 3,
               child: SizedBox.expand(
                 child: GlobeShaderWidget(
                   program: program,
