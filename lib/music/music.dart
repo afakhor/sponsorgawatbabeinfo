@@ -4,6 +4,7 @@ import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screen_recording/flutter_screen_recording.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:path_provider/path_provider.dart';
@@ -117,27 +118,42 @@ class MusicController extends ChangeNotifier {
   Future<void> startRecord() async {
     try{
       await _req();
+      // FIX UTAMA: SEMBUNYIKAN JAM,SINYAL,BATERAI BIAR GAK KE-RECORD
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      
       final dir=await getTemporaryDirectory();
       isRecording=true; recordSeconds=0; recordedPath=null; notifyListeners();
       final fileName='babe_${DateTime.now().millisecondsSinceEpoch}';
-      // API BARU - gak butuh height
       await FlutterScreenRecording.startRecordScreen(fileName, dirPath: dir.path, audioEnable: true);
       recordTimer?.cancel();
       recordTimer=Timer.periodic(const Duration(seconds:1), (t){
         recordSeconds++; notifyListeners();
         if(recordSeconds>=60) stopRecord();
       });
-    }catch(e){ isRecording=false; errorMessage='Record gagal: $e'; notifyListeners(); }
+    }catch(e){
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      isRecording=false; errorMessage='Record gagal: $e'; notifyListeners();
+    }
   }
 
   Future<void> stopRecord() async {
     try{
       recordTimer?.cancel();
-      // API BARU - return String path langsung
       recordedPath = await FlutterScreenRecording.stopRecordScreen;
       isRecording=false;
+      // BALIKIN SYSTEM UI BIAR JAM MUNCUL LAGI
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.black,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ));
       notifyListeners();
-    }catch(e){ isRecording=false; errorMessage='Stop gagal: $e'; notifyListeners(); }
+    }catch(e){
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      isRecording=false; errorMessage='Stop gagal: $e'; notifyListeners();
+    }
   }
 
   Future<void> shareToWhatsApp() async {
