@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:ed_screen_recorder/ed_screen_recorder.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:share_plus/share_plus.dart';
 
 class RunningText extends StatefulWidget {
   final String text;
@@ -29,16 +31,32 @@ class _RunningTextState extends State<RunningText> with SingleTickerProviderStat
 class MusicController extends ChangeNotifier {
   final ja.AudioPlayer audioPlayer=ja.AudioPlayer();
   final PlayerController waveformController=PlayerController();
+  final EdScreenRecorder recorder=EdScreenRecorder();
+
   File? selectedMusicFile;
   String musicName='Belum ada musik';
   String editableTitle='SPONSOR BABE INFO GAWAT • TAP UNTUK EDIT JUDUL';
-  String lyricText='Lyric akan muncul di sini...\nTap lyric untuk fold in/out\nGeser ke atas untuk pilih lagu & slider detik';
+  List<String> lyricLines=['Tap lyric untuk fold in/out','Geser atas untuk pilih lagu 📁','Putar musik untuk lyric per kalimat muncul'];
+  int currentLyricIndex=0;
   Duration position=Duration.zero, duration=Duration.zero;
-  bool isPlaying=false, isLoading=false;
+  bool isPlaying=false, isLoading=false, isRecording=false;
   String? errorMessage;
+  String? recordedPath;
+  Timer? recordTimer;
+  int recordSeconds=0;
 
   MusicController(){
-    audioPlayer.positionStream.listen((v){ position=v; notifyListeners(); });
+    audioPlayer.positionStream.listen((v){
+      position=v;
+      // LYRIC MUNCUL PER KALIMAT FOLD IN OUT
+      if(lyricLines.isNotEmpty && duration.inSeconds>2){
+        int idx = ((v.inSeconds / duration.inSeconds) * lyricLines.length).floor();
+        if(idx<0) idx=0;
+        if(idx>=lyricLines.length) idx=lyricLines.length-1;
+        if(idx!=currentLyricIndex){ currentLyricIndex=idx; }
+      }
+      notifyListeners();
+    });
     audioPlayer.durationStream.listen((v){ if(v!=null){ duration=v; notifyListeners(); }});
     audioPlayer.playerStateStream.listen((s){
       isPlaying=s.playing;
@@ -47,15 +65,17 @@ class MusicController extends ChangeNotifier {
     });
     audioPlayer.setVolume(1.0);
   }
-  Future<bool> _req() async {
-    if(!Platform.isAndroid) return true;
-    final sdk=(await DeviceInfoPlugin().androidInfo).version.sdkInt;
-    if(sdk>=33) return (await Permission.audio.request()).isGranted;
-    return (await Permission.storage.request()).isGranted;
+
+  Future<void> _req() async {
+    if(!Platform.isAndroid) return;
+    await Permission.storage.request();
+    await Permission.audio.request();
+    await Permission.microphone.request();
   }
+
   Future<void> pickMusic() async {
     try{
-      if(!await _req()){ errorMessage='Izin audio ditolak'; notifyListeners(); return; }
+      await _req();
       final res=await FilePicker.platform.pickFiles(type: FileType.audio, withData:true);
       if(res==null||res.files.isEmpty) return;
       final p=res.files.single;
@@ -70,7 +90,8 @@ class MusicController extends ChangeNotifier {
       selectedMusicFile=File(path);
       musicName=p.name;
       editableTitle=musicName!;
-      lyricText='Memutar: $musicName\n\n[00:05] Babe info gawat jalan...\n[00:12] Lyric demo bisa panjang...';
+      lyricLines=['Memutar: $musicName','Babe Info Gawat di angkasa','Globe berputar musik berdentum','Wave naik turun ikuti beat','Share ke WhatsApp Status sekarang'];
+      currentLyricIndex=0;
       isLoading=true; notifyListeners();
       await audioPlayer.stop(); try{await waveformController.stopPlayer();}catch(_){}
       await audioPlayer.setAudioSource(ja.AudioSource.file(path));
@@ -79,21 +100,60 @@ class MusicController extends ChangeNotifier {
     }catch(e){ errorMessage='Gagal: $e'; }
     finally{ isLoading=false; notifyListeners(); }
   }
+
   Future<void> togglePlay() async {
     if(selectedMusicFile==null){ errorMessage='Geser atas untuk pilih lagu 📁'; notifyListeners(); return; }
     if(audioPlayer.playing){ await audioPlayer.pause(); try{await waveformController.pausePlayer();}catch(_){} }
     else { await audioPlayer.play(); try{await waveformController.startPlayer();}catch(_){} }
   }
-  Future<void> stopMusic() async { try{await audioPlayer.stop();}catch(_){} try{await waveformController.stopPlayer();}catch(_){} position=Duration.zero; isPlaying=false; notifyListeners(); }
+
   Future<void> seekTo(Duration v) async {
-    Duration safe=v; if(safe<Duration.zero) safe=Duration.zero; if(safe>duration) safe=duration;
-    try{await audioPlayer.seek(safe);}catch(_){} try{await waveformController.seekTo(safe.inMilliseconds);}catch(_){}
+    Duration safe=v;
+    if(safe<Duration.zero) safe=Duration.zero;
+    if(safe>duration) safe=duration;
+    try{await audioPlayer.seek(safe);}catch(_){}
+    try{await waveformController.seekTo(safe.inMilliseconds);}catch(_){}
     position=safe; notifyListeners();
   }
+
+  Future<void> startRecord() async {
+    try{
+      await _req();
+      final dir=await getTemporaryDirectory();
+      isRecording=true; recordSeconds=0; recordedPath=null; notifyListeners();
+      await recorder.startRecordScreen(fileName: 'babe_${DateTime.now().millisecondsSinceEpoch}', dirPathToSave: dir.path, audioEnable: true);
+      recordTimer?.cancel();
+      recordTimer=Timer.periodic(const Duration(seconds:1), (t){
+        recordSeconds++; notifyListeners();
+        if(recordSeconds>=60){ stopRecord(); } // 1 MENIT AUTO STOP
+      });
+    }catch(e){ isRecording=false; errorMessage='Record gagal: $e'; notifyListeners(); }
+  }
+
+  Future<void> stopRecord() async {
+    try{
+      recordTimer?.cancel();
+      final result=await recorder.stopRecord();
+      isRecording=false;
+      recordedPath=result['file'] as String?;
+      notifyListeners();
+    }catch(e){ isRecording=false; notifyListeners(); }
+  }
+
+  Future<void> shareToWhatsApp() async {
+    if(recordedPath==null || !File(recordedPath!).existsSync()){ errorMessage='Belum ada video record'; notifyListeners(); return; }
+    await Share.shareXFiles([XFile(recordedPath!)], text: editableTitle);
+  }
+
   String fmt(Duration v)=>'${v.inMinutes.remainder(60).toString().padLeft(2,'0')}:${v.inSeconds.remainder(60).toString().padLeft(2,'0')}';
   double max()=>duration.inMilliseconds<=0?1.0:duration.inMilliseconds.toDouble();
-  double val(){ if(duration.inMilliseconds<=0) return 0; double c=position.inMilliseconds.toDouble(); double m=duration.inMilliseconds.toDouble(); if(c<0) return 0; if(c>m) return m; return c; }
-  @override void dispose(){ audioPlayer.dispose(); waveformController.dispose(); super.dispose(); }
+  double val(){
+    if(duration.inMilliseconds<=0) return 0;
+    double c=position.inMilliseconds.toDouble();
+    double m=duration.inMilliseconds.toDouble();
+    if(c<0) return 0; if(c>m) return m; return c;
+  }
+  @override void dispose(){ recordTimer?.cancel(); audioPlayer.dispose(); waveformController.dispose(); super.dispose(); }
 }
 
 class MusicPanel extends StatefulWidget {
@@ -109,18 +169,17 @@ class _MusicPanelState extends State<MusicPanel> {
   bool get isSheetExpanded => widget.sheetController.isAttached ? widget.sheetController.size >= 0.6 : false;
 
   void _editTitle() async {
-    final c = TextEditingController(text: widget.controller.editableTitle);
-    final result = await showDialog<String>(context: context, builder: (ctx)=>AlertDialog(
+    final c=TextEditingController(text: widget.controller.editableTitle);
+    final result=await showDialog<String>(context: context, builder: (ctx)=>AlertDialog(
       backgroundColor: const Color(0xFF1E1E24),
       title: const Text('Edit Judul Running Text', style: TextStyle(color:Colors.white,fontSize:14)),
-      content: TextField(controller:c, style: const TextStyle(color:Colors.white,fontSize:14), autofocus:true, decoration: const InputDecoration(hintText:'Judul lagu', hintStyle:TextStyle(color:Colors.white38))),
+      content: TextField(controller:c, style: const TextStyle(color:Colors.white,fontSize:14), autofocus:true),
       actions: [TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text('Batal')), TextButton(onPressed: ()=>Navigator.pop(ctx,c.text), child: const Text('Simpan', style:TextStyle(color:Colors.amber)))],
     ));
     if(result!=null && result.isNotEmpty){ widget.controller.editableTitle=result; widget.controller.notifyListeners(); }
   }
 
-  @override
-  Widget build(BuildContext context) {
+  @override Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context,_){
@@ -134,7 +193,6 @@ class _MusicPanelState extends State<MusicPanel> {
             Center(child: Container(width:42,height:5,decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)))),
             const SizedBox(height:10),
 
-            // FOLDER PICKER - AUTO HIDE, GESER BAWAH HILANG, GESER ATAS MUNCUL
             AnimatedCrossFade(
               duration: const Duration(milliseconds:250),
               firstChild: const SizedBox.shrink(),
@@ -147,7 +205,7 @@ class _MusicPanelState extends State<MusicPanel> {
                   Expanded(child: Text(ctrl.musicName, maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:13,fontWeight:FontWeight.bold))),
                   if(ctrl.isLoading) const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.amber)),
                   const SizedBox(width:8),
-                  InkWell(onTap: ctrl.pickMusic, borderRadius: BorderRadius.circular(8), child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.folder_open,color:Colors.black,size:22))),
+                  InkWell(onTap: ctrl.pickMusic, child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.folder_open,color:Colors.black,size:22))),
                 ]),
               ),
               crossFadeState: showPicker ? CrossFadeState.showSecond : CrossFadeState.showFirst,
@@ -155,53 +213,41 @@ class _MusicPanelState extends State<MusicPanel> {
             if(ctrl.errorMessage!=null) Padding(padding: const EdgeInsets.only(top:6), child: Text(ctrl.errorMessage!, style: const TextStyle(color:Colors.redAccent,fontSize:11))),
 
             const SizedBox(height:10),
-            // 1 RUNNING TEXT JUDUL BISA EDIT
-            InkWell(
-              onTap: _editTitle,
-              child: Container(width:double.infinity, padding: const EdgeInsets.symmetric(horizontal:10,vertical:6), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.14), borderRadius: BorderRadius.circular(8)),
-                child: Row(children:[
-                  const Icon(Icons.edit,size:14,color:Colors.amber),
-                  const SizedBox(width:6),
-                  Expanded(child: RunningText(text: ctrl.editableTitle)),
-                ]),
-              ),
-            ),
+            InkWell(onTap: _editTitle, child: Container(width:double.infinity, padding: const EdgeInsets.symmetric(horizontal:10,vertical:6), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.14), borderRadius: BorderRadius.circular(8)), child: Row(children:[const Icon(Icons.edit,size:14,color:Colors.amber), const SizedBox(width:6), Expanded(child: RunningText(text: ctrl.editableTitle))]))),
 
             const SizedBox(height:8),
-            // WAVE / EQUALIZER
-            Container(height:52, decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ctrl.selectedMusicFile==null ? const Center(child: Text('Waveform / Equalizer akan muncul di sini', style: TextStyle(color:Colors.white24,fontSize:11))) : AudioFileWaveforms(size: Size(MediaQuery.of(context).size.width-24,52), playerController: ctrl.waveformController, enableSeekGesture:true, waveformType: WaveformType.fitWidth, playerWaveStyle: const PlayerWaveStyle(fixedWaveColor:Colors.white24,liveWaveColor:Colors.amber,spacing:3,waveThickness:2))),
+            Container(height:52, decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ctrl.selectedMusicFile==null ? const Center(child: Text('Waveform / Equalizer', style: TextStyle(color:Colors.white24,fontSize:11))) : AudioFileWaveforms(size: Size(MediaQuery.of(context).size.width-24,52), playerController: ctrl.waveformController, enableSeekGesture:true, waveformType: WaveformType.fitWidth, playerWaveStyle: const PlayerWaveStyle(fixedWaveColor:Colors.white24,liveWaveColor:Colors.amber,spacing:3,waveThickness:2))),
 
             const SizedBox(height:8),
-            // 1 LYRIC FOLD IN/OUT
             GestureDetector(
               onTap: ()=>setState(()=>lyricExpanded=!lyricExpanded),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds:250),
                 width: double.infinity,
-                constraints: BoxConstraints(minHeight: lyricExpanded? 70 : 36, maxHeight: lyricExpanded? 140 : 36),
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                child: lyricExpanded 
-                  ? SingleChildScrollView(child: Text(ctrl.lyricText, style: const TextStyle(color:Colors.white70,fontSize:14,height:1.4)))
-                  : RunningText(text: ctrl.lyricText.replaceAll('\n',' • '), color: Colors.white70),
+                child: lyricExpanded
+                  ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: ctrl.lyricLines.asMap().entries.map((e){
+                      final isActive = e.key==ctrl.currentLyricIndex;
+                      return AnimatedContainer(duration: const Duration(milliseconds:200), padding: const EdgeInsets.symmetric(vertical:2), child: Text(e.value, style: TextStyle(color: isActive?Colors.amber:Colors.white54, fontSize: isActive?14:12, fontWeight: isActive?FontWeight.bold:FontWeight.normal)));
+                    }).toList())
+                  : RunningText(text: ctrl.lyricLines.isNotEmpty ? ctrl.lyricLines[ctrl.currentLyricIndex] : '', color: Colors.white70),
               ),
             ),
             const SizedBox(height:4),
-            Center(child: Text(lyricExpanded?'Tap lyric untuk fold in':'Tap lyric untuk fold out', style: const TextStyle(color:Colors.white24,fontSize:10))),
+            Center(child: Text(lyricExpanded?'Tap lyric fold in':'Tap lyric fold out per kalimat', style: const TextStyle(color:Colors.white24,fontSize:10))),
 
             const SizedBox(height:12),
-            // PLAY KIRI, PAUSE KANAN
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[
-              // KIRI - PLAY
               Container(decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle), child: IconButton(onPressed: ctrl.togglePlay, icon: const Icon(Icons.play_arrow_rounded,color:Colors.black,size:36))),
-              // TENGAH STATUS
-              Column(children:[Text(ctrl.isPlaying?'PLAYING':'PAUSED', style: TextStyle(color: ctrl.isPlaying?Colors.amber:Colors.white38,fontSize:11,fontWeight:FontWeight.bold)), Text(ctrl.fmt(ctrl.position), style: const TextStyle(color:Colors.white60,fontSize:11))]),
-              // KANAN - PAUSE
+              GestureDetector(
+                onTap: ctrl.isRecording ? ctrl.stopRecord : ctrl.startRecord,
+                child: Container(padding: const EdgeInsets.symmetric(horizontal:14,vertical:8), decoration: BoxDecoration(color: ctrl.isRecording?Colors.red:Colors.white12, borderRadius: BorderRadius.circular(20)), child: Row(children:[Icon(ctrl.isRecording?Icons.stop:Icons.fiber_manual_record, color: ctrl.isRecording?Colors.white:Colors.red, size:16), const SizedBox(width:6), Text(ctrl.isRecording?'${ctrl.recordSeconds}s / 60s':'REC', style: TextStyle(color: ctrl.isRecording?Colors.white:Colors.white70,fontSize:12,fontWeight:FontWeight.bold))])),
+              ),
               Container(decoration: BoxDecoration(color: Colors.white12, shape: BoxShape.circle, border: Border.all(color: Colors.white24)), child: IconButton(onPressed: () async { if(ctrl.audioPlayer.playing){ await ctrl.audioPlayer.pause(); try{await ctrl.waveformController.pausePlayer();}catch(_){} } }, icon: const Icon(Icons.pause_rounded,color:Colors.white,size:32))),
             ]),
 
             const SizedBox(height:10),
-            // SLIDER DETIK - AUTO HIDE GESER ATAS MUNCUL
             AnimatedCrossFade(
               duration: const Duration(milliseconds:250),
               firstChild: const SizedBox.shrink(),
@@ -212,8 +258,20 @@ class _MusicPanelState extends State<MusicPanel> {
               crossFadeState: showSlider ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             ),
 
+            const SizedBox(height:12),
+            if(ctrl.recordedPath!=null)
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.green.withOpacity(0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.3))),
+                child: Column(children:[
+                  Row(children:[const Icon(Icons.check_circle,color:Colors.green,size:18), const SizedBox(width:6), Expanded(child: Text('Video: ${ctrl.recordedPath!.split('/').last}', maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:11)))]),
+                  const SizedBox(height:8),
+                  SizedBox(width:double.infinity, child: ElevatedButton.icon(onPressed: ctrl.shareToWhatsApp, icon: const Icon(Icons.share,color:Colors.white,size:18), label: const Text('Preview & Share ke WhatsApp 1 menit', style: TextStyle(fontSize:13)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
+                ]),
+              ),
+
             const SizedBox(height:10),
-            Center(child: Text(showPicker?'▼ Geser bawah hide folder & slider':'▲ Geser atas untuk folder 📁 & slider detik', style: const TextStyle(color:Colors.white24,fontSize:11))),
+            Center(child: Text(showPicker?'▼ Geser bawah hide 📁 & slider':'▲ Geser atas untuk 📁 & slider & REC', style: const TextStyle(color:Colors.white24,fontSize:11))),
           ],
         );
       },
