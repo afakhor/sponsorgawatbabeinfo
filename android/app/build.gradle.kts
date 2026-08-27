@@ -6,8 +6,8 @@ plugins {
 
 android {
     namespace = "com.example.sponsorbabeinfogawat"
-    compileSdk = 36
-    ndkVersion = "27.0.12077973"
+    compileSdk = 35
+    ndkVersion = "28.2.13676358"
 
     packaging {
         resources {
@@ -42,7 +42,7 @@ android {
     defaultConfig {
         applicationId = "com.example.sponsorbabeinfogawat"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         // HAPUS abiFilters - biar --split-per-abi yang atur! JANGAN PAKAI KEDUANYA!
