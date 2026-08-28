@@ -10,7 +10,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 
-// FIX: tambahin fontSize biar main.dart gak error
 class RunningText extends StatefulWidget {
   final String text;
   final Color color;
@@ -42,11 +41,13 @@ class MusicController extends ChangeNotifier {
   int currentLyricIndex=0;
   Duration position=Duration.zero, duration=Duration.zero;
   bool isPlaying=false, isLoading=false, isRecording=false;
-  bool usePreTrim=false; // FIX: tambahin biar main.dart gak error
+  bool usePreTrim=false;
   String? errorMessage;
   String? recordedPath;
   Timer? recordTimer;
   int recordSeconds=0;
+  Duration trimStart=Duration.zero;
+  Duration trimEnd=const Duration(seconds:60);
 
   MusicController(){
     audioPlayer.positionStream.listen((v){
@@ -59,7 +60,7 @@ class MusicController extends ChangeNotifier {
       }
       notifyListeners();
     });
-    audioPlayer.durationStream.listen((v){ if(v!=null){ duration=v; notifyListeners(); }});
+    audioPlayer.durationStream.listen((v){ if(v!=null){ duration=v; if(trimEnd>v) trimEnd=v; notifyListeners(); }});
     audioPlayer.playerStateStream.listen((s){
       isPlaying=s.playing;
       if(s.processingState==ja.ProcessingState.completed){ isPlaying=false; position=Duration.zero; try{waveformController.stopPlayer();}catch(_){} }
@@ -99,6 +100,8 @@ class MusicController extends ChangeNotifier {
       await audioPlayer.stop(); try{await waveformController.stopPlayer();}catch(_){}
       await audioPlayer.setAudioSource(ja.AudioSource.file(path));
       duration=audioPlayer.duration??Duration.zero;
+      trimStart=Duration.zero;
+      trimEnd= duration.inSeconds>60 ? const Duration(seconds:60) : duration;
       try{ await waveformController.preparePlayer(path:path, shouldExtractWaveform:true, noOfSamples:100); await waveformController.stopPlayer(); }catch(_){}
     }catch(e){ errorMessage='Gagal: $e'; }
     finally{ isLoading=false; notifyListeners(); }
@@ -119,17 +122,36 @@ class MusicController extends ChangeNotifier {
     position=safe; notifyListeners();
   }
 
-  Future<void> startRecord() async {
+  // OPSI 1: REC MERAH - auto PLAY + RECORD globe full
+  Future<void> startRecord({Duration? startFrom, Duration? endAt}) async {
     try{
       await _req();
+      if(selectedMusicFile!=null){
+        if(startFrom!=null) await seekTo(startFrom);
+        else await seekTo(Duration.zero);
+        await audioPlayer.play();
+        try{await waveformController.startPlayer();}catch(_){}
+      }
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       isRecording=true; recordSeconds=0; recordedPath=null; notifyListeners();
       final fileName='babe_${DateTime.now().millisecondsSinceEpoch}';
-      await FlutterScreenRecording.startRecordScreenAndAudio(fileName, titleNotification: "Babe Info Gawat REC HD", messageNotification: "Merekam globe 60 detik HD bersuara");
+      await FlutterScreenRecording.startRecordScreenAndAudio(fileName, titleNotification: "Babe Info GAWAT REC HD", messageNotification: "Globe full + running text + lirik - 60s HD");
+
+      Duration targetEnd = endAt ?? (duration.inSeconds>0 ? (duration.inSeconds>60? const Duration(seconds:60) : duration) : const Duration(seconds:60));
+      if(startFrom!=null){
+        Duration maxDur = targetEnd - startFrom;
+        if(maxDur.inSeconds>60) targetEnd = startFrom + const Duration(seconds:60);
+      }
+
       recordTimer?.cancel();
       recordTimer=Timer.periodic(const Duration(seconds:1), (t){
         recordSeconds++; notifyListeners();
-        if(recordSeconds>=60) stopRecord();
+        // auto stop kalau udah sampai trim end
+        if(startFrom!=null && position >= targetEnd){
+          stopRecord();
+        } else if(recordSeconds>=60 || (startFrom==null && recordSeconds>=targetEnd.inSeconds)){
+          stopRecord();
+        }
       });
     }catch(e){
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -140,6 +162,7 @@ class MusicController extends ChangeNotifier {
   Future<void> stopRecord() async {
     try{
       recordTimer?.cancel();
+      try{ await audioPlayer.pause(); await waveformController.pausePlayer(); }catch(_){}
       recordedPath = await FlutterScreenRecording.stopRecordScreen;
       isRecording=false;
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -150,11 +173,11 @@ class MusicController extends ChangeNotifier {
     }
   }
 
-  // FIX: method yang dipanggil main.dart
   Future<void> cancelRecord() async {
     try{
       recordTimer?.cancel();
       await FlutterScreenRecording.stopRecordScreen;
+      try{ await audioPlayer.pause(); await waveformController.pausePlayer(); }catch(_){}
       isRecording=false;
       recordedPath=null;
       recordSeconds=0;
@@ -163,23 +186,74 @@ class MusicController extends ChangeNotifier {
     }catch(_){}
   }
 
-  // FIX: dialog setelah record
   Future<void> showPostRecordDialog(BuildContext context) async {
     if(recordedPath==null) return;
-    await showDialog(context: context, builder: (ctx)=>AlertDialog(
+    await showDialog(context: context, barrierDismissible:false, builder: (ctx)=>AlertDialog(
       backgroundColor: const Color(0xFF1E1E24),
-      title: const Text('Rekaman Selesai HD', style: TextStyle(color:Colors.white)),
-      content: Text('File: ${recordedPath!.split('/').last}\nMau share ke WhatsApp?', style: const TextStyle(color:Colors.white70, fontSize:13)),
+      title: const Text('Rekaman Selesai 0-60s HD', style: TextStyle(color:Colors.white)),
+      content: Text('File: ${recordedPath!.split('/').last}\nDurasi: ${recordSeconds}s / 60s\n${editableTitle}', style: const TextStyle(color:Colors.white70, fontSize:12)),
       actions: [
-        TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text('Nanti')),
+        TextButton(onPressed: () async { Navigator.pop(ctx); await cancelRecord(); }, child: const Text('Hapus', style: TextStyle(color:Colors.redAccent))),
         ElevatedButton(onPressed: (){ Navigator.pop(ctx); shareToWhatsApp(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text('Share WA HD')),
       ],
     ));
   }
 
+  // OPSI 2: TRIM REC KUNING
+  Future<void> showTrimDialog(BuildContext context) async {
+    if(selectedMusicFile==null || duration==Duration.zero){
+      errorMessage='Pilih lagu dulu 📁'; notifyListeners(); return;
+    }
+    Duration tempStart=Duration.zero;
+    Duration tempEnd= duration.inSeconds>60 ? const Duration(seconds:60) : duration;
+
+    await showDialog(context: context, builder: (ctx){
+      return StatefulBuilder(builder: (ctx,setSt){
+        double maxSec = duration.inSeconds.toDouble();
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E1E24),
+          title: const Text('TRIM REC 60s MAX', style: TextStyle(color:Colors.amber, fontSize:14, fontWeight: FontWeight.bold)),
+          content: Column(mainAxisSize: MainAxisSize.min, children:[
+            Text('${fmt(tempStart)} - ${fmt(tempEnd)} (${(tempEnd-tempStart).inSeconds}s)', style: const TextStyle(color:Colors.white70, fontSize:12)),
+            const SizedBox(height:12),
+            RangeSlider(
+              min: 0, max: maxSec,
+              values: RangeValues(tempStart.inSeconds.toDouble(), tempEnd.inSeconds.toDouble()),
+              activeColor: Colors.amber, inactiveColor: Colors.white24,
+              labels: RangeLabels(fmt(tempStart), fmt(tempEnd)),
+              onChanged: (v){
+                Duration ns = Duration(seconds: v.start.toInt());
+                Duration ne = Duration(seconds: v.end.toInt());
+                if((ne-ns).inSeconds>60){
+                  ne = ns + const Duration(seconds:60);
+                }
+                setSt((){ tempStart=ns; tempEnd=ne; });
+              },
+            ),
+            const SizedBox(height:8),
+            const Text('Pilih start-end max 60 detik, nanti auto PLAY + RECORD + auto Share WA', style: TextStyle(color:Colors.white24, fontSize:10)),
+          ]),
+          actions: [
+            TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text('Batal')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                trimStart=tempStart; trimEnd=tempEnd;
+                // OPSI 2 FLOW: auto PLAY + RECORD dari trimStart sampai trimEnd
+                await startRecord(startFrom: trimStart, endAt: trimEnd);
+              },
+              child: const Text('TRIM REC & SHARE'),
+            ),
+          ],
+        );
+      });
+    });
+  }
+
   Future<void> shareToWhatsApp() async {
     if(recordedPath==null || !File(recordedPath!).existsSync()){ errorMessage='Belum ada video record'; notifyListeners(); return; }
-    await Share.shareXFiles([XFile(recordedPath!)], text: "$editableTitle - HD 1080p");
+    await Share.shareXFiles([XFile(recordedPath!)], text: "$editableTitle - HD 1080p - ${recordSeconds}s");
   }
 
   String fmt(Duration v)=>'${v.inMinutes.remainder(60).toString().padLeft(2,'0')}:${v.inSeconds.remainder(60).toString().padLeft(2,'0')}';
@@ -217,41 +291,69 @@ class _MusicPanelState extends State<MusicPanel> {
   }
 
   @override Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: widget.controller,
-      builder: (context,_){
-        final ctrl=widget.controller;
-        final showPicker=isSheetExpanded;
-        return ListView(
-          controller: widget.scrollController,
-          padding: const EdgeInsets.fromLTRB(12,10,12,16),
-          children: [
-            Center(child: Container(width:42,height:5,decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)))),
-            const SizedBox(height:10),
-            AnimatedCrossFade(duration: const Duration(milliseconds:250), firstChild: const SizedBox.shrink(), secondChild: Container(padding: const EdgeInsets.symmetric(horizontal:10,vertical:8), decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(children:[const Icon(Icons.music_note,color:Colors.amber,size:20), const SizedBox(width:8), Expanded(child: Text(ctrl.musicName, maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:13,fontWeight:FontWeight.bold))), if(ctrl.isLoading) const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.amber)), const SizedBox(width:8), InkWell(onTap: ctrl.pickMusic, child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.folder_open,color:Colors.black,size:22)))]),), crossFadeState: showPicker ? CrossFadeState.showSecond : CrossFadeState.showFirst),
-            if(ctrl.errorMessage!=null) Padding(padding: const EdgeInsets.only(top:6), child: Text(ctrl.errorMessage!, style: const TextStyle(color:Colors.redAccent,fontSize:11))),
-            const SizedBox(height:10),
-            InkWell(onTap: _editTitle, child: Container(width:double.infinity, padding: const EdgeInsets.symmetric(horizontal:10,vertical:6), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.14), borderRadius: BorderRadius.circular(8)), child: Row(children:[const Icon(Icons.edit,size:14,color:Colors.amber), const SizedBox(width:6), Expanded(child: RunningText(text: ctrl.editableTitle))]))),
-            const SizedBox(height:8),
-            Container(height:52, decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ctrl.selectedMusicFile==null ? const Center(child: Text('Waveform / Equalizer', style: TextStyle(color:Colors.white24,fontSize:11))) : AudioFileWaveforms(size: Size(MediaQuery.of(context).size.width-24,52), playerController: ctrl.waveformController, enableSeekGesture:true, waveformType: WaveformType.fitWidth, playerWaveStyle: const PlayerWaveStyle(fixedWaveColor:Colors.white24,liveWaveColor:Colors.amber,spacing:3,waveThickness:2))),
-            const SizedBox(height:8),
-            GestureDetector(onTap: ()=>setState(()=>lyricExpanded=!lyricExpanded), child: AnimatedContainer(duration: const Duration(milliseconds:250), width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: lyricExpanded ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: ctrl.lyricLines.asMap().entries.map((e){ final isActive = e.key==ctrl.currentLyricIndex; return AnimatedContainer(duration: const Duration(milliseconds:200), padding: const EdgeInsets.symmetric(vertical:2), child: Text(e.value, style: TextStyle(color: isActive?Colors.amber:Colors.white54, fontSize: isActive?14:12, fontWeight: isActive?FontWeight.bold:FontWeight.normal))); }).toList()) : RunningText(text: ctrl.lyricLines.isNotEmpty ? ctrl.lyricLines[ctrl.currentLyricIndex] : '', color: Colors.white70),)),
-            const SizedBox(height:12),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[
-              Container(decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle), child: IconButton(onPressed: ctrl.togglePlay, icon: const Icon(Icons.play_arrow_rounded,color:Colors.black,size:36))),
-              GestureDetector(onTap: ctrl.isRecording ? ctrl.stopRecord : ctrl.startRecord, child: Container(padding: const EdgeInsets.symmetric(horizontal:14,vertical:8), decoration: BoxDecoration(color: ctrl.isRecording?Colors.red:Colors.white12, borderRadius: BorderRadius.circular(20)), child: Row(children:[Icon(ctrl.isRecording?Icons.stop:Icons.fiber_manual_record, color: ctrl.isRecording?Colors.white:Colors.red, size:16), const SizedBox(width:6), Text(ctrl.isRecording?'${ctrl.recordSeconds}s / 60s':'REC HD', style: TextStyle(color: ctrl.isRecording?Colors.white:Colors.white70,fontSize:12,fontWeight:FontWeight.bold))])),
-              ),
-              Container(decoration: BoxDecoration(color: Colors.white12, shape: BoxShape.circle, border: Border.all(color: Colors.white24)), child: IconButton(onPressed: () async { if(ctrl.audioPlayer.playing){ await ctrl.audioPlayer.pause(); try{await ctrl.waveformController.pausePlayer();}catch(_){} } }, icon: const Icon(Icons.pause_rounded,color:Colors.white,size:32))),
-            ]),
-            const SizedBox(height:10),
-            AnimatedCrossFade(duration: const Duration(milliseconds:250), firstChild: const SizedBox.shrink(), secondChild: Column(children:[SliderTheme(data: SliderTheme.of(context).copyWith(trackHeight:3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius:8)), child: Slider(value: ctrl.val(), min:0.0, max:ctrl.max(), activeColor:Colors.amber, inactiveColor:Colors.white24, onChanged: ctrl.duration==Duration.zero?null:(v)=>ctrl.seekTo(Duration(milliseconds:v.toInt())))), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[Text(ctrl.fmt(ctrl.position),style: const TextStyle(color:Colors.white60,fontSize:11)), Text(ctrl.fmt(ctrl.duration),style: const TextStyle(color:Colors.white60,fontSize:11))]),]), crossFadeState: showPicker ? CrossFadeState.showSecond : CrossFadeState.showFirst),
-            const SizedBox(height:12),
-            if(ctrl.recordedPath!=null) Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.green.withOpacity(0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.3))), child: Column(children:[Row(children:[const Icon(Icons.check_circle,color:Colors.green,size:18), const SizedBox(width:6), Expanded(child: Text('Video: ${ctrl.recordedPath!.split('/').last}', maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:11)))]), const SizedBox(height:8), SizedBox(width:double.infinity, child: ElevatedButton.icon(onPressed: ctrl.shareToWhatsApp, icon: const Icon(Icons.share,color:Colors.white,size:18), label: const Text('Share HD + Suara ke WA', style: TextStyle(fontSize:13)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),]),),
-            const SizedBox(height:10),
-            Center(child: Text(showPicker?'▼ Geser bawah hide':'▲ Geser atas untuk 📁 & slider & REC HD', style: const TextStyle(color:Colors.white24,fontSize:11))),
-          ],
-        );
+    return PopScope(
+      canPop: !context.read<MusicController>().isRecording,
+      onPopInvokedWithResult: (didPop, result) async {
+        if(!didPop && context.read<MusicController>().isRecording){
+          await context.read<MusicController>().cancelRecord();
+        }
       },
+      child: AnimatedBuilder(
+        animation: widget.controller,
+        builder: (context,_){
+          final ctrl=widget.controller;
+          final showPicker=isSheetExpanded;
+          return ListView(
+            controller: widget.scrollController,
+            padding: const EdgeInsets.fromLTRB(12,10,12,16),
+            children: [
+              Center(child: Container(width:42,height:5,decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)))),
+              const SizedBox(height:10),
+              AnimatedCrossFade(duration: const Duration(milliseconds:250), firstChild: const SizedBox.shrink(), secondChild: Container(padding: const EdgeInsets.symmetric(horizontal:10,vertical:8), decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(children:[const Icon(Icons.music_note,color:Colors.amber,size:20), const SizedBox(width:8), Expanded(child: Text(ctrl.musicName, maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:13,fontWeight:FontWeight.bold))), if(ctrl.isLoading) const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.amber)), const SizedBox(width:8), InkWell(onTap: ctrl.pickMusic, child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.folder_open,color:Colors.black,size:22)))]),), crossFadeState: showPicker ? CrossFadeState.showSecond : CrossFadeState.showFirst),
+              if(ctrl.errorMessage!=null) Padding(padding: const EdgeInsets.only(top:6), child: Text(ctrl.errorMessage!, style: const TextStyle(color:Colors.redAccent,fontSize:11))),
+              const SizedBox(height:10),
+              InkWell(onTap: _editTitle, child: Container(width:double.infinity, padding: const EdgeInsets.symmetric(horizontal:10,vertical:6), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.14), borderRadius: BorderRadius.circular(8)), child: Row(children:[const Icon(Icons.edit,size:14,color:Colors.amber), const SizedBox(width:6), Expanded(child: RunningText(text: ctrl.editableTitle))]))),
+              const SizedBox(height:8),
+              Container(height:52, decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ctrl.selectedMusicFile==null ? const Center(child: Text('Waveform / Equalizer', style: TextStyle(color:Colors.white24,fontSize:11))) : AudioFileWaveforms(size: Size(MediaQuery.of(context).size.width-24,52), playerController: ctrl.waveformController, enableSeekGesture:true, waveformType: WaveformType.fitWidth, playerWaveStyle: const PlayerWaveStyle(fixedWaveColor:Colors.white24,liveWaveColor:Colors.amber,spacing:3,waveThickness:2))),
+              const SizedBox(height:8),
+              GestureDetector(onTap: ()=>setState(()=>lyricExpanded=!lyricExpanded), child: AnimatedContainer(duration: const Duration(milliseconds:250), width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: lyricExpanded ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: ctrl.lyricLines.asMap().entries.map((e){ final isActive = e.key==ctrl.currentLyricIndex; return AnimatedContainer(duration: const Duration(milliseconds:200), padding: const EdgeInsets.symmetric(vertical:2), child: Text(e.value, style: TextStyle(color: isActive?Colors.amber:Colors.white54, fontSize: isActive?14:12, fontWeight: isActive?FontWeight.bold:FontWeight.normal))); }).toList()) : RunningText(text: ctrl.lyricLines.isNotEmpty ? ctrl.lyricLines[ctrl.currentLyricIndex] : '', color: Colors.white70),)),
+              const SizedBox(height:12),
+              // 2 OPSI BUTTON
+              Row(children:[
+                Expanded(child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical:12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  onPressed: ctrl.isRecording ? ctrl.stopRecord : () => ctrl.startRecord(),
+                  icon: Icon(ctrl.isRecording ? Icons.stop : Icons.fiber_manual_record, size:18),
+                  label: Text(ctrl.isRecording ? '${ctrl.recordSeconds}s STOP' : 'REC MERAH', style: const TextStyle(fontWeight: FontWeight.bold, fontSize:12)),
+                )),
+                const SizedBox(width:8),
+                Expanded(child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical:12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  onPressed: ctrl.isRecording ? null : () => ctrl.showTrimDialog(context),
+                  icon: const Icon(Icons.content_cut, size:18),
+                  label: const Text('TRIM REC KUNING', style: TextStyle(fontWeight: FontWeight.bold, fontSize:11)),
+                )),
+              ]),
+              const SizedBox(height:8),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[
+                Container(decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle), child: IconButton(onPressed: ctrl.togglePlay, icon: const Icon(Icons.play_arrow_rounded,color:Colors.black,size:32))),
+                Text(ctrl.isRecording?'Globe Full + 2 Running + Lirik':'BACK=cancel | O merah=stop', style: const TextStyle(color:Colors.white24,fontSize:10)),
+                Container(decoration: BoxDecoration(color: Colors.white12, shape: BoxShape.circle, border: Border.all(color: Colors.white24)), child: IconButton(onPressed: () async { if(ctrl.audioPlayer.playing){ await ctrl.audioPlayer.pause(); try{await ctrl.waveformController.pausePlayer();}catch(_){} } }, icon: const Icon(Icons.pause_rounded,color:Colors.white,size:28))),
+              ]),
+              const SizedBox(height:10),
+              AnimatedCrossFade(duration: const Duration(milliseconds:250), firstChild: const SizedBox.shrink(), secondChild: Column(children:[SliderTheme(data: SliderTheme.of(context).copyWith(trackHeight:3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius:8)), child: Slider(value: ctrl.val(), min:0.0, max:ctrl.max(), activeColor:Colors.amber, inactiveColor:Colors.white24, onChanged: ctrl.duration==Duration.zero?null:(v)=>ctrl.seekTo(Duration(milliseconds:v.toInt())))), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[Text(ctrl.fmt(ctrl.position),style: const TextStyle(color:Colors.white60,fontSize:11)), Text(ctrl.fmt(ctrl.duration),style: const TextStyle(color:Colors.white60,fontSize:11))]),]), crossFadeState: showPicker ? CrossFadeState.showSecond : CrossFadeState.showFirst),
+              const SizedBox(height:12),
+              if(ctrl.recordedPath!=null) Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.green.withOpacity(0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.3))), child: Column(children:[Row(children:[const Icon(Icons.check_circle,color:Colors.green,size:18), const SizedBox(width:6), Expanded(child: Text('Video: ${ctrl.recordedPath!.split('/').last} ${ctrl.recordSeconds}s', maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:11)))]), const SizedBox(height:8), Row(children:[Expanded(child: ElevatedButton(onPressed: () => ctrl.showPostRecordDialog(context), style: ElevatedButton.styleFrom(backgroundColor: Colors.white12), child: const Text('Lihat 0-60s', style:TextStyle(fontSize:11)))), const SizedBox(width:8), Expanded(child: ElevatedButton.icon(onPressed: ctrl.shareToWhatsApp, icon: const Icon(Icons.share,color:Colors.white,size:18), label: const Text('Share WA', style: TextStyle(fontSize:11)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),]),]),),
+              const SizedBox(height:10),
+              Center(child: Text(showPicker?'▼ Geser bawah hide':'▲ Geser atas untuk 📁', style: const TextStyle(color:Colors.white24,fontSize:11))),
+            ],
+          );
+        },
+      ),
     );
   }
+}
+
+extension ReadContext on BuildContext {
+  T read<T>() => this as dynamic;
 }
