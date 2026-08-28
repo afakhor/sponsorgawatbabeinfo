@@ -11,6 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
+import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
 
 class RunningText extends StatefulWidget {
   final String text;
@@ -123,41 +124,110 @@ class MusicController extends ChangeNotifier {
     await Permission.notification.request();
   }
 
-  Future<String> _ensureModel() async {
+  Future<void> _dlWithProgress(String url, String save, Function(double) onProgress) async {
+    final client = http.Client();
+    final req = http.Request('GET', Uri.parse(url));
+    final res = await client.send(req);
+    final total = res.contentLength?? 0;
+    int received = 0;
+    final file = File(save).openWrite();
+    await for(var chunk in res.stream){
+      received += chunk.length;
+      file.add(chunk);
+      if(total>0) onProgress(received/total);
+    }
+    await file.close();
+    client.close();
+  }
+
+  Future<String> _ensureModelWithDialog(BuildContext context) async {
     final dir = await getApplicationDocumentsDirectory();
     final modelDir = Directory('${dir.path}/sherpa-small');
     if(!await modelDir.exists()) await modelDir.create(recursive:true);
     final enc = '${modelDir.path}/encoder.onnx';
     final dec = '${modelDir.path}/decoder.onnx';
     final tok = '${modelDir.path}/tokens.txt';
-    if(File(enc).existsSync() && File(dec).existsSync() && File(tok).existsSync()){
+
+    bool isCorrupt(File f) =>!f.existsSync() || f.lengthSync() < 5*1024*1024;
+    if(File(enc).existsSync() && File(dec).existsSync() && File(tok).existsSync() &&!isCorrupt(File(enc))){
       return modelDir.path;
     }
+    try{ if(File(enc).existsSync()) await File(enc).delete(); if(File(dec).existsSync()) await File(dec).delete(); if(File(tok).existsSync()) await File(tok).delete(); }catch(_){}
+
+    double progress = 0;
+    bool success = false;
+    late StateSetter dialogSetState;
+
+    if(context.mounted){
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx){
+          return StatefulBuilder(builder: (ctx,setSt){
+            dialogSetState = setSt;
+            return AlertDialog(
+              backgroundColor: Color(0xFF1E1E24),
+              title: Text(success? '✅ Download Sukses' : '⬇️ Download Model 70MB', style: TextStyle(color: Colors.amber, fontSize: 14, fontWeight: FontWeight.bold)),
+              content: Column(mainAxisSize: MainAxisSize.min, children:[
+                LinearProgressIndicator(value: success?1: (progress==0?null:progress), color: Colors.amber, backgroundColor: Colors.white12),
+                SizedBox(height:12),
+                Text(success? 'Model siap! Offline selamanya.' : '${(progress*100).toStringAsFixed(0)}% - Jangan tutup app...', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              ]),
+              actions: success? [ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: ()=>Navigator.pop(ctx), child: Text('Mulai'))] : [],
+            );
+          });
+        }
+      );
+    }
+
     const base = 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main';
-    errorMessage='⬇️ Download model 70MB pertama kali...';
-    notifyListeners();
-    await _dl('$base/base-encoder.int8.onnx', enc);
-    await _dl('$base/base-decoder.int8.onnx', dec);
-    await _dl('$base/base-tokens.txt', tok);
+    try{
+      await _dlWithProgress('$base/base-encoder.int8.onnx', enc, (p){ progress = p*0.5; try{dialogSetState((){});}catch(_){} notifyListeners(); });
+      await _dlWithProgress('$base/base-decoder.int8.onnx', dec, (p){ progress = 0.5 + p*0.4; try{dialogSetState((){});}catch(_){} });
+      await _dlWithProgress('$base/base-tokens.txt', tok, (p){ progress = 0.9 + p*0.1; try{dialogSetState((){});}catch(_){} });
+      success = true;
+      try{dialogSetState((){});}catch(_){}
+      await Future.delayed(Duration(milliseconds: 800));
+      if(context.mounted) Navigator.pop(context);
+
+      if(context.mounted){
+        await showDialog(context: context, builder: (ctx)=>AlertDialog(
+          backgroundColor: Color(0xFF1E1E24),
+          title: Row(children:[Icon(Icons.check_circle, color: Colors.green), SizedBox(width:8), Text('Download Sukses!', style: TextStyle(color: Colors.white))]),
+          content: Text('Model 70MB terpasang.\nSekarang transcribe lagu Indo & Barat bisa offline.', style: TextStyle(color: Colors.white70, fontSize: 12)),
+          actions: [ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black), onPressed: ()=>Navigator.pop(ctx), child: Text('OK Siap'))],
+        ));
+      }
+    }catch(e){
+      if(context.mounted) Navigator.pop(context);
+      if(context.mounted){
+        await showDialog(context: context, builder: (ctx)=>AlertDialog(
+          backgroundColor: Color(0xFF1E1E24),
+          title: Text('❌ Download Gagal', style: TextStyle(color: Colors.redAccent)),
+          content: Text('$e\nCek internet, coba lagi.', style: TextStyle(color: Colors.white70)),
+          actions: [TextButton(onPressed: ()=>Navigator.pop(ctx), child: Text('Tutup'))],
+        ));
+      }
+      rethrow;
+    }
     return modelDir.path;
   }
 
-  Future<void> _dl(String url, String save) async {
-    final r = await http.get(Uri.parse(url));
-    if(r.statusCode==200){
-      await File(save).writeAsBytes(r.bodyBytes);
-    } else {
-      throw Exception('Gagal $url');
-    }
+  Future<String> _convertToWav(String inputPath) async {
+    if(inputPath.toLowerCase().endsWith('.wav')) return inputPath;
+    final dir = await getTemporaryDirectory();
+    final outPath = '${dir.path}/sherpa_${DateTime.now().millisecondsSinceEpoch}.wav';
+    await FFmpegKit.execute('-y -i "$inputPath" -ar 16000 -ac 1 -c:a pcm_s16le "$outPath"');
+    return outPath;
   }
 
-  Future<void> transcribeLyric() async {
+  Future<void> transcribeLyric(BuildContext context) async {
     if(selectedMusicFile==null) return;
     isTranscribing=true;
-    errorMessage='🌐 Auto detect Indo/Barat...';
+    errorMessage='🌐 Siapkan model...';
     notifyListeners();
     try{
-      final mp = await _ensureModel();
+      final mp = await _ensureModelWithDialog(context);
       final whisperCfg = sherpa.OfflineWhisperModelConfig(
         encoder: '${mp}/encoder.onnx',
         decoder: '${mp}/decoder.onnx',
@@ -168,11 +238,13 @@ class MusicController extends ChangeNotifier {
         whisper: whisperCfg,
         tokens: '${mp}/tokens.txt',
       );
-      final recogCfg = sherpa.OfflineRecognizerConfig(model: modelCfg);
-      final recog = sherpa.OfflineRecognizer(recogCfg);
+      final recog = sherpa.OfflineRecognizer(sherpa.OfflineRecognizerConfig(model: modelCfg));
       final stream = recog.createStream();
-      final wave = sherpa.readWave(selectedMusicFile!.path);
+      final wavPath = await _convertToWav(selectedMusicFile!.path);
+      final wave = sherpa.readWave(wavPath);
       stream.acceptWaveform(sampleRate: wave.sampleRate, samples: wave.samples);
+      errorMessage='🧠 Transcribe...';
+      notifyListeners();
       recog.decode(stream);
       final result = recog.getResult(stream);
       String raw = result.text.trim();
@@ -188,37 +260,26 @@ class MusicController extends ChangeNotifier {
         lyricLines = sentences;
         currentLyricIndex=0;
         errorMessage='✅ Lirik asli ${sentences.length} baris';
-        notifyListeners();
-        return;
+      } else {
+        throw Exception('Hasil kosong');
       }
-      throw Exception('Hasil kosong');
     }catch(e){
-      String base = musicName.replaceAll('.mp3','').replaceAll('.m4a','').replaceAll('.wav','').replaceAll('_',' ').trim();
-      if(base.length<4) base = 'Babe Info Gawat Globe Berputar Musik Berdentum';
-      List<String> parts = base.split(RegExp(r'[-|]')).map((e)=>e.trim()).where((e)=>e.isNotEmpty).toList();
-      if(parts.length<3) parts = ['Memutar: $musicName','Babe Info Gawat di angkasa','Globe berputar musik berdentum','Wave naik turun ikuti beat','Share ke WhatsApp Status'];
-      lyricLines = parts;
-      currentLyricIndex=0;
-      errorMessage='⚠️ Pakai judul: $e';
+      String base = musicName.replaceAll('.mp3','').replaceAll('.m4a','').replaceAll('.wav','').trim();
+      lyricLines = [base.isEmpty? 'Babe Info Gawat' : base];
+      errorMessage='⚠️ $e';
     }finally{
       isTranscribing=false;
       notifyListeners();
     }
   }
 
-  Future<void> pickMusic() async {
+  Future<void> pickMusic(BuildContext context) async {
     try{
       await _req();
-      final res=await FilePicker.platform.pickFiles(type: FileType.audio, withData:true);
+      final res=await FilePicker.platform.pickFiles(type: FileType.audio, withData:false);
       if(res==null||res.files.isEmpty) return;
       final p=res.files.single;
       String? path=p.path;
-      if(path==null && p.bytes!=null){
-        final dir=await getTemporaryDirectory();
-        final f=File('${dir.path}/${p.name}');
-        await f.writeAsBytes(p.bytes!,flush:true);
-        path=f.path;
-      }
       if(path==null) return;
       selectedMusicFile=File(path);
       musicName=p.name;
@@ -232,7 +293,7 @@ class MusicController extends ChangeNotifier {
       trimEnd= duration.inSeconds>60? const Duration(seconds:60) : duration;
       try{ await waveformController.preparePlayer(path:path, shouldExtractWaveform:true, noOfSamples:100); await waveformController.stopPlayer(); }catch(_){}
       isLoading=false; notifyListeners();
-      await transcribeLyric();
+      await transcribeLyric(context);
     }catch(e){ errorMessage='Gagal: $e'; isLoading=false; notifyListeners(); }
   }
 
@@ -414,7 +475,7 @@ class _MusicPanelState extends State<MusicPanel> {
         return ListView(controller: widget.scrollController, padding: const EdgeInsets.fromLTRB(12,10,12,16), children: [
           Center(child: Container(width:42,height:5,decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)))),
           const SizedBox(height:10),
-          AnimatedCrossFade(duration: const Duration(milliseconds:250), firstChild: const SizedBox.shrink(), secondChild: Container(padding: const EdgeInsets.symmetric(horizontal:10,vertical:8), decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(children:[const Icon(Icons.music_note,color:Colors.amber,size:20), const SizedBox(width:8), Expanded(child: Text(ctrl.musicName, maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:13,fontWeight:FontWeight.bold))), if(ctrl.isLoading||ctrl.isTranscribing) const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.amber)), const SizedBox(width:8), InkWell(onTap: ctrl.pickMusic, child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.folder_open,color:Colors.black,size:22)))])), crossFadeState: showPicker? CrossFadeState.showSecond : CrossFadeState.showFirst),
+          AnimatedCrossFade(duration: const Duration(milliseconds:250), firstChild: const SizedBox.shrink(), secondChild: Container(padding: const EdgeInsets.symmetric(horizontal:10,vertical:8), decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.withOpacity(0.3))), child: Row(children:[const Icon(Icons.music_note,color:Colors.amber,size:20), const SizedBox(width:8), Expanded(child: Text(ctrl.musicName, maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:13,fontWeight:FontWeight.bold))), if(ctrl.isLoading||ctrl.isTranscribing) const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2,color:Colors.amber)), const SizedBox(width:8), InkWell(onTap: ()=>ctrl.pickMusic(context), child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.folder_open,color:Colors.black,size:22)))])), crossFadeState: showPicker? CrossFadeState.showSecond : CrossFadeState.showFirst),
           if(ctrl.errorMessage!=null) Padding(padding: const EdgeInsets.only(top:6), child: Text(ctrl.errorMessage!, style: const TextStyle(color:Colors.amber,fontSize:11))),
           const SizedBox(height:10),
           InkWell(onTap: _editTitle, child: Container(width:double.infinity, padding: const EdgeInsets.symmetric(horizontal:10,vertical:6), decoration: BoxDecoration(color: Colors.amber.withOpacity(0.14), borderRadius: BorderRadius.circular(8)), child: Row(children:[const Icon(Icons.edit,size:14,color:Colors.amber), const SizedBox(width:6), Expanded(child: RunningText(text: ctrl.editableTitle))]))),
@@ -422,7 +483,7 @@ class _MusicPanelState extends State<MusicPanel> {
           Container(height:52, decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ctrl.selectedMusicFile==null? const Center(child: Text('Waveform / Equalizer', style: TextStyle(color:Colors.white24,fontSize:11))) : AudioFileWaveforms(size: Size(MediaQuery.of(context).size.width-24,52), playerController: ctrl.waveformController, enableSeekGesture:true, waveformType: WaveformType.fitWidth, playerWaveStyle: const PlayerWaveStyle(fixedWaveColor:Colors.white24,liveWaveColor:Colors.amber,spacing:3,waveThickness:2))),
           const SizedBox(height:8),
           Row(children:[
-            Expanded(child: ElevatedButton.icon(onPressed: ctrl.isTranscribing?null:()=>ctrl.transcribeLyric(), style: ElevatedButton.styleFrom(backgroundColor: Colors.white12, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical:10)), icon: Icon(ctrl.isTranscribing?Icons.hourglass_top:Icons.auto_awesome, size:16), label: Text(ctrl.isTranscribing?'Transcribing...':'Auto Lirik Asli', style: const TextStyle(fontSize:11)))),
+            Expanded(child: ElevatedButton.icon(onPressed: ctrl.isTranscribing?null:()=>ctrl.transcribeLyric(context), style: ElevatedButton.styleFrom(backgroundColor: Colors.white12, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical:10)), icon: Icon(ctrl.isTranscribing?Icons.hourglass_top:Icons.auto_awesome, size:16), label: Text(ctrl.isTranscribing?'Transcribing...':'Auto Lirik Asli', style: const TextStyle(fontSize:11)))),
             const SizedBox(width:8),
             Expanded(child: ElevatedButton.icon(onPressed: ()=>ctrl.editLyricsDialog(context), style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.withOpacity(0.2), foregroundColor: Colors.amber, padding: const EdgeInsets.symmetric(vertical:10)), icon: const Icon(Icons.edit_note, size:16), label: const Text('Edit Lirik', style: TextStyle(fontSize:11)))),
           ]),
@@ -433,7 +494,7 @@ class _MusicPanelState extends State<MusicPanel> {
             if(lyricExpanded) Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
               Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(10)), child: ctrl.lyricLines.isEmpty? const Text('Belum ada lirik', style: TextStyle(color:Colors.white24, fontSize:11)) : LyricKaraoke(sentence: ctrl.lyricLines[ctrl.currentLyricIndex], sentenceIndex: ctrl.currentLyricIndex, currentSentenceIndex: ctrl.currentLyricIndex, position: ctrl.position, sentenceStart: ctrl.currentSentenceStart, sentenceDuration: ctrl.sentenceDuration)),
               const SizedBox(height:8),
-           ...ctrl.lyricLines.asMap().entries.map((e){
+          ...ctrl.lyricLines.asMap().entries.map((e){
                 final isActive = e.key==ctrl.currentLyricIndex;
                 return AnimatedContainer(duration: const Duration(milliseconds:200), padding: const EdgeInsets.symmetric(vertical:3, horizontal:6), margin: const EdgeInsets.only(bottom:2), decoration: isActive? BoxDecoration(color: Colors.amber.withOpacity(0.12), borderRadius: BorderRadius.circular(6)) : null, child: Row(children:[Text('${e.key+1}. ', style: TextStyle(color: isActive?Colors.amber:Colors.white24, fontSize:10)), Expanded(child: Text(e.value, style: TextStyle(color: isActive?Colors.white:Colors.white38, fontSize: isActive?13:11, fontWeight: isActive?FontWeight.bold:FontWeight.normal)))]));
               }),
