@@ -32,7 +32,7 @@ class _RunningTextState extends State<RunningText> with SingleTickerProviderStat
   }
 }
 
-// ================= KARAOKE HIJAU FOLD IN/OUT =================
+// ================= KARAOKE HIJAU =================
 class LyricKaraoke extends StatelessWidget {
   final String sentence;
   final int sentenceIndex;
@@ -49,7 +49,6 @@ class LyricKaraoke extends StatelessWidget {
     final elapsed = position - sentenceStart;
     double progress = sentenceDuration.inMilliseconds>0? (elapsed.inMilliseconds / sentenceDuration.inMilliseconds).clamp(0.0, 1.0) : 0;
     int activeWord = (progress * words.length).floor().clamp(0, words.length-1);
-
     return TweenAnimationBuilder<double>(
       key: ValueKey(sentenceIndex),
       tween: Tween(begin: 0, end: 1),
@@ -66,7 +65,7 @@ class LyricKaraoke extends StatelessWidget {
           duration: const Duration(milliseconds: 180),
           padding: EdgeInsets.symmetric(horizontal: current?8:0, vertical: current?4:2),
           decoration: current? BoxDecoration(color: Colors.green.withOpacity(0.22), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.greenAccent.withOpacity(0.8))) : null,
-          child: Text(words[i], style: TextStyle(color: col, fontSize: current?16:13.5, fontWeight: passed||current?FontWeight.bold:FontWeight.w500, shadows: current?[Shadow(color: Colors.green.withOpacity(0.9), blurRadius: 10)]:null)),
+          child: Text(words[i], style: TextStyle(color: col, fontSize: current?16:13.5, fontWeight: passed||current?FontWeight.bold:FontWeight.w500)),
         );
       })),
     );
@@ -77,16 +76,13 @@ class LyricKaraoke extends StatelessWidget {
 class MusicController extends ChangeNotifier {
   final ja.AudioPlayer audioPlayer=ja.AudioPlayer();
   final PlayerController waveformController=PlayerController();
-
   File? selectedMusicFile;
   String musicName='Belum ada musik';
   String editableTitle='SPONSOR BABE INFO GAWAT • TAP UNTUK EDIT JUDUL';
-  String editableBottomTitle='Babe Info Gawat - Tap untuk edit bawah';
   List<String> lyricLines=['Tap 📁 pilih lagu untuk auto lirik','Lirik asli auto transcribe Whisper','Putih fold in -> hijau per kata -> fold out'];
   int currentLyricIndex=0;
   Duration position=Duration.zero, duration=Duration.zero;
   bool isPlaying=false, isLoading=false, isRecording=false, isTranscribing=false;
-  bool usePreTrim=false;
   String? errorMessage;
   String? recordedPath;
   Timer? recordTimer;
@@ -128,21 +124,16 @@ class MusicController extends ChangeNotifier {
     await Permission.notification.request();
   }
 
-  // ====== DOWNLOAD MODEL AUTO (ONLINE SEKALI, OFFLINE SELAMANYA) ======
   Future<String> _ensureModel() async {
     final dir = await getApplicationDocumentsDirectory();
     final modelDir = Directory('${dir.path}/sherpa-small');
     if(!await modelDir.exists()) await modelDir.create(recursive:true);
-
     final enc = '${modelDir.path}/encoder.onnx';
     final dec = '${modelDir.path}/decoder.onnx';
     final tok = '${modelDir.path}/tokens.txt';
-
     if(File(enc).existsSync() && File(dec).existsSync() && File(tok).existsSync()){
       return modelDir.path;
     }
-
-    // pakai model base.int8 biar kecil 70MB tapi tetap auto Indo+Barat
     const base = 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main';
     errorMessage='⬇️ Download model 70MB pertama kali...';
     notifyListeners();
@@ -157,11 +148,11 @@ class MusicController extends ChangeNotifier {
     if(r.statusCode==200){
       await File(save).writeAsBytes(r.bodyBytes);
     } else {
-      throw Exception('Gagal download $url ${r.statusCode}');
+      throw Exception('Gagal $url');
     }
   }
 
-  // === AUTO LIRIK ASLI SHERPA WHISPER MULTILINGUAL AUTO DETECT ===
+  // FIX API 1.13.6 - pakai OfflineStream
   Future<void> transcribeLyric() async {
     if(selectedMusicFile==null) return;
     isTranscribing=true;
@@ -172,7 +163,7 @@ class MusicController extends ChangeNotifier {
       final whisperCfg = sherpa.OfflineWhisperModelConfig(
         encoder: '${mp}/encoder.onnx',
         decoder: '${mp}/decoder.onnx',
-        language: '', // kosong = auto detect bahasa
+        language: '',
         task: 'transcribe',
       );
       final modelCfg = sherpa.OfflineModelConfig(
@@ -181,10 +172,22 @@ class MusicController extends ChangeNotifier {
       );
       final recogCfg = sherpa.OfflineRecognizerConfig(model: modelCfg);
       final recog = sherpa.OfflineRecognizer(recogCfg);
+      final stream = recog.createStream();
 
-      // sherpa butuh wav, kalau mp3 kita coba langsung decode (base support mp3 via ffmpeg di android)
-      final result = recog.decode(selectedMusicFile!.path);
+      // sherpa_onnx butuh WAV 16kHz, coba baca langsung
+      try{
+        final wave = sherpa.readWave(selectedMusicFile!.path);
+        stream.acceptWaveform(sampleRate: wave.sampleRate, samples: wave.samples);
+      }catch(_){
+        // kalau MP3, fallback pakai judul dulu, nanti convert manual kalau mau
+        throw Exception('File bukan WAV, convert dulu ke WAV');
+      }
+
+      recog.decode(stream);
+      final result = stream.result;
       String raw = result.text.trim();
+      stream.free();
+      recog.free();
 
       if(raw.length>5){
         List<String> sentences = [];
@@ -195,15 +198,12 @@ class MusicController extends ChangeNotifier {
         }
         lyricLines = sentences;
         currentLyricIndex=0;
-        errorMessage='✅ Lirik asli ${sentences.length} baris - tap Edit kalau salah';
+        errorMessage='✅ Lirik asli ${sentences.length} baris';
         notifyListeners();
-        recog.free();
         return;
       }
-      recog.free();
       throw Exception('Hasil kosong');
     }catch(e){
-      // FALLBACK JUDUL kalau offline / gagal
       String base = musicName.replaceAll('.mp3','').replaceAll('.m4a','').replaceAll('.wav','').replaceAll('_',' ').trim();
       if(base.length<4) base = 'Babe Info Gawat Globe Berputar Musik Berdentum';
       List<String> parts = base.split(RegExp(r'[-|]')).map((e)=>e.trim()).where((e)=>e.isNotEmpty).toList();
@@ -218,7 +218,7 @@ class MusicController extends ChangeNotifier {
       if(parts.length<3) parts = ['Memutar: $musicName','Babe Info Gawat di angkasa','Globe berputar musik berdentum','Wave naik turun ikuti beat','Share ke WhatsApp Status'];
       lyricLines = parts;
       currentLyricIndex=0;
-      errorMessage='⚠️ Offline - lirik dari judul (online sekali untuk lirik asli): $e';
+      errorMessage='⚠️ Pakai judul (butuh WAV untuk Whisper): $e';
     }finally{
       isTranscribing=false;
       notifyListeners();
@@ -356,8 +356,6 @@ class MusicController extends ChangeNotifier {
               if((ne-ns).inSeconds>60) ne = ns + const Duration(seconds:60);
               setSt((){ tempStart=ns; tempEnd=ne; });
             }),
-            const SizedBox(height:8),
-            const Text('Pilih start-end max 60 detik, nanti auto PLAY + RECORD + auto Share WA', style: TextStyle(color:Colors.white24, fontSize:10)),
           ]),
           actions: [
             TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text('Batal')),
@@ -372,8 +370,8 @@ class MusicController extends ChangeNotifier {
     final controller = TextEditingController(text: lyricLines.join('\n'));
     final res = await showDialog<String>(context: context, builder: (ctx)=>AlertDialog(
       backgroundColor: const Color(0xFF1E1E24),
-      title: const Text('Edit Lirik Asli - 1 baris = 1 kalimat karaoke', style: TextStyle(color:Colors.white, fontSize:12)),
-      content: SizedBox(width: double.maxFinite, height: 320, child: TextField(controller: controller, maxLines: 20, style: const TextStyle(color:Colors.white, fontSize:12), decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'Tulis lirik per baris...', hintStyle: TextStyle(color: Colors.white24)))),
+      title: const Text('Edit Lirik Asli', style: TextStyle(color:Colors.white, fontSize:12)),
+      content: SizedBox(width: double.maxFinite, height: 320, child: TextField(controller: controller, maxLines: 20, style: const TextStyle(color:Colors.white, fontSize:12))),
       actions: [
         TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text('Batal')),
         ElevatedButton(onPressed: ()=>Navigator.pop(ctx, controller.text), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text('Simpan Lirik')),
@@ -414,7 +412,6 @@ class MusicPanel extends StatefulWidget {
 class _MusicPanelState extends State<MusicPanel> {
   bool lyricExpanded=true;
   bool get isSheetExpanded => widget.sheetController.isAttached? widget.sheetController.size >= 0.6 : false;
-
   void _editTitle() async {
     final c=TextEditingController(text: widget.controller.editableTitle);
     final result=await showDialog<String>(context: context, builder: (ctx)=>AlertDialog(
@@ -476,7 +473,20 @@ class _MusicPanelState extends State<MusicPanel> {
           const SizedBox(height:10),
           AnimatedCrossFade(duration: const Duration(milliseconds:250), firstChild: const SizedBox.shrink(), secondChild: Column(children:[SliderTheme(data: SliderTheme.of(context).copyWith(trackHeight:3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius:8)), child: Slider(value: ctrl.val(), min:0.0, max:ctrl.max(), activeColor:Colors.amber, inactiveColor:Colors.white24, onChanged: ctrl.duration==Duration.zero?null:(v)=>ctrl.seekTo(Duration(milliseconds:v.toInt())))), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[Text(ctrl.fmt(ctrl.position),style: const TextStyle(color:Colors.white60,fontSize:11)), Text(ctrl.fmt(ctrl.duration),style: const TextStyle(color:Colors.white60,fontSize:11))])]), crossFadeState: showPicker? CrossFadeState.showSecond : CrossFadeState.showFirst),
           const SizedBox(height:12),
-          if(ctrl.recordedPath!=null) Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.green.withOpacity(0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.3))), child: Column(children:[Row(children:[const Icon(Icons.check_circle,color:Colors.green,size:18), const SizedBox(width:6), Expanded(child: Text('Video: ${ctrl.recordedPath!.split('/').last} ${ctrl.recordSeconds}s', maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:11)))]), const SizedBox(height:8), Row(children:[Expanded(child: ElevatedButton(onPressed: () => ctrl.showPostRecordDialog(context), style: ElevatedButton.styleFrom(backgroundColor: Colors.white12), child: const Text('Lihat 0-60s', style:TextStyle(fontSize:11)))), const SizedBox(width:8), Expanded(child: ElevatedButton.icon(onPressed: ctrl.shareToWhatsApp, icon: const Icon(Icons.share,color:Colors.white,size:18), label: const Text('Share WA', style: TextStyle(fontSize:11)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),]),]),
+          if(ctrl.recordedPath!=null)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: Colors.green.withOpacity(0.12), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.green.withOpacity(0.3))),
+              child: Column(children:[
+                Row(children:[const Icon(Icons.check_circle,color:Colors.green,size:18), const SizedBox(width:6), Expanded(child: Text('Video: ${ctrl.recordedPath!.split('/').last} ${ctrl.recordSeconds}s', maxLines:1, overflow:TextOverflow.ellipsis, style: const TextStyle(color:Colors.white,fontSize:11)))]),
+                const SizedBox(height:8),
+                Row(children:[
+                  Expanded(child: ElevatedButton(onPressed: () => ctrl.showPostRecordDialog(context), style: ElevatedButton.styleFrom(backgroundColor: Colors.white12), child: const Text('Lihat 0-60s', style:TextStyle(fontSize:11)))),
+                  const SizedBox(width:8),
+                  Expanded(child: ElevatedButton.icon(onPressed: ctrl.shareToWhatsApp, icon: const Icon(Icons.share,color:Colors.white,size:18), label: const Text('Share WA', style: TextStyle(fontSize:11)), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))))),
+                ]),
+              ]),
+            ),
           const SizedBox(height:10),
           Center(child: Text(showPicker?'▼ Geser bawah hide':'▲ Geser atas untuk 📁', style: const TextStyle(color:Colors.white24,fontSize:11))),
         ]);
