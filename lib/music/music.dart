@@ -147,7 +147,6 @@ class MusicController extends ChangeNotifier {
     final enc = '${modelDir.path}/encoder.onnx';
     final dec = '${modelDir.path}/decoder.onnx';
     final tok = '${modelDir.path}/tokens.txt';
-
     bool isCorrupt(File f) =>!f.existsSync() || f.lengthSync() < 5*1024*1024;
     if(File(enc).existsSync() && File(dec).existsSync() && File(tok).existsSync() &&!isCorrupt(File(enc))){
       return modelDir.path;
@@ -157,7 +156,6 @@ class MusicController extends ChangeNotifier {
     double progress = 0;
     bool success = false;
     late StateSetter dialogSetState;
-
     if(context.mounted){
       showDialog(
         context: context,
@@ -173,23 +171,20 @@ class MusicController extends ChangeNotifier {
                 SizedBox(height:12),
                 Text(success? 'Model siap! Offline selamanya.' : '${(progress*100).toStringAsFixed(0)}% - Jangan tutup app...', style: TextStyle(color: Colors.white70, fontSize: 12)),
               ]),
-              actions: success? [ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green), onPressed: ()=>Navigator.pop(ctx), child: Text('Mulai'))] : [],
             );
           });
         }
       );
     }
-
     const base = 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main';
     try{
-      await _dlWithProgress('$base/base-encoder.int8.onnx', enc, (p){ progress = p*0.5; try{dialogSetState((){});}catch(_){} notifyListeners(); });
+      await _dlWithProgress('$base/base-encoder.int8.onnx', enc, (p){ progress = p*0.5; try{dialogSetState((){});}catch(_){} });
       await _dlWithProgress('$base/base-decoder.int8.onnx', dec, (p){ progress = 0.5 + p*0.4; try{dialogSetState((){});}catch(_){} });
       await _dlWithProgress('$base/base-tokens.txt', tok, (p){ progress = 0.9 + p*0.1; try{dialogSetState((){});}catch(_){} });
       success = true;
       try{dialogSetState((){});}catch(_){}
       await Future.delayed(Duration(milliseconds: 800));
       if(context.mounted) Navigator.pop(context);
-
       if(context.mounted){
         await showDialog(context: context, builder: (ctx)=>AlertDialog(
           backgroundColor: Color(0xFF1E1E24),
@@ -200,14 +195,6 @@ class MusicController extends ChangeNotifier {
       }
     }catch(e){
       if(context.mounted) Navigator.pop(context);
-      if(context.mounted){
-        await showDialog(context: context, builder: (ctx)=>AlertDialog(
-          backgroundColor: Color(0xFF1E1E24),
-          title: Text('❌ Download Gagal', style: TextStyle(color: Colors.redAccent)),
-          content: Text('$e\nCek internet, coba lagi.', style: TextStyle(color: Colors.white70)),
-          actions: [TextButton(onPressed: ()=>Navigator.pop(ctx), child: Text('Tutup'))],
-        ));
-      }
       rethrow;
     }
     return modelDir.path;
@@ -243,8 +230,6 @@ class MusicController extends ChangeNotifier {
       final wavPath = await _convertToWav(selectedMusicFile!.path);
       final wave = sherpa.readWave(wavPath);
       stream.acceptWaveform(sampleRate: wave.sampleRate, samples: wave.samples);
-      errorMessage='🧠 Transcribe...';
-      notifyListeners();
       recog.decode(stream);
       final result = recog.getResult(stream);
       String raw = result.text.trim();
@@ -264,8 +249,6 @@ class MusicController extends ChangeNotifier {
         throw Exception('Hasil kosong');
       }
     }catch(e){
-      String base = musicName.replaceAll('.mp3','').replaceAll('.m4a','').replaceAll('.wav','').trim();
-      lyricLines = [base.isEmpty? 'Babe Info Gawat' : base];
       errorMessage='⚠️ $e';
     }finally{
       isTranscribing=false;
@@ -494,7 +477,7 @@ class _MusicPanelState extends State<MusicPanel> {
             if(lyricExpanded) Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
               Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(10)), child: ctrl.lyricLines.isEmpty? const Text('Belum ada lirik', style: TextStyle(color:Colors.white24, fontSize:11)) : LyricKaraoke(sentence: ctrl.lyricLines[ctrl.currentLyricIndex], sentenceIndex: ctrl.currentLyricIndex, currentSentenceIndex: ctrl.currentLyricIndex, position: ctrl.position, sentenceStart: ctrl.currentSentenceStart, sentenceDuration: ctrl.sentenceDuration)),
               const SizedBox(height:8),
-          ...ctrl.lyricLines.asMap().entries.map((e){
+         ...ctrl.lyricLines.asMap().entries.map((e){
                 final isActive = e.key==ctrl.currentLyricIndex;
                 return AnimatedContainer(duration: const Duration(milliseconds:200), padding: const EdgeInsets.symmetric(vertical:3, horizontal:6), margin: const EdgeInsets.only(bottom:2), decoration: isActive? BoxDecoration(color: Colors.amber.withOpacity(0.12), borderRadius: BorderRadius.circular(6)) : null, child: Row(children:[Text('${e.key+1}. ', style: TextStyle(color: isActive?Colors.amber:Colors.white24, fontSize:10)), Expanded(child: Text(e.value, style: TextStyle(color: isActive?Colors.white:Colors.white38, fontSize: isActive?13:11, fontWeight: isActive?FontWeight.bold:FontWeight.normal)))]));
               }),
