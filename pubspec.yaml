@@ -20,6 +20,7 @@ dependencies:
   just_audio: ^0.10.4
   audio_waveforms: ^2.0.2
   flutter_screen_recording: ^2.0.25
+  whisper_flutter_new: ^0.0.4
 
 dependency_overrides:
   uuid: ^4.4.0
