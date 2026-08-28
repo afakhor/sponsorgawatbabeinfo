@@ -12,7 +12,6 @@ import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
-// ================= RUNNING TEXT =================
 class RunningText extends StatefulWidget {
   final String text;
   final Color color;
@@ -32,7 +31,6 @@ class _RunningTextState extends State<RunningText> with SingleTickerProviderStat
   }
 }
 
-// ================= KARAOKE HIJAU =================
 class LyricKaraoke extends StatelessWidget {
   final String sentence;
   final int sentenceIndex;
@@ -72,13 +70,14 @@ class LyricKaraoke extends StatelessWidget {
   }
 }
 
-// ================= CONTROLLER =================
 class MusicController extends ChangeNotifier {
   final ja.AudioPlayer audioPlayer=ja.AudioPlayer();
   final PlayerController waveformController=PlayerController();
   File? selectedMusicFile;
   String musicName='Belum ada musik';
   String editableTitle='SPONSOR BABE INFO GAWAT • TAP UNTUK EDIT JUDUL';
+  String editableBottomTitle='Babe Info Gawat - Tap untuk edit bawah';
+  bool usePreTrim=false;
   List<String> lyricLines=['Tap 📁 pilih lagu untuk auto lirik','Lirik asli auto transcribe Whisper','Putih fold in -> hijau per kata -> fold out'];
   int currentLyricIndex=0;
   Duration position=Duration.zero, duration=Duration.zero;
@@ -152,8 +151,7 @@ class MusicController extends ChangeNotifier {
     }
   }
 
-  // FIX API 1.13.6 - pakai OfflineStream
-      Future<void> transcribeLyric() async {
+  Future<void> transcribeLyric() async {
     if(selectedMusicFile==null) return;
     isTranscribing=true;
     errorMessage='🌐 Auto detect Indo/Barat...';
@@ -173,7 +171,6 @@ class MusicController extends ChangeNotifier {
       final recogCfg = sherpa.OfflineRecognizerConfig(model: modelCfg);
       final recog = sherpa.OfflineRecognizer(recogCfg);
       final stream = recog.createStream();
-
       final wave = sherpa.readWave(selectedMusicFile!.path);
       stream.acceptWaveform(sampleRate: wave.sampleRate, samples: wave.samples);
       recog.decode(stream);
@@ -181,7 +178,6 @@ class MusicController extends ChangeNotifier {
       String raw = result.text.trim();
       stream.free();
       recog.free();
-
       if(raw.length>5){
         List<String> sentences = [];
         final wordsAll = raw.split(RegExp(r'\s+'));
@@ -197,7 +193,6 @@ class MusicController extends ChangeNotifier {
       }
       throw Exception('Hasil kosong');
     }catch(e){
-      // fallback judul
       String base = musicName.replaceAll('.mp3','').replaceAll('.m4a','').replaceAll('.wav','').replaceAll('_',' ').trim();
       if(base.length<4) base = 'Babe Info Gawat Globe Berputar Musik Berdentum';
       List<String> parts = base.split(RegExp(r'[-|]')).map((e)=>e.trim()).where((e)=>e.isNotEmpty).toList();
@@ -438,7 +433,7 @@ class _MusicPanelState extends State<MusicPanel> {
             if(lyricExpanded) Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
               Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(10)), child: ctrl.lyricLines.isEmpty? const Text('Belum ada lirik', style: TextStyle(color:Colors.white24, fontSize:11)) : LyricKaraoke(sentence: ctrl.lyricLines[ctrl.currentLyricIndex], sentenceIndex: ctrl.currentLyricIndex, currentSentenceIndex: ctrl.currentLyricIndex, position: ctrl.position, sentenceStart: ctrl.currentSentenceStart, sentenceDuration: ctrl.sentenceDuration)),
               const SizedBox(height:8),
-            ...ctrl.lyricLines.asMap().entries.map((e){
+           ...ctrl.lyricLines.asMap().entries.map((e){
                 final isActive = e.key==ctrl.currentLyricIndex;
                 return AnimatedContainer(duration: const Duration(milliseconds:200), padding: const EdgeInsets.symmetric(vertical:3, horizontal:6), margin: const EdgeInsets.only(bottom:2), decoration: isActive? BoxDecoration(color: Colors.amber.withOpacity(0.12), borderRadius: BorderRadius.circular(6)) : null, child: Row(children:[Text('${e.key+1}. ', style: TextStyle(color: isActive?Colors.amber:Colors.white24, fontSize:10)), Expanded(child: Text(e.value, style: TextStyle(color: isActive?Colors.white:Colors.white38, fontSize: isActive?13:11, fontWeight: isActive?FontWeight.bold:FontWeight.normal)))]));
               }),
