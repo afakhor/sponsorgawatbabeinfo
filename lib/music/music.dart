@@ -153,7 +153,7 @@ class MusicController extends ChangeNotifier {
   }
 
   // FIX API 1.13.6 - pakai OfflineStream
-    Future<void> transcribeLyric() async {
+      Future<void> transcribeLyric() async {
     if(selectedMusicFile==null) return;
     isTranscribing=true;
     errorMessage='🌐 Auto detect Indo/Barat...';
