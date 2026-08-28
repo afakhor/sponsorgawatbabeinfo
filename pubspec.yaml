@@ -21,14 +21,21 @@ dependencies:
   audio_waveforms: ^2.0.2
   flutter_screen_recording: ^2.0.25
   whisper_flutter_new: ^0.0.4
+  sherpa_onnx: ^1.10.20
+  http: ^1.2.0
+ 
+
 
 dependency_overrides:
   uuid: ^4.4.0
 
 flutter:
   uses-material-design: true
+
   shaders:
     - shaders/globe.frag
+
   assets:
+    - assets/
     - assets/images/bg.jpg
     - assets/images/babe_info.png
