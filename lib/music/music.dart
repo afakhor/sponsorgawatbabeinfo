@@ -9,9 +9,8 @@ import 'package:just_audio/just_audio.dart' as ja;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
-
-// Jika pakai Whisper, aktifkan 2 baris ini dan tambah di pubspec.yaml
-// import 'package:whisper_flutter_new/whisper_flutter_new.dart';
+import 'package:http/http.dart' as http;
+import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
 // ================= RUNNING TEXT =================
 class RunningText extends StatefulWidget {
@@ -95,9 +94,6 @@ class MusicController extends ChangeNotifier {
   Duration trimStart=Duration.zero;
   Duration trimEnd=const Duration(seconds:60);
 
-  // Whisper instance (optional)
-  // Whisper? _whisper;
-
   Duration get sentenceDuration {
     if(lyricLines.isEmpty || duration.inMilliseconds==0) return const Duration(seconds:4);
     return Duration(milliseconds: (duration.inMilliseconds / lyricLines.length).floor());
@@ -121,6 +117,7 @@ class MusicController extends ChangeNotifier {
       notifyListeners();
     });
     audioPlayer.setVolume(1.0);
+    sherpa.initBindings();
   }
 
   Future<void> _req() async {
@@ -131,41 +128,85 @@ class MusicController extends ChangeNotifier {
     await Permission.notification.request();
   }
 
-  // === AUTO LIRIK ASLI WHISPER / FALLBACK JUDUL ===
+  // ====== DOWNLOAD MODEL AUTO (ONLINE SEKALI, OFFLINE SELAMANYA) ======
+  Future<String> _ensureModel() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final modelDir = Directory('${dir.path}/sherpa-small');
+    if(!await modelDir.exists()) await modelDir.create(recursive:true);
+
+    final enc = '${modelDir.path}/encoder.onnx';
+    final dec = '${modelDir.path}/decoder.onnx';
+    final tok = '${modelDir.path}/tokens.txt';
+
+    if(File(enc).existsSync() && File(dec).existsSync() && File(tok).existsSync()){
+      return modelDir.path;
+    }
+
+    // pakai model base.int8 biar kecil 70MB tapi tetap auto Indo+Barat
+    const base = 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main';
+    errorMessage='⬇️ Download model 70MB pertama kali...';
+    notifyListeners();
+    await _dl('$base/base-encoder.int8.onnx', enc);
+    await _dl('$base/base-decoder.int8.onnx', dec);
+    await _dl('$base/base-tokens.txt', tok);
+    return modelDir.path;
+  }
+
+  Future<void> _dl(String url, String save) async {
+    final r = await http.get(Uri.parse(url));
+    if(r.statusCode==200){
+      await File(save).writeAsBytes(r.bodyBytes);
+    } else {
+      throw Exception('Gagal download $url ${r.statusCode}');
+    }
+  }
+
+  // === AUTO LIRIK ASLI SHERPA WHISPER MULTILINGUAL AUTO DETECT ===
   Future<void> transcribeLyric() async {
     if(selectedMusicFile==null) return;
     isTranscribing=true;
-    errorMessage='🔊 Transcribe lirik asli (Whisper)...';
+    errorMessage='🌐 Auto detect Indo/Barat...';
     notifyListeners();
     try{
-      // --- COBA WHISPER JIKA ADA ---
-      // Uncomment jika sudah install whisper_flutter_new
-      /*
-      _whisper??= Whisper(model: WhisperModel.small, language: "id");
-      await _whisper!.initModel();
-      final result = await _whisper!.transcribe(filePath: selectedMusicFile!.path);
-      final raw = result.text.trim();
+      final mp = await _ensureModel();
+      final whisperCfg = sherpa.OfflineWhisperModelConfig(
+        encoder: '${mp}/encoder.onnx',
+        decoder: '${mp}/decoder.onnx',
+        language: '', // kosong = auto detect bahasa
+        task: 'transcribe',
+      );
+      final modelCfg = sherpa.OfflineModelConfig(
+        whisper: whisperCfg,
+        tokens: '${mp}/tokens.txt',
+      );
+      final recogCfg = sherpa.OfflineRecognizerConfig(model: modelCfg);
+      final recog = sherpa.OfflineRecognizer(recogCfg);
+
+      // sherpa butuh wav, kalau mp3 kita coba langsung decode (base support mp3 via ffmpeg di android)
+      final result = recog.decode(selectedMusicFile!.path);
+      String raw = result.text.trim();
+
       if(raw.length>5){
         List<String> sentences = [];
-        // pecah per 7 kata biar enak karaoke
         final wordsAll = raw.split(RegExp(r'\s+'));
         for(int i=0;i<wordsAll.length;i+=7){
           int end = (i+7<wordsAll.length)? i+7 : wordsAll.length;
           sentences.add(wordsAll.sublist(i,end).join(' '));
         }
         lyricLines = sentences;
-        errorMessage='✅ Lirik asli ketemu ${sentences.length} baris - bisa diedit';
         currentLyricIndex=0;
+        errorMessage='✅ Lirik asli ${sentences.length} baris - tap Edit kalau salah';
         notifyListeners();
+        recog.free();
         return;
       }
-      */
-
-      // --- FALLBACK: kalau whisper belum dipasang, pakai judul file ---
+      recog.free();
+      throw Exception('Hasil kosong');
+    }catch(e){
+      // FALLBACK JUDUL kalau offline / gagal
       String base = musicName.replaceAll('.mp3','').replaceAll('.m4a','').replaceAll('.wav','').replaceAll('_',' ').trim();
       if(base.length<4) base = 'Babe Info Gawat Globe Berputar Musik Berdentum';
       List<String> parts = base.split(RegExp(r'[-|]')).map((e)=>e.trim()).where((e)=>e.isNotEmpty).toList();
-      // kalau cuma 1 part panjang, pecah per 6 kata
       if(parts.length==1 && parts[0].split(' ').length>8){
         final w = parts[0].split(' ');
         parts = [];
@@ -177,9 +218,7 @@ class MusicController extends ChangeNotifier {
       if(parts.length<3) parts = ['Memutar: $musicName','Babe Info Gawat di angkasa','Globe berputar musik berdentum','Wave naik turun ikuti beat','Share ke WhatsApp Status'];
       lyricLines = parts;
       currentLyricIndex=0;
-      errorMessage='Lirik dari judul (pasang Whisper untuk lirik asli auto)';
-    }catch(e){
-      errorMessage='Transcribe gagal: $e';
+      errorMessage='⚠️ Offline - lirik dari judul (online sekali untuk lirik asli): $e';
     }finally{
       isTranscribing=false;
       notifyListeners();
@@ -212,7 +251,6 @@ class MusicController extends ChangeNotifier {
       trimEnd= duration.inSeconds>60? const Duration(seconds:60) : duration;
       try{ await waveformController.preparePlayer(path:path, shouldExtractWaveform:true, noOfSamples:100); await waveformController.stopPlayer(); }catch(_){}
       isLoading=false; notifyListeners();
-      // AUTO TRANSCRIBE SETELAH PICK
       await transcribeLyric();
     }catch(e){ errorMessage='Gagal: $e'; isLoading=false; notifyListeners(); }
   }
@@ -405,7 +443,6 @@ class _MusicPanelState extends State<MusicPanel> {
           const SizedBox(height:8),
           Container(height:52, decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)), child: ctrl.selectedMusicFile==null? const Center(child: Text('Waveform / Equalizer', style: TextStyle(color:Colors.white24,fontSize:11))) : AudioFileWaveforms(size: Size(MediaQuery.of(context).size.width-24,52), playerController: ctrl.waveformController, enableSeekGesture:true, waveformType: WaveformType.fitWidth, playerWaveStyle: const PlayerWaveStyle(fixedWaveColor:Colors.white24,liveWaveColor:Colors.amber,spacing:3,waveThickness:2))),
           const SizedBox(height:8),
-          // TOMBOL AUTO LIRIK + EDIT
           Row(children:[
             Expanded(child: ElevatedButton.icon(onPressed: ctrl.isTranscribing?null:()=>ctrl.transcribeLyric(), style: ElevatedButton.styleFrom(backgroundColor: Colors.white12, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical:10)), icon: Icon(ctrl.isTranscribing?Icons.hourglass_top:Icons.auto_awesome, size:16), label: Text(ctrl.isTranscribing?'Transcribing...':'Auto Lirik Asli', style: const TextStyle(fontSize:11)))),
             const SizedBox(width:8),
@@ -418,7 +455,7 @@ class _MusicPanelState extends State<MusicPanel> {
             if(lyricExpanded) Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
               Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(10)), child: ctrl.lyricLines.isEmpty? const Text('Belum ada lirik', style: TextStyle(color:Colors.white24, fontSize:11)) : LyricKaraoke(sentence: ctrl.lyricLines[ctrl.currentLyricIndex], sentenceIndex: ctrl.currentLyricIndex, currentSentenceIndex: ctrl.currentLyricIndex, position: ctrl.position, sentenceStart: ctrl.currentSentenceStart, sentenceDuration: ctrl.sentenceDuration)),
               const SizedBox(height:8),
-             ...ctrl.lyricLines.asMap().entries.map((e){
+            ...ctrl.lyricLines.asMap().entries.map((e){
                 final isActive = e.key==ctrl.currentLyricIndex;
                 return AnimatedContainer(duration: const Duration(milliseconds:200), padding: const EdgeInsets.symmetric(vertical:3, horizontal:6), margin: const EdgeInsets.only(bottom:2), decoration: isActive? BoxDecoration(color: Colors.amber.withOpacity(0.12), borderRadius: BorderRadius.circular(6)) : null, child: Row(children:[Text('${e.key+1}. ', style: TextStyle(color: isActive?Colors.amber:Colors.white24, fontSize:10)), Expanded(child: Text(e.value, style: TextStyle(color: isActive?Colors.white:Colors.white38, fontSize: isActive?13:11, fontWeight: isActive?FontWeight.bold:FontWeight.normal)))]));
               }),
