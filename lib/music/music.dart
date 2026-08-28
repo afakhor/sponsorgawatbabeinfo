@@ -10,10 +10,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 
+// FIX: tambahin fontSize biar main.dart gak error
 class RunningText extends StatefulWidget {
   final String text;
   final Color color;
-  const RunningText({super.key, required this.text, this.color = Colors.amber});
+  final double fontSize;
+  const RunningText({super.key, required this.text, this.color = Colors.amber, this.fontSize = 14});
   @override State<RunningText> createState() => _RunningTextState();
 }
 class _RunningTextState extends State<RunningText> with SingleTickerProviderStateMixin {
@@ -23,7 +25,7 @@ class _RunningTextState extends State<RunningText> with SingleTickerProviderStat
   @override Widget build(BuildContext c){
     if(widget.text.isEmpty) return const SizedBox(height:18);
     return SizedBox(height:18, child: ClipRect(child: AnimatedBuilder(animation:_c, builder:(ctx,_){
-      return Transform.translate(offset: Offset(120 - (_c.value*350),0), child: Text(widget.text, maxLines:1, style: TextStyle(color:widget.color,fontSize:14,fontWeight:FontWeight.w600)));
+      return Transform.translate(offset: Offset(120 - (_c.value*350),0), child: Text(widget.text, maxLines:1, style: TextStyle(color:widget.color,fontSize:widget.fontSize,fontWeight:FontWeight.w600)));
     })));
   }
 }
@@ -35,10 +37,12 @@ class MusicController extends ChangeNotifier {
   File? selectedMusicFile;
   String musicName='Belum ada musik';
   String editableTitle='SPONSOR BABE INFO GAWAT • TAP UNTUK EDIT JUDUL';
+  String editableBottomTitle='Babe Info Gawat - Tap untuk edit bawah';
   List<String> lyricLines=['Tap lyric untuk fold in/out','Geser atas untuk pilih lagu 📁','Putar musik untuk lyric per kalimat muncul'];
   int currentLyricIndex=0;
   Duration position=Duration.zero, duration=Duration.zero;
   bool isPlaying=false, isLoading=false, isRecording=false;
+  bool usePreTrim=false; // FIX: tambahin biar main.dart gak error
   String? errorMessage;
   String? recordedPath;
   Timer? recordTimer;
@@ -69,6 +73,7 @@ class MusicController extends ChangeNotifier {
     await Permission.storage.request();
     await Permission.audio.request();
     await Permission.microphone.request();
+    await Permission.notification.request();
   }
 
   Future<void> pickMusic() async {
@@ -114,18 +119,13 @@ class MusicController extends ChangeNotifier {
     position=safe; notifyListeners();
   }
 
-  // FIX UTAMA: PAKAI startRecordScreenAndAudio BIAR BERSUARA + HD
   Future<void> startRecord() async {
     try{
       await _req();
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       isRecording=true; recordSeconds=0; recordedPath=null; notifyListeners();
       final fileName='babe_${DateTime.now().millisecondsSinceEpoch}';
-      await FlutterScreenRecording.startRecordScreenAndAudio(
-        fileName,
-        titleNotification: "Babe Info Gawat REC HD",
-        messageNotification: "Merekam globe 60 detik HD bersuara"
-      );
+      await FlutterScreenRecording.startRecordScreenAndAudio(fileName, titleNotification: "Babe Info Gawat REC HD", messageNotification: "Merekam globe 60 detik HD bersuara");
       recordTimer?.cancel();
       recordTimer=Timer.periodic(const Duration(seconds:1), (t){
         recordSeconds++; notifyListeners();
@@ -148,6 +148,33 @@ class MusicController extends ChangeNotifier {
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       isRecording=false; errorMessage='Stop gagal: $e'; notifyListeners();
     }
+  }
+
+  // FIX: method yang dipanggil main.dart
+  Future<void> cancelRecord() async {
+    try{
+      recordTimer?.cancel();
+      await FlutterScreenRecording.stopRecordScreen;
+      isRecording=false;
+      recordedPath=null;
+      recordSeconds=0;
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      notifyListeners();
+    }catch(_){}
+  }
+
+  // FIX: dialog setelah record
+  Future<void> showPostRecordDialog(BuildContext context) async {
+    if(recordedPath==null) return;
+    await showDialog(context: context, builder: (ctx)=>AlertDialog(
+      backgroundColor: const Color(0xFF1E1E24),
+      title: const Text('Rekaman Selesai HD', style: TextStyle(color:Colors.white)),
+      content: Text('File: ${recordedPath!.split('/').last}\nMau share ke WhatsApp?', style: const TextStyle(color:Colors.white70, fontSize:13)),
+      actions: [
+        TextButton(onPressed: ()=>Navigator.pop(ctx), child: const Text('Nanti')),
+        ElevatedButton(onPressed: (){ Navigator.pop(ctx); shareToWhatsApp(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text('Share WA HD')),
+      ],
+    ));
   }
 
   Future<void> shareToWhatsApp() async {
