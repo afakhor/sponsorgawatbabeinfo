@@ -153,7 +153,7 @@ class MusicController extends ChangeNotifier {
   }
 
   // FIX API 1.13.6 - pakai OfflineStream
-  Future<void> transcribeLyric() async {
+    Future<void> transcribeLyric() async {
     if(selectedMusicFile==null) return;
     isTranscribing=true;
     errorMessage='🌐 Auto detect Indo/Barat...';
@@ -174,17 +174,10 @@ class MusicController extends ChangeNotifier {
       final recog = sherpa.OfflineRecognizer(recogCfg);
       final stream = recog.createStream();
 
-      // sherpa_onnx butuh WAV 16kHz, coba baca langsung
-      try{
-        final wave = sherpa.readWave(selectedMusicFile!.path);
-        stream.acceptWaveform(sampleRate: wave.sampleRate, samples: wave.samples);
-      }catch(_){
-        // kalau MP3, fallback pakai judul dulu, nanti convert manual kalau mau
-        throw Exception('File bukan WAV, convert dulu ke WAV');
-      }
-
+      final wave = sherpa.readWave(selectedMusicFile!.path);
+      stream.acceptWaveform(sampleRate: wave.sampleRate, samples: wave.samples);
       recog.decode(stream);
-      final result = stream.result;
+      final result = recog.getResult(stream);
       String raw = result.text.trim();
       stream.free();
       recog.free();
@@ -204,21 +197,14 @@ class MusicController extends ChangeNotifier {
       }
       throw Exception('Hasil kosong');
     }catch(e){
+      // fallback judul
       String base = musicName.replaceAll('.mp3','').replaceAll('.m4a','').replaceAll('.wav','').replaceAll('_',' ').trim();
       if(base.length<4) base = 'Babe Info Gawat Globe Berputar Musik Berdentum';
       List<String> parts = base.split(RegExp(r'[-|]')).map((e)=>e.trim()).where((e)=>e.isNotEmpty).toList();
-      if(parts.length==1 && parts[0].split(' ').length>8){
-        final w = parts[0].split(' ');
-        parts = [];
-        for(int i=0;i<w.length;i+=6){
-          int end = (i+6<w.length)? i+6 : w.length;
-          parts.add(w.sublist(i,end).join(' '));
-        }
-      }
       if(parts.length<3) parts = ['Memutar: $musicName','Babe Info Gawat di angkasa','Globe berputar musik berdentum','Wave naik turun ikuti beat','Share ke WhatsApp Status'];
       lyricLines = parts;
       currentLyricIndex=0;
-      errorMessage='⚠️ Pakai judul (butuh WAV untuk Whisper): $e';
+      errorMessage='⚠️ Pakai judul: $e';
     }finally{
       isTranscribing=false;
       notifyListeners();
