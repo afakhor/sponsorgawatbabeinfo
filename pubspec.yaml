@@ -23,8 +23,8 @@ dependencies:
   sherpa_onnx: ^1.10.20
   http: ^1.2.0
   ffmpeg_kit_flutter_new: ^4.6.2
-  mp3: ^1.0.0
-  wav: ^1.1.0
+  //mp3: ^1.0.0
+  //wav: ^1.1.0
 
 dependency_overrides:
   uuid: ^4.4.0
