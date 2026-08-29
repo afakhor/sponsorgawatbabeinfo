@@ -12,9 +12,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
-//import 'package:mp3/mp3.dart' as mp3decoder;
-//import 'package:wav/wav.dart';
+// HAPUS FFMPEG BIAR BUILD GAK GAGAL LAGI
+// import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 
 class RunningText extends StatefulWidget {
   final String text;
@@ -35,7 +34,6 @@ class _RunningTextState extends State<RunningText> with SingleTickerProviderStat
   }
 }
 
-// MODEL TIMESTAMP AKURAT
 class TimedWord {
   final String word;
   final Duration start;
@@ -58,16 +56,13 @@ class LyricKaraoke extends StatelessWidget {
     int activeWord = -1;
     for(int i=0;i<sentence.words.length;i++){
       if(position >= sentence.words[i].start && position < sentence.words[i].end){
-        activeWord = i;
-        break;
+        activeWord = i; break;
       }
-      if(position >= sentence.words[i].end && i==sentence.words.length-1 && position < sentence.end + Duration(milliseconds:300)){
+      if(position >= sentence.words[i].end && i==sentence.words.length-1 && position < sentence.end + const Duration(milliseconds:300)){
         activeWord = i;
       }
     }
-    // kalau sudah lewat kalimat, semua hijau
     if(position > sentence.end) activeWord = sentence.words.length;
-
     return TweenAnimationBuilder<double>(
       key: ValueKey(sentence.start),
       tween: Tween(begin: 0, end: 1),
@@ -110,7 +105,6 @@ class MusicController extends ChangeNotifier {
   int recordSeconds=0;
   Duration trimStart=Duration.zero;
   Duration trimEnd=const Duration(seconds:60);
-
   Duration get sentenceDuration => lyricSentences.isEmpty? const Duration(seconds:4) : lyricSentences[currentLyricIndex].end - lyricSentences[currentLyricIndex].start;
   Duration get currentSentenceStart => lyricSentences.isEmpty? Duration.zero : lyricSentences[currentLyricIndex].start;
 
@@ -118,13 +112,11 @@ class MusicController extends ChangeNotifier {
     audioPlayer.positionStream.listen((v){
       position=v;
       if(lyricSentences.isNotEmpty){
-        // cari kalimat yang mengandung posisi sekarang
         for(int i=0;i<lyricSentences.length;i++){
-          if(v >= lyricSentences[i].start && v < lyricSentences[i].end + Duration(milliseconds:500)){
+          if(v >= lyricSentences[i].start && v < lyricSentences[i].end + const Duration(milliseconds:500)){
             if(i!=currentLyricIndex) currentLyricIndex=i;
             break;
           }
-          // kalau di antara kalimat
           if(i < lyricSentences.length-1 && v >= lyricSentences[i].end && v < lyricSentences[i+1].start){
             if(i!=currentLyricIndex) currentLyricIndex=i+1;
             break;
@@ -168,47 +160,39 @@ class MusicController extends ChangeNotifier {
     client.close();
   }
 
-    Future<String> _ensureModelWithDialog(BuildContext context) async {
+  Future<String> _ensureModelWithDialog(BuildContext context) async {
     final dir = await getApplicationDocumentsDirectory();
-    // GANTI KE TINY 39MB - HAPUS SMALL 70MB YANG BIKIN CRASH
     try{
       final old = Directory('${dir.path}/sherpa-small');
       if(await old.exists()) await old.delete(recursive:true);
     }catch(_){}
-
     final modelDir = Directory('${dir.path}/sherpa-tiny');
     if(!await modelDir.exists()) await modelDir.create(recursive:true);
     final enc = '${modelDir.path}/encoder.onnx';
     final dec = '${modelDir.path}/decoder.onnx';
     final tok = '${modelDir.path}/tokens.txt';
-
     if(File(enc).existsSync() && File(dec).existsSync() && File(tok).existsSync() && File(enc).lengthSync() > 3*1024*1024){
       return modelDir.path;
     }
     try{ if(File(enc).existsSync()) await File(enc).delete(); if(File(dec).existsSync()) await File(dec).delete(); if(File(tok).existsSync()) await File(tok).delete(); }catch(_){}
-
     double progress = 0;
     bool success = false;
     late StateSetter dialogSetState;
     if(context.mounted){
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx){
-          return StatefulBuilder(builder: (ctx,setSt){
-            dialogSetState = setSt;
-            return AlertDialog(
-              backgroundColor: Color(0xFF1E1E24),
-              title: Text(success? '✅ Download Sukses' : '⬇️ Download Tiny 39MB', style: TextStyle(color: Colors.amber, fontSize: 14, fontWeight: FontWeight.bold)),
-              content: Column(mainAxisSize: MainAxisSize.min, children:[
-                LinearProgressIndicator(value: success?1: (progress==0?null:progress), color: Colors.amber, backgroundColor: Colors.white12),
-                SizedBox(height:12),
-                Text(success? 'Model siap! Anti-crash.' : '${(progress*100).toStringAsFixed(0)}% - Model kecil...', style: TextStyle(color: Colors.white70, fontSize: 12)),
-              ]),
-            );
-          });
-        }
-      );
+      showDialog(context: context, barrierDismissible: false, builder: (ctx){
+        return StatefulBuilder(builder: (ctx,setSt){
+          dialogSetState = setSt;
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E1E24),
+            title: Text(success? '✅ Download Sukses' : '⬇️ Download Tiny 39MB', style: const TextStyle(color: Colors.amber, fontSize: 14, fontWeight: FontWeight.bold)),
+            content: Column(mainAxisSize: MainAxisSize.min, children:[
+              LinearProgressIndicator(value: success?1: (progress==0?null:progress), color: Colors.amber, backgroundColor: Colors.white12),
+              const SizedBox(height:12),
+              Text(success? 'Model siap! Anti-crash.' : '${(progress*100).toStringAsFixed(0)}% - Model kecil...', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            ]),
+          );
+        });
+      });
     }
     const base = 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/main';
     try{
@@ -217,14 +201,14 @@ class MusicController extends ChangeNotifier {
       await _dlWithProgress('$base/tiny-tokens.txt', tok, (p){ progress = 0.9 + p*0.1; try{dialogSetState((){});}catch(_){} });
       success = true;
       try{dialogSetState((){});}catch(_){}
-      await Future.delayed(Duration(milliseconds: 800));
+      await Future.delayed(const Duration(milliseconds: 800));
       if(context.mounted) Navigator.pop(context);
       if(context.mounted){
         await showDialog(context: context, builder: (ctx)=>AlertDialog(
-          backgroundColor: Color(0xFF1E1E24),
-          title: Row(children:[Icon(Icons.check_circle, color: Colors.green), SizedBox(width:8), Text('Download Sukses!', style: TextStyle(color: Colors.white))]),
-          content: Text('Tiny 39MB terpasang.\nAnti crash untuk MP3 11MB.', style: TextStyle(color: Colors.white70, fontSize: 12)),
-          actions: [ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black), onPressed: ()=>Navigator.pop(ctx), child: Text('OK Siap'))],
+          backgroundColor: const Color(0xFF1E1E24),
+          title: Row(children:[const Icon(Icons.check_circle, color: Colors.green), const SizedBox(width:8), const Text('Download Sukses!', style: TextStyle(color: Colors.white))]),
+          content: const Text('Tiny 39MB terpasang.\nAnti crash untuk MP3 11MB.', style: TextStyle(color: Colors.white70, fontSize: 12)),
+          actions: [ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black), onPressed: ()=>Navigator.pop(ctx), child: const Text('OK Siap'))],
         ));
       }
     }catch(e){
@@ -234,12 +218,12 @@ class MusicController extends ChangeNotifier {
     return modelDir.path;
   }
 
+  // FIX UTAMA - GAK PAKAI FFMPEG
   Future<String> _convertToWav(String inputPath, {int maxSeconds = 180}) async => inputPath;
 
-        Future<void> transcribeLyric(BuildContext context) async {
+  Future<void> transcribeLyric(BuildContext context) async {
     if(selectedMusicFile==null) return;
     isTranscribing=true;
-
     String currentStep = 'START';
     double progress = 0;
     late StateSetter diagSet;
@@ -250,25 +234,24 @@ class MusicController extends ChangeNotifier {
         builder: (ctx) => StatefulBuilder(builder: (ctx,setSt){
           diagSet = setSt;
           return AlertDialog(
-            backgroundColor: Color(0xFF1E1E24),
-            title: Text('🔍 TRANSCRIBE 3 MENIT', style: TextStyle(color: Colors.amber, fontSize:13, fontWeight: FontWeight.bold)),
+            backgroundColor: const Color(0xFF1E1E24),
+            title: const Text('🔍 TRANSCRIBE 3 MENIT', style: TextStyle(color: Colors.amber, fontSize:13, fontWeight: FontWeight.bold)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('File: $musicName (${selectedMusicFile!.lengthSync()~/1024}KB)', style: TextStyle(color: Colors.white70, fontSize:11)),
-                SizedBox(height:8),
-                Text('STEP: $currentStep', style: TextStyle(color: Colors.cyan, fontSize:12, fontWeight: FontWeight.bold)),
-                SizedBox(height:8),
+                Text('File: $musicName (${selectedMusicFile!.lengthSync()~/1024}KB)', style: const TextStyle(color: Colors.white70, fontSize:11)),
+                const SizedBox(height:8),
+                Text('STEP: $currentStep', style: const TextStyle(color: Colors.cyan, fontSize:12, fontWeight: FontWeight.bold)),
+                const SizedBox(height:8),
                 LinearProgressIndicator(value: progress==0?null:progress, color: Colors.amber),
-                SizedBox(height:12),
-                Text(errorMessage??'', style: TextStyle(color: Colors.white54, fontSize:10)),
+                const SizedBox(height:12),
+                Text(errorMessage??'', style: const TextStyle(color: Colors.white54, fontSize:10)),
               ],
             ),
           );
         }),
       );
     }
-
     void updateStep(String step, {double prog = 0, String? msg}){
       currentStep = step;
       progress = prog;
@@ -276,80 +259,106 @@ class MusicController extends ChangeNotifier {
       try{ diagSet((){}); }catch(_){}
       notifyListeners();
     }
-
     try{
       updateStep('1/5 CEK MODEL', prog:0.1);
       final mp = await _ensureModelWithDialog(context);
 
       updateStep('2/5 SKIP CONVERT', prog:0.3, msg:'MP3 11MB langsung baca tanpa FFmpeg');
-      // GAK CONVERT LAGI - LANGSUNG PAKAI FILE ASLI
       String wavPath = selectedMusicFile!.path;
 
       updateStep('3/5 BACA MP3', prog:0.5, msg:'readWave MP3 3 menit...');
       late sherpa.WaveData wave;
-      wave = sherpa.readWave(wavPath); // bisa baca MP3 langsung
+      try{
+        wave = sherpa.readWave(wavPath);
+      }catch(e){
+        throw Exception('readWave gagal baca MP3: $e - coba MP3 lain');
+      }
 
-      // POTONG 3 MENIT MAX = 180 DETIK
+      if(wave.sampleRate==0 || wave.samples.isEmpty){
+        throw Exception('readWave sampleRate 0 / kosong');
+      }
+
+      // ANTI NaN / Infinity - INI FIX ERROR LU DI FOTO
+      List<double> raw = wave.samples.map((e)=> e.isFinite? e : 0.0).where((e)=> e.isFinite).toList();
+      if(raw.isEmpty) throw Exception('Semua samples NaN');
+
       int targetSr = 16000;
-      var samples = wave.samples;
-      // resample kalau bukan 16k
-      if(wave.sampleRate != targetSr){
+      List<double> samples = raw;
+
+      if(wave.sampleRate!= targetSr && wave.sampleRate > 0 && wave.sampleRate.isFinite){
         double ratio = wave.sampleRate / targetSr;
-        int newLen = (samples.length / ratio).toInt();
-        if(newLen > targetSr * 180) newLen = targetSr * 180; // max 3 menit
-        var resampled = List<double>.filled(newLen, 0);
-        for(int i=0;i<newLen;i++){
-          int srcIdx = (i * ratio).toInt();
-          if(srcIdx < samples.length) resampled[i] = samples[srcIdx];
+        if(ratio.isFinite && ratio>0){
+          int newLen = (samples.length / ratio).floor(); // floor anti Infinity
+          if(newLen > targetSr * 180) newLen = targetSr * 180;
+          if(newLen>0){
+            var resampled = List<double>.filled(newLen, 0.0);
+            for(int i=0;i<newLen;i++){
+              int srcIdx = (i * ratio).floor();
+              if(srcIdx>=0 && srcIdx < samples.length){
+                double v = samples[srcIdx];
+                resampled[i] = v.isFinite? v : 0.0;
+              }
+            }
+            samples = resampled;
+          }
         }
-        samples = Float32List.fromList(resampled);
       } else {
         if(samples.length > targetSr * 180) samples = samples.sublist(0, targetSr * 180);
       }
 
-      updateStep('3/5 SIAP ${samples.length~/16000}s', prog:0.6, msg:'${samples.length} samples');
+      // pastikan final gak ada NaN lagi
+      samples = samples.map((e)=> e.isFinite? e : 0.0).toList();
+      Float32List finalSamples = Float32List.fromList(samples);
+
+      updateStep('3/5 SIAP ${finalSamples.length~/16000}s', prog:0.6, msg:'${finalSamples.length} samples valid');
 
       updateStep('4/5 INIT TINY', prog:0.7);
       final whisperCfg = sherpa.OfflineWhisperModelConfig(encoder: '$mp/encoder.onnx', decoder: '$mp/decoder.onnx', language: '', task: 'transcribe');
       final modelCfg = sherpa.OfflineModelConfig(whisper: whisperCfg, tokens: '$mp/tokens.txt', numThreads: 1);
       final recog = sherpa.OfflineRecognizer(sherpa.OfflineRecognizerConfig(model: modelCfg, decodingMethod: 'greedy', maxActivePaths: 1));
 
-      // CHUNK 30 DETIK BIAR GAK CRASH
       int chunkSec = 30;
       int chunkSamples = 16000 * chunkSec;
-      int totalChunks = (samples.length / chunkSamples).ceil();
+      int totalChunks = (finalSamples.length / chunkSamples).ceil();
+      if(totalChunks==0) totalChunks=1;
       List<TimedSentence> allSentences = [];
 
       for(int c=0;c<totalChunks;c++){
         int start = c * chunkSamples;
         int end = start + chunkSamples;
-        if(end > samples.length) end = samples.length;
-        var chunk = samples.sublist(start, end);
+        if(end > finalSamples.length) end = finalSamples.length;
+        if(start>=end) break;
+        var chunk = finalSamples.sublist(start, end);
 
-        updateStep('5/5 DECODE ${c+1}/$totalChunks', prog:0.7 + 0.3*c/totalChunks, msg:'${(start/16000).toInt()}s-${(end/16000).toInt()}s / ${samples.length~/16000}s');
+        updateStep('5/5 DECODE ${c+1}/$totalChunks', prog:0.7 + 0.3*c/totalChunks, msg:'${(start/16000).toInt()}s-${(end/16000).toInt()}s / ${finalSamples.length~/16000}s');
 
         final stream = recog.createStream();
         stream.acceptWaveform(sampleRate: 16000, samples: chunk);
         recog.decode(stream);
         final result = recog.getResult(stream);
-        String raw = result.text.trim();
+        String rawText = result.text.trim();
 
         double offsetSec = start / 16000.0;
-        if(raw.isNotEmpty){
-          var words = raw.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
+        if(offsetSec.isNaN ||!offsetSec.isFinite) offsetSec = 0;
+
+        if(rawText.isNotEmpty){
+          var words = rawText.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
           for(int i=0;i<words.length;i+=6){
             int en = (i+6<words.length)? i+6 : words.length;
             var slice = words.sublist(i,en);
             List<TimedWord> wds = [];
             for(int j=0;j<slice.length;j++){
               double s = offsetSec + (i+j)*0.5;
-              wds.add(TimedWord(slice[j], Duration(milliseconds:(s*1000).toInt()), Duration(milliseconds:((s+0.5)*1000).toInt())));
+              double e = s + 0.5;
+              if(!s.isFinite) s = offsetSec;
+              if(!e.isFinite) e = s + 0.5;
+              wds.add(TimedWord(slice[j], Duration(milliseconds:(s*1000).floor()), Duration(milliseconds:(e*1000).floor())));
             }
             if(wds.isNotEmpty) allSentences.add(TimedSentence(wds, wds.first.start, wds.last.end));
           }
         }
         stream.free();
-        await Future.delayed(Duration(milliseconds:150));
+        await Future.delayed(const Duration(milliseconds:150));
       }
 
       lyricSentences = allSentences;
@@ -357,17 +366,18 @@ class MusicController extends ChangeNotifier {
       recog.free();
 
       if(context.mounted) Navigator.pop(context);
-      errorMessage='✅ ${allSentences.length} baris - 3 menit sukses tanpa FFmpeg';
+      errorMessage='✅ ${allSentences.length} baris - 3 menit sukses';
+      if(allSentences.isEmpty) errorMessage='⚠️ Lirik kosong - model tidak deteksi vokal, coba edit manual';
 
     }catch(e){
       if(context.mounted) Navigator.pop(context);
       errorMessage='❌ GAGAL DI $currentStep: $e';
       if(context.mounted){
         showDialog(context: context, builder: (ctx)=>AlertDialog(
-          backgroundColor: Color(0xFF1E1E24),
-          title: Text('❌ $currentStep', style: TextStyle(color: Colors.redAccent)),
-          content: Text('$e', style: TextStyle(color: Colors.white70, fontSize:11)),
-          actions: [ElevatedButton(onPressed: ()=>Navigator.pop(ctx), child: Text('OK'))],
+          backgroundColor: const Color(0xFF1E1E24),
+          title: Text('❌ $currentStep', style: const TextStyle(color: Colors.redAccent)),
+          content: Text('$e', style: const TextStyle(color: Colors.white70, fontSize:11)),
+          actions: [ElevatedButton(onPressed: ()=>Navigator.pop(ctx), child: const Text('OK'))],
         ));
       }
     }finally{
@@ -474,7 +484,7 @@ class MusicController extends ChangeNotifier {
     await showDialog(context: context, barrierDismissible:false, builder: (ctx)=>AlertDialog(
       backgroundColor: const Color(0xFF1E1E24),
       title: const Text('Rekaman Selesai 0-60s HD', style: TextStyle(color:Colors.white)),
-      content: Text('File: ${recordedPath!.split('/').last}\nDurasi: ${recordSeconds}s / 60s\n${editableTitle}', style: const TextStyle(color:Colors.white70, fontSize:12)),
+      content: Text('File: ${recordedPath!.split('/').last}\nDurasi: ${recordSeconds}s / 60s\n${editableTitle}\nLirik: ${lyricSentences.length} baris', style: const TextStyle(color:Colors.white70, fontSize:12)),
       actions: [
         TextButton(onPressed: () async { Navigator.pop(ctx); await cancelRecord(); }, child: const Text('Hapus', style: TextStyle(color:Colors.redAccent))),
         ElevatedButton(onPressed: (){ Navigator.pop(ctx); shareToWhatsApp(); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text('Share WA HD')),
@@ -489,6 +499,7 @@ class MusicController extends ChangeNotifier {
     await showDialog(context: context, builder: (ctx){
       return StatefulBuilder(builder: (ctx,setSt){
         double maxSec = duration.inSeconds.toDouble();
+        if(!maxSec.isFinite) maxSec=60;
         return AlertDialog(
           backgroundColor: const Color(0xFF1E1E24),
           title: const Text('TRIM REC 60s MAX', style: TextStyle(color:Colors.amber, fontSize:14, fontWeight: FontWeight.bold)),
@@ -496,8 +507,8 @@ class MusicController extends ChangeNotifier {
             Text('${fmt(tempStart)} - ${fmt(tempEnd)} (${(tempEnd-tempStart).inSeconds}s)', style: const TextStyle(color:Colors.white70, fontSize:12)),
             const SizedBox(height:12),
             RangeSlider(min: 0, max: maxSec, values: RangeValues(tempStart.inSeconds.toDouble(), tempEnd.inSeconds.toDouble()), activeColor: Colors.amber, inactiveColor: Colors.white24, labels: RangeLabels(fmt(tempStart), fmt(tempEnd)), onChanged: (v){
-              Duration ns = Duration(seconds: v.start.toInt());
-              Duration ne = Duration(seconds: v.end.toInt());
+              Duration ns = Duration(seconds: v.start.floor());
+              Duration ne = Duration(seconds: v.end.floor());
               if((ne-ns).inSeconds>60) ne = ns + const Duration(seconds:60);
               setSt((){ tempStart=ns; tempEnd=ne; });
             }),
@@ -526,14 +537,17 @@ class MusicController extends ChangeNotifier {
     if(res!=null){
       var lines = res.split('\n').map((e)=>e.trim()).where((e)=>e.isNotEmpty).toList();
       if(lines.isEmpty) lines=['Lirik kosong'];
-      // rebuild dengan timestamp bagi rata kalau edit manual
       List<TimedWord> words = [];
       int totalMs = duration.inMilliseconds>0? duration.inMilliseconds : lines.length*3000;
+      if(!totalMs.isFinite) totalMs = lines.length*3000;
       int idx=0;
+      int totalWords = lines.join(' ').split(' ').where((w)=>w.isNotEmpty).length;
+      if(totalWords==0) totalWords=1;
       for(var line in lines){
         var ws = line.split(' ').where((w)=>w.isNotEmpty).toList();
         for(var w in ws){
-          int s = (idx*totalMs ~/ (lines.join(' ').split(' ').length));
+          int s = (idx*totalMs ~/ totalWords);
+          if(!s.isFinite) s=0;
           words.add(TimedWord(w, Duration(milliseconds:s), Duration(milliseconds:s+400)));
           idx++;
         }
@@ -555,12 +569,21 @@ class MusicController extends ChangeNotifier {
     await Share.shareXFiles([XFile(recordedPath!)], text: "$editableTitle - HD 1080p - ${recordSeconds}s");
   }
 
-  String fmt(Duration v)=>'${v.inMinutes.remainder(60).toString().padLeft(2,'0')}:${v.inSeconds.remainder(60).toString().padLeft(2,'0')}';
-  double max()=>duration.inMilliseconds<=0?1.0:duration.inMilliseconds.toDouble();
+  String fmt(Duration v){
+    if(!v.inMilliseconds.isFinite) return "00:00";
+    return '${v.inMinutes.remainder(60).toString().padLeft(2,'0')}:${v.inSeconds.remainder(60).toString().padLeft(2,'0')}';
+  }
+  double max(){
+    if(duration.inMilliseconds<=0) return 1.0;
+    double m = duration.inMilliseconds.toDouble();
+    if(!m.isFinite) return 1.0;
+    return m;
+  }
   double val(){
     if(duration.inMilliseconds<=0) return 0;
     double c=position.inMilliseconds.toDouble();
     double m=duration.inMilliseconds.toDouble();
+    if(!c.isFinite ||!m.isFinite) return 0;
     if(c<0) return 0; if(c>m) return m; return c;
   }
   @override void dispose(){ recordTimer?.cancel(); audioPlayer.dispose(); waveformController.dispose(); super.dispose(); }
@@ -587,7 +610,6 @@ class _MusicPanelState extends State<MusicPanel> {
     ));
     if(result!=null && result.isNotEmpty){ widget.controller.editableTitle=result; widget.controller.notifyListeners(); }
   }
-
   @override Widget build(BuildContext context) {
     return PopScope(
       canPop:!widget.controller.isRecording,
@@ -616,9 +638,9 @@ class _MusicPanelState extends State<MusicPanel> {
             Row(children:[const Icon(Icons.lyrics, size:14, color: Colors.amber), const SizedBox(width:6), Expanded(child: Text(lyricExpanded? 'LIRIK KARAOKE TIMESTAMP AKURAT - TAP FOLD' : 'KARAOKE: ${currentSentence?.text?? ''}', style: const TextStyle(color:Colors.amber, fontSize:11, fontWeight: FontWeight.bold), maxLines:1, overflow: TextOverflow.ellipsis))]),
             const SizedBox(height:8),
             if(lyricExpanded) Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
-              Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(10)), child: currentSentence==null? const Text('Belum ada lirik', style: TextStyle(color:Colors.white24, fontSize:11)) : LyricKaraoke(sentence: currentSentence, position: ctrl.position)),
+              Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(10)), child: currentSentence==null? const Text('Belum ada lirik - Transcribe dulu', style: TextStyle(color:Colors.white24, fontSize:11)) : LyricKaraoke(sentence: currentSentence, position: ctrl.position)),
               const SizedBox(height:8),
-             ...ctrl.lyricSentences.asMap().entries.map((e){
+            ...ctrl.lyricSentences.asMap().entries.map((e){
                 final isActive = e.key==ctrl.currentLyricIndex;
                 return AnimatedContainer(duration: const Duration(milliseconds:200), padding: const EdgeInsets.symmetric(vertical:3, horizontal:6), margin: const EdgeInsets.only(bottom:2), decoration: isActive? BoxDecoration(color: Colors.amber.withOpacity(0.12), borderRadius: BorderRadius.circular(6)) : null, child: Row(children:[Text('${e.key+1}. ', style: TextStyle(color: isActive?Colors.amber:Colors.white24, fontSize:10)), Expanded(child: Text(e.value.text, style: TextStyle(color: isActive?Colors.white:Colors.white38, fontSize: isActive?13:11, fontWeight: isActive?FontWeight.bold:FontWeight.normal)))]));
               }),
@@ -637,7 +659,7 @@ class _MusicPanelState extends State<MusicPanel> {
             Container(decoration: BoxDecoration(color: Colors.white12, shape: BoxShape.circle, border: Border.all(color: Colors.white24)), child: IconButton(onPressed: () async { if(ctrl.audioPlayer.playing){ await ctrl.audioPlayer.pause(); try{await ctrl.waveformController.pausePlayer();}catch(_){} } }, icon: const Icon(Icons.pause_rounded,color:Colors.white,size:28))),
           ]),
           const SizedBox(height:10),
-          AnimatedCrossFade(duration: const Duration(milliseconds:250), firstChild: const SizedBox.shrink(), secondChild: Column(children:[SliderTheme(data: SliderTheme.of(context).copyWith(trackHeight:3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius:8)), child: Slider(value: ctrl.val(), min:0.0, max:ctrl.max(), activeColor:Colors.amber, inactiveColor:Colors.white24, onChanged: ctrl.duration==Duration.zero?null:(v)=>ctrl.seekTo(Duration(milliseconds:v.toInt())))), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[Text(ctrl.fmt(ctrl.position),style: const TextStyle(color:Colors.white60,fontSize:11)), Text(ctrl.fmt(ctrl.duration),style: const TextStyle(color:Colors.white60,fontSize:11))])]), crossFadeState: showPicker? CrossFadeState.showSecond : CrossFadeState.showFirst),
+          AnimatedCrossFade(duration: const Duration(milliseconds:250), firstChild: const SizedBox.shrink(), secondChild: Column(children:[SliderTheme(data: SliderTheme.of(context).copyWith(trackHeight:3, thumbShape: const RoundSliderThumbShape(enabledThumbRadius:8)), child: Slider(value: ctrl.val(), min:0.0, max:ctrl.max(), activeColor:Colors.amber, inactiveColor:Colors.white24, onChanged: ctrl.duration==Duration.zero?null:(v)=>ctrl.seekTo(Duration(milliseconds:v.floor())))), Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children:[Text(ctrl.fmt(ctrl.position),style: const TextStyle(color:Colors.white60,fontSize:11)), Text(ctrl.fmt(ctrl.duration),style: const TextStyle(color:Colors.white60,fontSize:11))])]), crossFadeState: showPicker? CrossFadeState.showSecond : CrossFadeState.showFirst),
           const SizedBox(height:12),
           if(ctrl.recordedPath!=null)
             Container(
