@@ -22,19 +22,16 @@ dependencies:
   flutter_screen_recording: ^2.0.25
   sherpa_onnx: ^1.10.20
   http: ^1.2.0
-  ffmpeg_kit_flutter_new: ^4.6.2
-  #mp3: ^1.0.0
-  #wav: ^1.1.0
+  # HAPUS FFMPEG - SUDAH GAK DIPAKAI, BIANG CRASH 2/5
+  # ffmpeg_kit_flutter_new: ^4.6.2
 
 dependency_overrides:
   uuid: ^4.4.0
 
 flutter:
   uses-material-design: true
-
   shaders:
     - shaders/globe.frag
-
   assets:
     - assets/
     - assets/images/bg.jpg
