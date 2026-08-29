@@ -225,21 +225,32 @@ class MusicController extends ChangeNotifier {
     return modelDir.path;
   }
 
-  Future<String> _convertToWav(String inputPath) async {
-    if(inputPath.toLowerCase().endsWith('.wav')) return inputPath;
+    Future<String> _convertToWav(String inputPath, {int maxSeconds = 60}) async {
+    if(inputPath.toLowerCase().endsWith('.wav') && duration.inSeconds <= maxSeconds) return inputPath;
     final dir = await getTemporaryDirectory();
     final outPath = '${dir.path}/sherpa_${DateTime.now().millisecondsSinceEpoch}.wav';
-    await FFmpegKit.execute('-y -i "$inputPath" -ar 16000 -ac 1 -c:a pcm_s16le "$outPath"');
+    // POTONG 60 DETIK PERTAMA SAJA, 16k mono - ini yang bikin gak crash
+    await FFmpegKit.execute('-y -i "$inputPath" -t $maxSeconds -ar 16000 -ac 1 -c:a pcm_s16le "$outPath"');
     return outPath;
   }
 
   Future<void> transcribeLyric(BuildContext context) async {
     if(selectedMusicFile==null) return;
     isTranscribing=true;
-    errorMessage='🌐 Siapkan model...';
+    errorMessage='🌐 Potong 60s + siapkan model...';
     notifyListeners();
     try{
       final mp = await _ensureModelWithDialog(context);
+      // TRIM DULU KE 60s SEBELUM TRANSCRIBE - ANTI CRASH
+      final wavPath = await _convertToWav(selectedMusicFile!.path, maxSeconds: 60);
+      final waveFile = File(wavPath);
+      if(!waveFile.existsSync() || waveFile.lengthSync() < 1000){
+        throw Exception('Gagal convert WAV 60s');
+      }
+
+      errorMessage='🧠 Transcribe 60s... jangan tutup app';
+      notifyListeners();
+
       final whisperCfg = sherpa.OfflineWhisperModelConfig(
         encoder: '${mp}/encoder.onnx',
         decoder: '${mp}/decoder.onnx',
@@ -249,17 +260,29 @@ class MusicController extends ChangeNotifier {
       final modelCfg = sherpa.OfflineModelConfig(
         whisper: whisperCfg,
         tokens: '${mp}/tokens.txt',
+        numThreads: 1, // HEMAT RAM, ANTI CRASH
       );
-      final recog = sherpa.OfflineRecognizer(sherpa.OfflineRecognizerConfig(model: modelCfg));
+      final recogCfg = sherpa.OfflineRecognizerConfig(
+        model: modelCfg,
+        decodingMethod: 'greedy',
+        maxActivePaths: 1,
+      );
+      final recog = sherpa.OfflineRecognizer(recogCfg);
       final stream = recog.createStream();
-      final wavPath = await _convertToWav(selectedMusicFile!.path);
+
+      // BACA WAVE TAPI POTONG SAMPLE BIAR GAK OOM
       final wave = sherpa.readWave(wavPath);
-      stream.acceptWaveform(sampleRate: wave.sampleRate, samples: wave.samples);
+      int maxSamples = 16000 * 60; // 60 detik
+      List<double> samples = wave.samples;
+      if(samples.length > maxSamples){
+        samples = samples.sublist(0, maxSamples);
+      }
+
+      stream.acceptWaveform(sampleRate: 16000, samples: samples);
       recog.decode(stream);
       final result = recog.getResult(stream);
       String raw = result.text.trim();
 
-      // TIMESTAMP AKURAT DARI SHERPA
       List<TimedWord> allWords = [];
       try{
         var tokens = result.tokens;
@@ -267,7 +290,7 @@ class MusicController extends ChangeNotifier {
         if(tokens.isNotEmpty && times.isNotEmpty && tokens.length==times.length){
           for(int i=0;i<tokens.length;i++){
             String tok = tokens[i].replaceAll('<|','').replaceAll('|>','').trim();
-            if(tok.isEmpty || tok.startsWith('start') || tok.startsWith('end') || tok.length>20) continue;
+            if(tok.isEmpty || tok.length>20) continue;
             double s = times[i];
             double e = (i+1<times.length)? times[i+1] : s+0.4;
             if(e<=s) e = s+0.35;
@@ -276,18 +299,15 @@ class MusicController extends ChangeNotifier {
         }
       }catch(_){}
 
-      // FALLBACK KALAU GAK ADA TIMESTAMP (bagi rata sesuai durasi asli)
       if(allWords.isEmpty){
         final words = raw.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
-        int totalMs = duration.inMilliseconds>0? duration.inMilliseconds : words.length*500;
-        int perWord = (totalMs/words.length).floor();
+        int totalMs = 60000;
+        int perWord = words.isEmpty? 500 : (totalMs/words.length).floor();
         for(int i=0;i<words.length;i++){
-          int s = i*perWord;
-          allWords.add(TimedWord(words[i], Duration(milliseconds:s), Duration(milliseconds:s+perWord)));
+          allWords.add(TimedWord(words[i], Duration(milliseconds:i*perWord), Duration(milliseconds:i*perWord+perWord)));
         }
       }
 
-      // GROUP 6-7 KATA JADI 1 KALIMAT
       List<TimedSentence> sentences = [];
       for(int i=0;i<allWords.length;i+=6){
         int end = (i+6 < allWords.length)? i+6 : allWords.length;
@@ -300,12 +320,16 @@ class MusicController extends ChangeNotifier {
       currentLyricIndex=0;
       stream.free();
       recog.free();
-      errorMessage='✅ ${sentences.length} baris timestamp akurat';
-    }catch(e){
-      errorMessage='⚠️ $e';
-      // fallback judul
+
+      // HAPUS FILE TEMP 60s
+      try{ await File(wavPath).delete(); }catch(_){}
+
+      errorMessage='✅ ${sentences.length} baris (60s) anti-crash';
+    }catch(e, st){
+      print('CRASH TRANSCRIBE: $e $st');
+      errorMessage='⚠️ Gagal transcribe: $e\nCoba lagu lebih pendek / WAV';
       String base = musicName.replaceAll('.mp3','').trim();
-      lyricSentences = [TimedSentence([TimedWord(base, Duration.zero, duration)], Duration.zero, duration)];
+      lyricSentences = [TimedSentence([TimedWord(base.isEmpty?'Babe Info Gawat':base, Duration.zero, Duration(seconds:60))], Duration.zero, Duration(seconds:60))];
     }finally{
       isTranscribing=false;
       notifyListeners();
