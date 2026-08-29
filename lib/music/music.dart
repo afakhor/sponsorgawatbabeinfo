@@ -107,6 +107,40 @@ class MusicController extends ChangeNotifier {
     }catch(e){ if(context.mounted) Navigator.pop(context); rethrow; }
     return modelDir.path;
   }
+
+  Future<sherpa.WaveData> _readWavManual(String path) async {
+    final bytes = await File(path).readAsBytes();
+    int dataPos = -1; int sampleRate = 16000; int channels = 1; int bits = 16;
+    // scan header
+    for(int i=12; i < bytes.length-8; i++){
+      if(i+24 < bytes.length && bytes[i]==0x66 && bytes[i+1]==0x6d && bytes[i+2]==0x74 && bytes[i+3]==0x20){
+        channels = bytes[i+10] | bytes[i+11]<<8;
+        sampleRate = bytes[i+12] | bytes[i+13]<<8 | bytes[i+14]<<16 | bytes[i+15]<<24;
+        bits = bytes[i+22] | bytes[i+23]<<8;
+      }
+      if(bytes[i]==0x64 && bytes[i+1]==0x61 && bytes[i+2]==0x74 && bytes[i+3]==0x61){
+        dataPos = i+8; break;
+      }
+    }
+    if(dataPos==-1) throw Exception('WAV header rusak');
+    List<double> samples = [];
+    if(bits==16){
+      for(int i=dataPos; i+1 < bytes.length; i+=2*channels){
+        int v = bytes[i] | bytes[i+1]<<8;
+        if(v>=32768) v-=65536;
+        samples.add(v/32768.0);
+      }
+    }else if(bits==32){
+      var bd = ByteData.sublistView(bytes);
+      for(int i=dataPos; i+3 < bytes.length; i+=4*channels){
+        double v = bd.getFloat32(i, Endian.little);
+        if(!v.isFinite) v=0;
+        samples.add(v.clamp(-1.0,1.0));
+      }
+    }
+    if(samples.isEmpty) throw Exception('WAV kosong setelah parse');
+    return sherpa.WaveData(samples: Float32List.fromList(samples), sampleRate: sampleRate);
+  }
   Future<String> _convertToWav(String inputPath, {int maxSeconds = 180}) async => inputPath;
 
   Future<void> transcribeLyric(BuildContext context) async {
@@ -116,17 +150,10 @@ class MusicController extends ChangeNotifier {
     void updateStep(String step, {double prog = 0, String? msg}){ currentStep = step; progress = prog; if(msg!=null) errorMessage = msg; try{ diagSet((){}); }catch(_){} notifyListeners(); }
     try{
       updateStep('1/5 CEK MODEL', prog:0.1); final mp = await _ensureModelWithDialog(context);
-      updateStep('2/5 BACA WAV', prog:0.4); String wavPath = selectedMusicFile!.path;
-      late sherpa.WaveData wave; wave = sherpa.readWave(wavPath);
-      if(wave.sampleRate==0 || wave.samples.isEmpty) throw Exception('WAV 0/kosong');
-      List<double> raw = wave.samples.map((e)=> e.isFinite? e : 0.0).where((e)=> e.isFinite).toList();
-      int targetSr = 16000; List<double> samples = raw;
-      if(wave.sampleRate!= targetSr && wave.sampleRate>0){
-        double ratio = wave.sampleRate / targetSr; int newLen = (samples.length / ratio).floor();
-        if(newLen > targetSr * 60) newLen = targetSr * 60;
-        if(newLen>0){ var resampled = List<double>.filled(newLen, 0.0); for(int i=0;i<newLen;i++){ int srcIdx = (i * ratio).floor(); if(srcIdx>=0 && srcIdx < samples.length){ resampled[i] = samples[srcIdx]; } } samples = resampled; }
-      } else { if(samples.length > targetSr * 60) samples = samples.sublist(0, targetSr * 60); }
-      Float32List finalSamples = Float32List.fromList(samples);
+            updateStep('2/5 BACA WAV MONO', prog:0.4);
+      String wavPath = selectedMusicFile!.path;
+      late sherpa.WaveData wave;
+      wave = await _readWavManual(wavPath); // LANGSUNG MANUAL, JANGAN sherpa.readWave
       updateStep('3/5 SIAP ${finalSamples.length~/16000}s', prog:0.6);
       updateStep('4/5 INIT TINY', prog:0.7);
       final whisperCfg = sherpa.OfflineWhisperModelConfig(encoder: '$mp/encoder.onnx', decoder: '$mp/decoder.onnx', language: 'en', task: 'transcribe');
