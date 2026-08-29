@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -273,11 +274,10 @@ class MusicController extends ChangeNotifier {
       // BACA WAVE TAPI POTONG SAMPLE BIAR GAK OOM
       final wave = sherpa.readWave(wavPath);
       int maxSamples = 16000 * 60; // 60 detik
-      List<double> samples = wave.samples;
+      Float32List samples = wave.samples;
       if(samples.length > maxSamples){
-        samples = samples.sublist(0, maxSamples);
+        samples = Float32List.fromList(samples.sublist(0, maxSamples));
       }
-
       stream.acceptWaveform(sampleRate: 16000, samples: samples);
       recog.decode(stream);
       final result = recog.getResult(stream);
