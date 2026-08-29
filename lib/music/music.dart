@@ -235,101 +235,161 @@ class MusicController extends ChangeNotifier {
     return outPath;
   }
 
-  Future<void> transcribeLyric(BuildContext context) async {
+    Future<void> transcribeLyric(BuildContext context) async {
     if(selectedMusicFile==null) return;
     isTranscribing=true;
-    errorMessage='🌐 Potong 60s + siapkan model...';
-    notifyListeners();
-    try{
-      final mp = await _ensureModelWithDialog(context);
-      // TRIM DULU KE 60s SEBELUM TRANSCRIBE - ANTI CRASH
-      final wavPath = await _convertToWav(selectedMusicFile!.path, maxSeconds: 60);
-      final waveFile = File(wavPath);
-      if(!waveFile.existsSync() || waveFile.lengthSync() < 1000){
-        throw Exception('Gagal convert WAV 60s');
-      }
+    
+    // DIALOG DIAGNOSTIC
+    String currentStep = 'START';
+    double progress = 0;
+    late StateSetter diagSet;
+    if(context.mounted){
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => StatefulBuilder(builder: (ctx,setSt){
+          diagSet = setSt;
+          return AlertDialog(
+            backgroundColor: Color(0xFF1E1E24),
+            title: Text('🔍 DIAGNOSTIC TRANSCRIBE', style: TextStyle(color: Colors.amber, fontSize:13, fontWeight: FontWeight.bold)),
+            content: SingleChildScrollView(child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('File: $musicName (${selectedMusicFile!.lengthSync()~/1024}KB)', style: TextStyle(color: Colors.white70, fontSize:11)),
+                SizedBox(height:8),
+                Text('STEP: $currentStep', style: TextStyle(color: Colors.cyan, fontSize:12, fontWeight: FontWeight.bold)),
+                SizedBox(height:8),
+                LinearProgressIndicator(value: progress==0?null:progress, color: Colors.amber),
+                SizedBox(height:12),
+                Text(errorMessage??'', style: TextStyle(color: Colors.white54, fontSize:10)),
+              ],
+            )),
+          );
+        }),
+      );
+    }
 
-      errorMessage='🧠 Transcribe 60s... jangan tutup app';
+    void updateStep(String step, {double prog = 0, String? msg}){
+      currentStep = step;
+      progress = prog;
+      if(msg!=null) errorMessage = msg;
+      try{ diagSet((){}); }catch(_){}
       notifyListeners();
+      print('DIAG $step $msg');
+    }
 
-      final whisperCfg = sherpa.OfflineWhisperModelConfig(
-        encoder: '${mp}/encoder.onnx',
-        decoder: '${mp}/decoder.onnx',
-        language: '',
-        task: 'transcribe',
-      );
-      final modelCfg = sherpa.OfflineModelConfig(
-        whisper: whisperCfg,
-        tokens: '${mp}/tokens.txt',
-        numThreads: 1, // HEMAT RAM, ANTI CRASH
-      );
-      final recogCfg = sherpa.OfflineRecognizerConfig(
-        model: modelCfg,
-        decodingMethod: 'greedy',
-        maxActivePaths: 1,
-      );
-      final recog = sherpa.OfflineRecognizer(recogCfg);
-      final stream = recog.createStream();
-
-      // BACA WAVE TAPI POTONG SAMPLE BIAR GAK OOM
-      final wave = sherpa.readWave(wavPath);
-      int maxSamples = 16000 * 60; // 60 detik
-      Float32List samples = wave.samples;
-      if(samples.length > maxSamples){
-        samples = Float32List.fromList(samples.sublist(0, maxSamples));
-      }
-      stream.acceptWaveform(sampleRate: 16000, samples: samples);
-      recog.decode(stream);
-      final result = recog.getResult(stream);
-      String raw = result.text.trim();
-
-      List<TimedWord> allWords = [];
+    try{
+      updateStep('1/6 CEK MODEL LAMA', prog:0.1, msg:'Hapus model lama...');
       try{
-        var tokens = result.tokens;
-        var times = result.timestamps;
-        if(tokens.isNotEmpty && times.isNotEmpty && tokens.length==times.length){
-          for(int i=0;i<tokens.length;i++){
-            String tok = tokens[i].replaceAll('<|','').replaceAll('|>','').trim();
-            if(tok.isEmpty || tok.length>20) continue;
-            double s = times[i];
-            double e = (i+1<times.length)? times[i+1] : s+0.4;
-            if(e<=s) e = s+0.35;
-            allWords.add(TimedWord(tok, Duration(milliseconds:(s*1000).toInt()), Duration(milliseconds:(e*1000).toInt())));
-          }
-        }
+        final dir = await getApplicationDocumentsDirectory();
+        final old = Directory('${dir.path}/sherpa-small');
+        if(await old.exists()) await old.delete(recursive:true);
       }catch(_){}
 
-      if(allWords.isEmpty){
-        final words = raw.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
-        int totalMs = 60000;
-        int perWord = words.isEmpty? 500 : (totalMs/words.length).floor();
-        for(int i=0;i<words.length;i++){
-          allWords.add(TimedWord(words[i], Duration(milliseconds:i*perWord), Duration(milliseconds:i*perWord+perWord)));
+      updateStep('2/6 DOWNLOAD MODEL', prog:0.2, msg:'Download tiny 39MB...');
+      final mp = await _ensureModelWithDialog(context);
+      updateStep('2/6 MODEL OK', prog:0.4, msg:'Model: $mp');
+
+      updateStep('3/6 CONVERT MP3 11MB', prog:0.5, msg:'Convert ke WAV 30s...');
+      String wavPath;
+      try{
+        wavPath = await _convertToWav(selectedMusicFile!.path, maxSeconds: 30);
+        File f = File(wavPath);
+        updateStep('3/6 CONVERT SUKSES', prog:0.6, msg:'WAV: ${f.lengthSync()~/1024}KB di $wavPath');
+      }catch(e){
+        updateStep('3/6 CONVERT GAGAL', prog:0.6, msg:'CONVERT ERROR: $e');
+        throw Exception('STOP DI CONVERT: $e');
+      }
+
+      updateStep('4/6 BACA WAVE', prog:0.7, msg:'readWave()...');
+      late sherpa.WaveData wave;
+      try{
+        wave = sherpa.readWave(wavPath);
+        updateStep('4/6 WAVE OK', prog:0.75, msg:'Samples: ${wave.samples.length}, SR: ${wave.sampleRate}');
+      }catch(e){
+        updateStep('4/6 WAVE GAGAL', msg:'WAVE ERROR: $e');
+        throw Exception('STOP DI READWAVE: $e');
+      }
+
+      updateStep('5/6 INIT WHISPER', prog:0.8, msg:'Init recognizer tiny...');
+      late sherpa.OfflineRecognizer recog;
+      late sherpa.OfflineStream stream;
+      try{
+        final whisperCfg = sherpa.OfflineWhisperModelConfig(encoder: '$mp/encoder.onnx', decoder: '$mp/decoder.onnx', language: '', task: 'transcribe');
+        final modelCfg = sherpa.OfflineModelConfig(whisper: whisperCfg, tokens: '$mp/tokens.txt', numThreads: 1);
+        final recogCfg = sherpa.OfflineRecognizerConfig(model: modelCfg, decodingMethod: 'greedy', maxActivePaths: 1);
+        recog = sherpa.OfflineRecognizer(recogCfg);
+        stream = recog.createStream();
+        updateStep('5/6 INIT OK', prog:0.85, msg:'Recognizer siap');
+      }catch(e){
+        updateStep('5/6 INIT GAGAL', msg:'INIT ERROR: $e');
+        throw Exception('STOP DI INIT: $e');
+      }
+
+      updateStep('6/6 DECODE TRANSCRIBE', prog:0.9, msg:'Decoding... ini yang biasanya crash');
+      try{
+        int maxSamples = 16000 * 30;
+        var samples = wave.samples;
+        if(samples.length > maxSamples) samples = samples.sublist(0, maxSamples);
+        stream.acceptWaveform(sampleRate: 16000, samples: samples);
+        recog.decode(stream);
+        final result = recog.getResult(stream);
+        String raw = result.text.trim();
+        updateStep('6/6 DECODE SUKSES', prog:1.0, msg:'HASIL: $raw');
+        
+        // parsing timestamp seperti kemarin...
+        List<TimedWord> allWords = [];
+        try{
+          var tokens = result.tokens;
+          var times = result.timestamps;
+          if(tokens.isNotEmpty && times.isNotEmpty){
+            for(int i=0;i<tokens.length;i++){
+              String tok = tokens[i].replaceAll('<|','').replaceAll('|>','').trim();
+              if(tok.isEmpty) continue;
+              double s = times[i];
+              double e = (i+1<times.length)? times[i+1] : s+0.4;
+              allWords.add(TimedWord(tok, Duration(milliseconds:(s*1000).toInt()), Duration(milliseconds:(e*1000).toInt())));
+            }
+          }
+        }catch(_){}
+        if(allWords.isEmpty){
+          final words = raw.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
+          for(int i=0;i<words.length;i++){
+            allWords.add(TimedWord(words[i], Duration(milliseconds:i*500), Duration(milliseconds:i*500+500)));
+          }
         }
+        List<TimedSentence> sentences = [];
+        for(int i=0;i<allWords.length;i+=6){
+          int end = (i+6 < allWords.length)? i+6 : allWords.length;
+          var slice = allWords.sublist(i,end);
+          sentences.add(TimedSentence(slice, slice.first.start, slice.last.end));
+        }
+        lyricSentences = sentences;
+        currentLyricIndex=0;
+        stream.free();
+        recog.free();
+        try{ await File(wavPath).delete(); }catch(_){}
+        
+        await Future.delayed(Duration(seconds:1));
+        if(context.mounted) Navigator.pop(context);
+        errorMessage='✅ SUKSES ${sentences.length} baris - STEP: $currentStep';
+      }catch(e){
+        updateStep('6/6 DECODE GAGAL - INI PENYEBAB CRASH', msg:'DECODE ERROR: $e');
+        throw Exception('STOP DI DECODE: $e');
       }
 
-      List<TimedSentence> sentences = [];
-      for(int i=0;i<allWords.length;i+=6){
-        int end = (i+6 < allWords.length)? i+6 : allWords.length;
-        var slice = allWords.sublist(i,end);
-        if(slice.isEmpty) continue;
-        sentences.add(TimedSentence(slice, slice.first.start, slice.last.end));
+    }catch(e){
+      if(context.mounted) Navigator.pop(context);
+      if(context.mounted){
+        showDialog(context: context, builder: (ctx)=>AlertDialog(
+          backgroundColor: Color(0xFF1E1E24),
+          title: Text('❌ CRASH DI $currentStep', style: TextStyle(color: Colors.redAccent, fontSize:13)),
+          content: SingleChildScrollView(child: Text('$e\n\nFile: $musicName\nStep: $currentStep\nMsg: $errorMessage', style: TextStyle(color: Colors.white70, fontSize:11))),
+          actions: [ElevatedButton(onPressed: ()=>Navigator.pop(ctx), child: Text('OK'))],
+        ));
       }
-
-      lyricSentences = sentences;
-      currentLyricIndex=0;
-      stream.free();
-      recog.free();
-
-      // HAPUS FILE TEMP 60s
-      try{ await File(wavPath).delete(); }catch(_){}
-
-      errorMessage='✅ ${sentences.length} baris (60s) anti-crash';
-    }catch(e, st){
-      print('CRASH TRANSCRIBE: $e $st');
-      errorMessage='⚠️ Gagal transcribe: $e\nCoba lagu lebih pendek / WAV';
-      String base = musicName.replaceAll('.mp3','').trim();
-      lyricSentences = [TimedSentence([TimedWord(base.isEmpty?'Babe Info Gawat':base, Duration.zero, Duration(seconds:60))], Duration.zero, Duration(seconds:60))];
+      errorMessage='❌ GAGAL DI $currentStep: $e';
     }finally{
       isTranscribing=false;
       notifyListeners();
