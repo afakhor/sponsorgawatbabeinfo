@@ -57,6 +57,9 @@ class MusicController extends ChangeNotifier {
   final PlayerController waveformController=PlayerController();
   File? selectedMusicFile; String musicName='Belum ada musik';
   String editableTitle='SPONSOR BABE INFO GAWAT • TAP UNTUK EDIT JUDUL';
+  String editableBottomTitle='Babe Info Gawat - Tap untuk edit bawah';
+  bool usePreTrim=false;
+  List<String> get lyricLines => lyricSentences.map((e)=>e.text).toList();
   List<TimedSentence> lyricSentences=[]; int currentLyricIndex=0; Duration position=Duration.zero, duration=Duration.zero;
   bool isPlaying=false, isLoading=false, isRecording=false, isTranscribing=false;
   String? errorMessage; String? recordedPath; Timer? recordTimer; int recordSeconds=0;
