@@ -13,8 +13,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
-import 'package:mp3/mp3.dart' as mp3decoder;
-import 'package:wav/wav.dart';
+//import 'package:mp3/mp3.dart' as mp3decoder;
+//import 'package:wav/wav.dart';
 
 class RunningText extends StatefulWidget {
   final String text;
