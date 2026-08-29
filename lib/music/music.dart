@@ -13,6 +13,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:mp3/mp3.dart' as mp3decoder;
+import 'package:wav/wav.dart';
 
 class RunningText extends StatefulWidget {
   final String text;
@@ -166,15 +168,21 @@ class MusicController extends ChangeNotifier {
     client.close();
   }
 
-  Future<String> _ensureModelWithDialog(BuildContext context) async {
+    Future<String> _ensureModelWithDialog(BuildContext context) async {
     final dir = await getApplicationDocumentsDirectory();
-    final modelDir = Directory('${dir.path}/sherpa-small');
+    // GANTI KE TINY 39MB - HAPUS SMALL 70MB YANG BIKIN CRASH
+    try{
+      final old = Directory('${dir.path}/sherpa-small');
+      if(await old.exists()) await old.delete(recursive:true);
+    }catch(_){}
+
+    final modelDir = Directory('${dir.path}/sherpa-tiny');
     if(!await modelDir.exists()) await modelDir.create(recursive:true);
     final enc = '${modelDir.path}/encoder.onnx';
     final dec = '${modelDir.path}/decoder.onnx';
     final tok = '${modelDir.path}/tokens.txt';
-    bool isCorrupt(File f) =>!f.existsSync() || f.lengthSync() < 5*1024*1024;
-    if(File(enc).existsSync() && File(dec).existsSync() && File(tok).existsSync() &&!isCorrupt(File(enc))){
+
+    if(File(enc).existsSync() && File(dec).existsSync() && File(tok).existsSync() && File(enc).lengthSync() > 3*1024*1024){
       return modelDir.path;
     }
     try{ if(File(enc).existsSync()) await File(enc).delete(); if(File(dec).existsSync()) await File(dec).delete(); if(File(tok).existsSync()) await File(tok).delete(); }catch(_){}
@@ -191,22 +199,22 @@ class MusicController extends ChangeNotifier {
             dialogSetState = setSt;
             return AlertDialog(
               backgroundColor: Color(0xFF1E1E24),
-              title: Text(success? '✅ Download Sukses' : '⬇️ Download Model 70MB', style: TextStyle(color: Colors.amber, fontSize: 14, fontWeight: FontWeight.bold)),
+              title: Text(success? '✅ Download Sukses' : '⬇️ Download Tiny 39MB', style: TextStyle(color: Colors.amber, fontSize: 14, fontWeight: FontWeight.bold)),
               content: Column(mainAxisSize: MainAxisSize.min, children:[
                 LinearProgressIndicator(value: success?1: (progress==0?null:progress), color: Colors.amber, backgroundColor: Colors.white12),
                 SizedBox(height:12),
-                Text(success? 'Model siap! Offline selamanya.' : '${(progress*100).toStringAsFixed(0)}% - Jangan tutup app...', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                Text(success? 'Model siap! Anti-crash.' : '${(progress*100).toStringAsFixed(0)}% - Model kecil...', style: TextStyle(color: Colors.white70, fontSize: 12)),
               ]),
             );
           });
         }
       );
     }
-    const base = 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/main';
+    const base = 'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-tiny/resolve/main';
     try{
-      await _dlWithProgress('$base/base-encoder.int8.onnx', enc, (p){ progress = p*0.5; try{dialogSetState((){});}catch(_){} });
-      await _dlWithProgress('$base/base-decoder.int8.onnx', dec, (p){ progress = 0.5 + p*0.4; try{dialogSetState((){});}catch(_){} });
-      await _dlWithProgress('$base/base-tokens.txt', tok, (p){ progress = 0.9 + p*0.1; try{dialogSetState((){});}catch(_){} });
+      await _dlWithProgress('$base/tiny-encoder.int8.onnx', enc, (p){ progress = p*0.5; try{dialogSetState((){});}catch(_){} });
+      await _dlWithProgress('$base/tiny-decoder.int8.onnx', dec, (p){ progress = 0.5 + p*0.4; try{dialogSetState((){});}catch(_){} });
+      await _dlWithProgress('$base/tiny-tokens.txt', tok, (p){ progress = 0.9 + p*0.1; try{dialogSetState((){});}catch(_){} });
       success = true;
       try{dialogSetState((){});}catch(_){}
       await Future.delayed(Duration(milliseconds: 800));
@@ -215,7 +223,7 @@ class MusicController extends ChangeNotifier {
         await showDialog(context: context, builder: (ctx)=>AlertDialog(
           backgroundColor: Color(0xFF1E1E24),
           title: Row(children:[Icon(Icons.check_circle, color: Colors.green), SizedBox(width:8), Text('Download Sukses!', style: TextStyle(color: Colors.white))]),
-          content: Text('Model 70MB terpasang.\nSekarang transcribe lagu Indo & Barat bisa offline.', style: TextStyle(color: Colors.white70, fontSize: 12)),
+          content: Text('Tiny 39MB terpasang.\nAnti crash untuk MP3 11MB.', style: TextStyle(color: Colors.white70, fontSize: 12)),
           actions: [ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black), onPressed: ()=>Navigator.pop(ctx), child: Text('OK Siap'))],
         ));
       }
@@ -226,20 +234,44 @@ class MusicController extends ChangeNotifier {
     return modelDir.path;
   }
 
-    Future<String> _convertToWav(String inputPath, {int maxSeconds = 60}) async {
-    if(inputPath.toLowerCase().endsWith('.wav') && duration.inSeconds <= maxSeconds) return inputPath;
+  Future<String> _convertToWav(String inputPath, {int maxSeconds = 15}) async {
     final dir = await getTemporaryDirectory();
     final outPath = '${dir.path}/sherpa_${DateTime.now().millisecondsSinceEpoch}.wav';
-    // POTONG 60 DETIK PERTAMA SAJA, 16k mono - ini yang bikin gak crash
-    await FFmpegKit.execute('-y -i "$inputPath" -t $maxSeconds -ar 16000 -ac 1 -c:a pcm_s16le "$outPath"');
-    return outPath;
+
+    // HAPUS WAV LAMA BIAR GAK NUMPUK
+    try{
+      final tmp = Directory(dir.path);
+      await for(var f in tmp.list()){
+        if(f.path.contains('sherpa_') && f.path.endsWith('.wav')){
+          try{ await File(f.path).delete(); }catch(_){}
+        }
+      }
+    }catch(_){}
+
+    // FIX UTAMA: -ss 0 -t 15 SEBELUM -i + -threads 1 + async
+    // Ini bikin FFmpeg streaming, gak load full 11MB
+    final cmd = '-y -ss 0 -t $maxSeconds -i "$inputPath" -vn -sn -dn -threads 1 -ar 16000 -ac 1 -c:a pcm_s16le "$outPath"';
+
+    final completer = Completer<String>();
+    await FFmpegKit.executeAsync(cmd, (session) async {
+      final code = await session.getReturnCode();
+      if(code!= null && code.isValueSuccess() && File(outPath).existsSync()){
+        completer.complete(outPath);
+      } else {
+        final logs = await session.getAllLogsAsString();
+        completer.completeError('FFMPEG FAIL: $logs');
+      }
+    });
+
+    return completer.future.timeout(Duration(seconds: 60), onTimeout: (){
+      throw Exception('Convert timeout 60s - MP3 11MB terlalu besar');
+    });
   }
 
-    Future<void> transcribeLyric(BuildContext context) async {
+      Future<void> transcribeLyric(BuildContext context) async {
     if(selectedMusicFile==null) return;
     isTranscribing=true;
-    
-    // DIALOG DIAGNOSTIC
+
     String currentStep = 'START';
     double progress = 0;
     late StateSetter diagSet;
@@ -251,10 +283,9 @@ class MusicController extends ChangeNotifier {
           diagSet = setSt;
           return AlertDialog(
             backgroundColor: Color(0xFF1E1E24),
-            title: Text('🔍 DIAGNOSTIC TRANSCRIBE', style: TextStyle(color: Colors.amber, fontSize:13, fontWeight: FontWeight.bold)),
-            content: SingleChildScrollView(child: Column(
+            title: Text('🔍 DIAGNOSTIC 15s', style: TextStyle(color: Colors.amber, fontSize:13, fontWeight: FontWeight.bold)),
+            content: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('File: $musicName (${selectedMusicFile!.lengthSync()~/1024}KB)', style: TextStyle(color: Colors.white70, fontSize:11)),
                 SizedBox(height:8),
@@ -264,7 +295,7 @@ class MusicController extends ChangeNotifier {
                 SizedBox(height:12),
                 Text(errorMessage??'', style: TextStyle(color: Colors.white54, fontSize:10)),
               ],
-            )),
+            ),
           );
         }),
       );
@@ -276,120 +307,80 @@ class MusicController extends ChangeNotifier {
       if(msg!=null) errorMessage = msg;
       try{ diagSet((){}); }catch(_){}
       notifyListeners();
-      print('DIAG $step $msg');
     }
 
     try{
-      updateStep('1/6 CEK MODEL LAMA', prog:0.1, msg:'Hapus model lama...');
-      try{
-        final dir = await getApplicationDocumentsDirectory();
-        final old = Directory('${dir.path}/sherpa-small');
-        if(await old.exists()) await old.delete(recursive:true);
-      }catch(_){}
-
-      updateStep('2/6 DOWNLOAD MODEL', prog:0.2, msg:'Download tiny 39MB...');
+      updateStep('1/5 CEK MODEL', prog:0.1);
       final mp = await _ensureModelWithDialog(context);
-      updateStep('2/6 MODEL OK', prog:0.4, msg:'Model: $mp');
 
-      updateStep('3/6 CONVERT MP3 11MB', prog:0.5, msg:'Convert ke WAV 30s...');
-      String wavPath;
-      try{
-        wavPath = await _convertToWav(selectedMusicFile!.path, maxSeconds: 30);
-        File f = File(wavPath);
-        updateStep('3/6 CONVERT SUKSES', prog:0.6, msg:'WAV: ${f.lengthSync()~/1024}KB di $wavPath');
-      }catch(e){
-        updateStep('3/6 CONVERT GAGAL', prog:0.6, msg:'CONVERT ERROR: $e');
-        throw Exception('STOP DI CONVERT: $e');
-      }
+      updateStep('2/5 CONVERT 15s', prog:0.3, msg:'Convert MP3 11MB -> WAV 15s...');
+      String wavPath = await _convertToWav(selectedMusicFile!.path, maxSeconds: 15);
 
-      updateStep('4/6 BACA WAVE', prog:0.7, msg:'readWave()...');
-      late sherpa.WaveData wave;
-      try{
-        wave = sherpa.readWave(wavPath);
-        updateStep('4/6 WAVE OK', prog:0.75, msg:'Samples: ${wave.samples.length}, SR: ${wave.sampleRate}');
-      }catch(e){
-        updateStep('4/6 WAVE GAGAL', msg:'WAVE ERROR: $e');
-        throw Exception('STOP DI READWAVE: $e');
-      }
+      updateStep('3/5 BACA WAVE', prog:0.6, msg:'WAV ${File(wavPath).lengthSync()~/1024}KB');
+      final wave = sherpa.readWave(wavPath);
+      var samples = wave.samples;
+      int maxSamples = 16000 * 15;
+      if(samples.length > maxSamples) samples = samples.sublist(0, maxSamples);
 
-      updateStep('5/6 INIT WHISPER', prog:0.8, msg:'Init recognizer tiny...');
-      late sherpa.OfflineRecognizer recog;
-      late sherpa.OfflineStream stream;
-      try{
-        final whisperCfg = sherpa.OfflineWhisperModelConfig(encoder: '$mp/encoder.onnx', decoder: '$mp/decoder.onnx', language: '', task: 'transcribe');
-        final modelCfg = sherpa.OfflineModelConfig(whisper: whisperCfg, tokens: '$mp/tokens.txt', numThreads: 1);
-        final recogCfg = sherpa.OfflineRecognizerConfig(model: modelCfg, decodingMethod: 'greedy', maxActivePaths: 1);
-        recog = sherpa.OfflineRecognizer(recogCfg);
-        stream = recog.createStream();
-        updateStep('5/6 INIT OK', prog:0.85, msg:'Recognizer siap');
-      }catch(e){
-        updateStep('5/6 INIT GAGAL', msg:'INIT ERROR: $e');
-        throw Exception('STOP DI INIT: $e');
-      }
+      updateStep('4/5 INIT TINY', prog:0.8);
+      final whisperCfg = sherpa.OfflineWhisperModelConfig(encoder: '$mp/encoder.onnx', decoder: '$mp/decoder.onnx', language: '', task: 'transcribe');
+      final modelCfg = sherpa.OfflineModelConfig(whisper: whisperCfg, tokens: '$mp/tokens.txt', numThreads: 1);
+      final recog = sherpa.OfflineRecognizer(sherpa.OfflineRecognizerConfig(model: modelCfg, decodingMethod: 'greedy', maxActivePaths: 1));
+      final stream = recog.createStream();
 
-      updateStep('6/6 DECODE TRANSCRIBE', prog:0.9, msg:'Decoding... ini yang biasanya crash');
+      updateStep('5/5 DECODE', prog:0.9, msg:'Transcribe 15 detik...');
+      stream.acceptWaveform(sampleRate: 16000, samples: samples);
+      recog.decode(stream);
+      final result = recog.getResult(stream);
+      String raw = result.text.trim();
+
+      //... parsing jadi TimedSentence seperti kode sebelumnya
+      List<TimedWord> allWords = [];
       try{
-        int maxSamples = 16000 * 30;
-        var samples = wave.samples;
-        if(samples.length > maxSamples) samples = samples.sublist(0, maxSamples);
-        stream.acceptWaveform(sampleRate: 16000, samples: samples);
-        recog.decode(stream);
-        final result = recog.getResult(stream);
-        String raw = result.text.trim();
-        updateStep('6/6 DECODE SUKSES', prog:1.0, msg:'HASIL: $raw');
-        
-        // parsing timestamp seperti kemarin...
-        List<TimedWord> allWords = [];
-        try{
-          var tokens = result.tokens;
-          var times = result.timestamps;
-          if(tokens.isNotEmpty && times.isNotEmpty){
-            for(int i=0;i<tokens.length;i++){
-              String tok = tokens[i].replaceAll('<|','').replaceAll('|>','').trim();
-              if(tok.isEmpty) continue;
-              double s = times[i];
-              double e = (i+1<times.length)? times[i+1] : s+0.4;
-              allWords.add(TimedWord(tok, Duration(milliseconds:(s*1000).toInt()), Duration(milliseconds:(e*1000).toInt())));
-            }
-          }
-        }catch(_){}
-        if(allWords.isEmpty){
-          final words = raw.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
-          for(int i=0;i<words.length;i++){
-            allWords.add(TimedWord(words[i], Duration(milliseconds:i*500), Duration(milliseconds:i*500+500)));
+        var tokens = result.tokens;
+        var times = result.timestamps;
+        if(tokens.isNotEmpty && times.isNotEmpty){
+          for(int i=0;i<tokens.length;i++){
+            String tok = tokens[i].replaceAll('<|','').replaceAll('|>','').trim();
+            if(tok.isEmpty) continue;
+            double s = times[i];
+            double e = (i+1<times.length)? times[i+1] : s+0.4;
+            allWords.add(TimedWord(tok, Duration(milliseconds:(s*1000).toInt()), Duration(milliseconds:(e*1000).toInt())));
           }
         }
-        List<TimedSentence> sentences = [];
-        for(int i=0;i<allWords.length;i+=6){
-          int end = (i+6 < allWords.length)? i+6 : allWords.length;
-          var slice = allWords.sublist(i,end);
-          sentences.add(TimedSentence(slice, slice.first.start, slice.last.end));
+      }catch(_){}
+      if(allWords.isEmpty){
+        final words = raw.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
+        for(int i=0;i<words.length;i++){
+          allWords.add(TimedWord(words[i], Duration(milliseconds:i*500), Duration(milliseconds:i*500+500)));
         }
-        lyricSentences = sentences;
-        currentLyricIndex=0;
-        stream.free();
-        recog.free();
-        try{ await File(wavPath).delete(); }catch(_){}
-        
-        await Future.delayed(Duration(seconds:1));
-        if(context.mounted) Navigator.pop(context);
-        errorMessage='✅ SUKSES ${sentences.length} baris - STEP: $currentStep';
-      }catch(e){
-        updateStep('6/6 DECODE GAGAL - INI PENYEBAB CRASH', msg:'DECODE ERROR: $e');
-        throw Exception('STOP DI DECODE: $e');
       }
+      List<TimedSentence> sentences = [];
+      for(int i=0;i<allWords.length;i+=6){
+        int end = (i+6 < allWords.length)? i+6 : allWords.length;
+        var slice = allWords.sublist(i,end);
+        sentences.add(TimedSentence(slice, slice.first.start, slice.last.end));
+      }
+      lyricSentences = sentences;
+      currentLyricIndex=0;
+      stream.free();
+      recog.free();
+      try{ await File(wavPath).delete(); }catch(_){}
+
+      if(context.mounted) Navigator.pop(context);
+      errorMessage='✅ ${sentences.length} baris - MP3 11MB sukses 15s';
 
     }catch(e){
       if(context.mounted) Navigator.pop(context);
+      errorMessage='❌ GAGAL DI $currentStep: $e';
       if(context.mounted){
         showDialog(context: context, builder: (ctx)=>AlertDialog(
           backgroundColor: Color(0xFF1E1E24),
-          title: Text('❌ CRASH DI $currentStep', style: TextStyle(color: Colors.redAccent, fontSize:13)),
-          content: SingleChildScrollView(child: Text('$e\n\nFile: $musicName\nStep: $currentStep\nMsg: $errorMessage', style: TextStyle(color: Colors.white70, fontSize:11))),
+          title: Text('❌ $currentStep', style: TextStyle(color: Colors.redAccent)),
+          content: Text('$e', style: TextStyle(color: Colors.white70, fontSize:11)),
           actions: [ElevatedButton(onPressed: ()=>Navigator.pop(ctx), child: Text('OK'))],
         ));
       }
-      errorMessage='❌ GAGAL DI $currentStep: $e';
     }finally{
       isTranscribing=false;
       notifyListeners();
