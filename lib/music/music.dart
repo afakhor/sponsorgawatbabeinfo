@@ -32,39 +32,56 @@ class _RunningTextState extends State<RunningText> with SingleTickerProviderStat
   }
 }
 
+// MODEL TIMESTAMP AKURAT
+class TimedWord {
+  final String word;
+  final Duration start;
+  final Duration end;
+  TimedWord(this.word, this.start, this.end);
+}
+class TimedSentence {
+  final List<TimedWord> words;
+  final Duration start;
+  final Duration end;
+  String get text => words.map((w)=>w.word).join(' ');
+  TimedSentence(this.words, this.start, this.end);
+}
+
 class LyricKaraoke extends StatelessWidget {
-  final String sentence;
-  final int sentenceIndex;
-  final int currentSentenceIndex;
+  final TimedSentence sentence;
   final Duration position;
-  final Duration sentenceDuration;
-  final Duration sentenceStart;
-  const LyricKaraoke({super.key, required this.sentence, required this.sentenceIndex, required this.currentSentenceIndex, required this.position, required this.sentenceDuration, required this.sentenceStart});
+  const LyricKaraoke({super.key, required this.sentence, required this.position});
   @override Widget build(BuildContext context) {
-    final isActive = sentenceIndex == currentSentenceIndex;
-    if (!isActive) return const SizedBox.shrink();
-    final words = sentence.split(' ').where((w)=>w.isNotEmpty).toList();
-    if(words.isEmpty) return const SizedBox.shrink();
-    final elapsed = position - sentenceStart;
-    double progress = sentenceDuration.inMilliseconds>0? (elapsed.inMilliseconds / sentenceDuration.inMilliseconds).clamp(0.0, 1.0) : 0;
-    int activeWord = (progress * words.length).floor().clamp(0, words.length-1);
+    int activeWord = -1;
+    for(int i=0;i<sentence.words.length;i++){
+      if(position >= sentence.words[i].start && position < sentence.words[i].end){
+        activeWord = i;
+        break;
+      }
+      if(position >= sentence.words[i].end && i==sentence.words.length-1 && position < sentence.end + Duration(milliseconds:300)){
+        activeWord = i;
+      }
+    }
+    // kalau sudah lewat kalimat, semua hijau
+    if(position > sentence.end) activeWord = sentence.words.length;
+
     return TweenAnimationBuilder<double>(
-      key: ValueKey(sentenceIndex),
+      key: ValueKey(sentence.start),
       tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeOutBack,
       builder: (ctx, val, child) {
         return Opacity(opacity: val, child: Transform.translate(offset: Offset(0, (1-val)*14), child: Transform.scale(scale: 0.85 + val*0.15, child: child)));
       },
-      child: Wrap(spacing: 6, runSpacing: 6, children: List.generate(words.length, (i){
-        final passed = i < activeWord;
+      child: Wrap(spacing: 6, runSpacing: 6, children: List.generate(sentence.words.length, (i){
+        final passed = activeWord>i;
         final current = i == activeWord;
         Color col = passed? Colors.greenAccent : current? Colors.green : Colors.white;
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+          duration: const Duration(milliseconds: 120),
           padding: EdgeInsets.symmetric(horizontal: current?8:0, vertical: current?4:2),
           decoration: current? BoxDecoration(color: Colors.green.withOpacity(0.22), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.greenAccent.withOpacity(0.8))) : null,
-          child: Text(words[i], style: TextStyle(color: col, fontSize: current?16:13.5, fontWeight: passed||current?FontWeight.bold:FontWeight.w500)),
+          child: Text(sentence.words[i].word, style: TextStyle(color: col, fontSize: current?16:13.5, fontWeight: passed||current?FontWeight.bold:FontWeight.w500)),
         );
       })),
     );
@@ -79,7 +96,8 @@ class MusicController extends ChangeNotifier {
   String editableTitle='SPONSOR BABE INFO GAWAT • TAP UNTUK EDIT JUDUL';
   String editableBottomTitle='Babe Info Gawat - Tap untuk edit bawah';
   bool usePreTrim=false;
-  List<String> lyricLines=['Tap 📁 pilih lagu untuk auto lirik','Lirik asli auto transcribe Whisper','Putih fold in -> hijau per kata -> fold out'];
+  List<TimedSentence> lyricSentences=[];
+  List<String> get lyricLines => lyricSentences.map((e)=>e.text).toList();
   int currentLyricIndex=0;
   Duration position=Duration.zero, duration=Duration.zero;
   bool isPlaying=false, isLoading=false, isRecording=false, isTranscribing=false;
@@ -90,19 +108,26 @@ class MusicController extends ChangeNotifier {
   Duration trimStart=Duration.zero;
   Duration trimEnd=const Duration(seconds:60);
 
-  Duration get sentenceDuration {
-    if(lyricLines.isEmpty || duration.inMilliseconds==0) return const Duration(seconds:4);
-    return Duration(milliseconds: (duration.inMilliseconds / lyricLines.length).floor());
-  }
-  Duration get currentSentenceStart => Duration(milliseconds: currentLyricIndex * sentenceDuration.inMilliseconds);
+  Duration get sentenceDuration => lyricSentences.isEmpty? const Duration(seconds:4) : lyricSentences[currentLyricIndex].end - lyricSentences[currentLyricIndex].start;
+  Duration get currentSentenceStart => lyricSentences.isEmpty? Duration.zero : lyricSentences[currentLyricIndex].start;
 
   MusicController(){
     audioPlayer.positionStream.listen((v){
       position=v;
-      if(lyricLines.isNotEmpty && duration.inSeconds>1){
-        int idx = ((v.inMilliseconds / duration.inMilliseconds) * lyricLines.length).floor();
-        idx = idx.clamp(0, lyricLines.length-1);
-        if(idx!=currentLyricIndex){ currentLyricIndex=idx; }
+      if(lyricSentences.isNotEmpty){
+        // cari kalimat yang mengandung posisi sekarang
+        for(int i=0;i<lyricSentences.length;i++){
+          if(v >= lyricSentences[i].start && v < lyricSentences[i].end + Duration(milliseconds:500)){
+            if(i!=currentLyricIndex) currentLyricIndex=i;
+            break;
+          }
+          // kalau di antara kalimat
+          if(i < lyricSentences.length-1 && v >= lyricSentences[i].end && v < lyricSentences[i+1].start){
+            if(i!=currentLyricIndex) currentLyricIndex=i+1;
+            break;
+          }
+        }
+        if(v > lyricSentences.last.end) currentLyricIndex = lyricSentences.length-1;
       }
       notifyListeners();
     });
@@ -233,23 +258,54 @@ class MusicController extends ChangeNotifier {
       recog.decode(stream);
       final result = recog.getResult(stream);
       String raw = result.text.trim();
+
+      // TIMESTAMP AKURAT DARI SHERPA
+      List<TimedWord> allWords = [];
+      try{
+        var tokens = result.tokens;
+        var times = result.timestamps;
+        if(tokens.isNotEmpty && times.isNotEmpty && tokens.length==times.length){
+          for(int i=0;i<tokens.length;i++){
+            String tok = tokens[i].replaceAll('<|','').replaceAll('|>','').trim();
+            if(tok.isEmpty || tok.startsWith('start') || tok.startsWith('end') || tok.length>20) continue;
+            double s = times[i];
+            double e = (i+1<times.length)? times[i+1] : s+0.4;
+            if(e<=s) e = s+0.35;
+            allWords.add(TimedWord(tok, Duration(milliseconds:(s*1000).toInt()), Duration(milliseconds:(e*1000).toInt())));
+          }
+        }
+      }catch(_){}
+
+      // FALLBACK KALAU GAK ADA TIMESTAMP (bagi rata sesuai durasi asli)
+      if(allWords.isEmpty){
+        final words = raw.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
+        int totalMs = duration.inMilliseconds>0? duration.inMilliseconds : words.length*500;
+        int perWord = (totalMs/words.length).floor();
+        for(int i=0;i<words.length;i++){
+          int s = i*perWord;
+          allWords.add(TimedWord(words[i], Duration(milliseconds:s), Duration(milliseconds:s+perWord)));
+        }
+      }
+
+      // GROUP 6-7 KATA JADI 1 KALIMAT
+      List<TimedSentence> sentences = [];
+      for(int i=0;i<allWords.length;i+=6){
+        int end = (i+6 < allWords.length)? i+6 : allWords.length;
+        var slice = allWords.sublist(i,end);
+        if(slice.isEmpty) continue;
+        sentences.add(TimedSentence(slice, slice.first.start, slice.last.end));
+      }
+
+      lyricSentences = sentences;
+      currentLyricIndex=0;
       stream.free();
       recog.free();
-      if(raw.length>5){
-        List<String> sentences = [];
-        final wordsAll = raw.split(RegExp(r'\s+'));
-        for(int i=0;i<wordsAll.length;i+=7){
-          int end = (i+7<wordsAll.length)? i+7 : wordsAll.length;
-          sentences.add(wordsAll.sublist(i,end).join(' '));
-        }
-        lyricLines = sentences;
-        currentLyricIndex=0;
-        errorMessage='✅ Lirik asli ${sentences.length} baris';
-      } else {
-        throw Exception('Hasil kosong');
-      }
+      errorMessage='✅ ${sentences.length} baris timestamp akurat';
     }catch(e){
       errorMessage='⚠️ $e';
+      // fallback judul
+      String base = musicName.replaceAll('.mp3','').trim();
+      lyricSentences = [TimedSentence([TimedWord(base, Duration.zero, duration)], Duration.zero, duration)];
     }finally{
       isTranscribing=false;
       notifyListeners();
@@ -392,7 +448,8 @@ class MusicController extends ChangeNotifier {
   }
 
   Future<void> editLyricsDialog(BuildContext context) async {
-    final controller = TextEditingController(text: lyricLines.join('\n'));
+    final txt = lyricSentences.map((s)=>s.text).join('\n');
+    final controller = TextEditingController(text: txt);
     final res = await showDialog<String>(context: context, builder: (ctx)=>AlertDialog(
       backgroundColor: const Color(0xFF1E1E24),
       title: const Text('Edit Lirik Asli', style: TextStyle(color:Colors.white, fontSize:12)),
@@ -403,8 +460,27 @@ class MusicController extends ChangeNotifier {
       ],
     ));
     if(res!=null){
-      lyricLines = res.split('\n').map((e)=>e.trim()).where((e)=>e.isNotEmpty).toList();
-      if(lyricLines.isEmpty) lyricLines=['Lirik kosong'];
+      var lines = res.split('\n').map((e)=>e.trim()).where((e)=>e.isNotEmpty).toList();
+      if(lines.isEmpty) lines=['Lirik kosong'];
+      // rebuild dengan timestamp bagi rata kalau edit manual
+      List<TimedWord> words = [];
+      int totalMs = duration.inMilliseconds>0? duration.inMilliseconds : lines.length*3000;
+      int idx=0;
+      for(var line in lines){
+        var ws = line.split(' ').where((w)=>w.isNotEmpty).toList();
+        for(var w in ws){
+          int s = (idx*totalMs ~/ (lines.join(' ').split(' ').length));
+          words.add(TimedWord(w, Duration(milliseconds:s), Duration(milliseconds:s+400)));
+          idx++;
+        }
+      }
+      List<TimedSentence> newSent = [];
+      for(int i=0;i<words.length;i+=6){
+        int e = (i+6<words.length)? i+6 : words.length;
+        var sl = words.sublist(i,e);
+        newSent.add(TimedSentence(sl, sl.first.start, sl.last.end));
+      }
+      lyricSentences = newSent;
       currentLyricIndex=0;
       notifyListeners();
     }
@@ -455,6 +531,7 @@ class _MusicPanelState extends State<MusicPanel> {
       child: AnimatedBuilder(animation: widget.controller, builder: (context,_){
         final ctrl=widget.controller;
         final showPicker=isSheetExpanded;
+        final currentSentence = ctrl.lyricSentences.isNotEmpty && ctrl.currentLyricIndex < ctrl.lyricSentences.length? ctrl.lyricSentences[ctrl.currentLyricIndex] : null;
         return ListView(controller: widget.scrollController, padding: const EdgeInsets.fromLTRB(12,10,12,16), children: [
           Center(child: Container(width:42,height:5,decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)))),
           const SizedBox(height:10),
@@ -472,16 +549,16 @@ class _MusicPanelState extends State<MusicPanel> {
           ]),
           const SizedBox(height:8),
           GestureDetector(onTap: ()=>setState(()=>lyricExpanded=!lyricExpanded), child: AnimatedContainer(duration: const Duration(milliseconds:250), width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.withOpacity(0.2))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
-            Row(children:[const Icon(Icons.lyrics, size:14, color: Colors.amber), const SizedBox(width:6), Expanded(child: Text(lyricExpanded? 'LIRIK KARAOKE AUTO - TAP FOLD': 'KARAOKE: ${ctrl.lyricLines.isNotEmpty? ctrl.lyricLines[ctrl.currentLyricIndex] : ''}', style: const TextStyle(color:Colors.amber, fontSize:11, fontWeight: FontWeight.bold), maxLines:1, overflow: TextOverflow.ellipsis))]),
+            Row(children:[const Icon(Icons.lyrics, size:14, color: Colors.amber), const SizedBox(width:6), Expanded(child: Text(lyricExpanded? 'LIRIK KARAOKE TIMESTAMP AKURAT - TAP FOLD' : 'KARAOKE: ${currentSentence?.text?? ''}', style: const TextStyle(color:Colors.amber, fontSize:11, fontWeight: FontWeight.bold), maxLines:1, overflow: TextOverflow.ellipsis))]),
             const SizedBox(height:8),
             if(lyricExpanded) Column(crossAxisAlignment: CrossAxisAlignment.start, children:[
-              Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(10)), child: ctrl.lyricLines.isEmpty? const Text('Belum ada lirik', style: TextStyle(color:Colors.white24, fontSize:11)) : LyricKaraoke(sentence: ctrl.lyricLines[ctrl.currentLyricIndex], sentenceIndex: ctrl.currentLyricIndex, currentSentenceIndex: ctrl.currentLyricIndex, position: ctrl.position, sentenceStart: ctrl.currentSentenceStart, sentenceDuration: ctrl.sentenceDuration)),
+              Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(10)), child: currentSentence==null? const Text('Belum ada lirik', style: TextStyle(color:Colors.white24, fontSize:11)) : LyricKaraoke(sentence: currentSentence, position: ctrl.position)),
               const SizedBox(height:8),
-         ...ctrl.lyricLines.asMap().entries.map((e){
+             ...ctrl.lyricSentences.asMap().entries.map((e){
                 final isActive = e.key==ctrl.currentLyricIndex;
-                return AnimatedContainer(duration: const Duration(milliseconds:200), padding: const EdgeInsets.symmetric(vertical:3, horizontal:6), margin: const EdgeInsets.only(bottom:2), decoration: isActive? BoxDecoration(color: Colors.amber.withOpacity(0.12), borderRadius: BorderRadius.circular(6)) : null, child: Row(children:[Text('${e.key+1}. ', style: TextStyle(color: isActive?Colors.amber:Colors.white24, fontSize:10)), Expanded(child: Text(e.value, style: TextStyle(color: isActive?Colors.white:Colors.white38, fontSize: isActive?13:11, fontWeight: isActive?FontWeight.bold:FontWeight.normal)))]));
+                return AnimatedContainer(duration: const Duration(milliseconds:200), padding: const EdgeInsets.symmetric(vertical:3, horizontal:6), margin: const EdgeInsets.only(bottom:2), decoration: isActive? BoxDecoration(color: Colors.amber.withOpacity(0.12), borderRadius: BorderRadius.circular(6)) : null, child: Row(children:[Text('${e.key+1}. ', style: TextStyle(color: isActive?Colors.amber:Colors.white24, fontSize:10)), Expanded(child: Text(e.value.text, style: TextStyle(color: isActive?Colors.white:Colors.white38, fontSize: isActive?13:11, fontWeight: isActive?FontWeight.bold:FontWeight.normal)))]));
               }),
-            ]) else LyricKaraoke(sentence: ctrl.lyricLines.isNotEmpty? ctrl.lyricLines[ctrl.currentLyricIndex] : '', sentenceIndex: ctrl.currentLyricIndex, currentSentenceIndex: ctrl.currentLyricIndex, position: ctrl.position, sentenceStart: ctrl.currentSentenceStart, sentenceDuration: ctrl.sentenceDuration),
+            ]) else currentSentence==null? const SizedBox.shrink() : LyricKaraoke(sentence: currentSentence, position: ctrl.position),
           ]))),
           const SizedBox(height:12),
           Row(children:[
