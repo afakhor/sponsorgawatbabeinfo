@@ -234,41 +234,9 @@ class MusicController extends ChangeNotifier {
     return modelDir.path;
   }
 
-  Future<String> _convertToWav(String inputPath, {int maxSeconds = 15}) async {
-    final dir = await getTemporaryDirectory();
-    final outPath = '${dir.path}/sherpa_${DateTime.now().millisecondsSinceEpoch}.wav';
+  Future<String> _convertToWav(String inputPath, {int maxSeconds = 180}) async => inputPath;
 
-    // HAPUS WAV LAMA BIAR GAK NUMPUK
-    try{
-      final tmp = Directory(dir.path);
-      await for(var f in tmp.list()){
-        if(f.path.contains('sherpa_') && f.path.endsWith('.wav')){
-          try{ await File(f.path).delete(); }catch(_){}
-        }
-      }
-    }catch(_){}
-
-    // FIX UTAMA: -ss 0 -t 15 SEBELUM -i + -threads 1 + async
-    // Ini bikin FFmpeg streaming, gak load full 11MB
-    final cmd = '-y -ss 0 -t $maxSeconds -i "$inputPath" -vn -sn -dn -threads 1 -ar 16000 -ac 1 -c:a pcm_s16le "$outPath"';
-
-    final completer = Completer<String>();
-    await FFmpegKit.executeAsync(cmd, (session) async {
-      final code = await session.getReturnCode();
-      if(code!= null && code.isValueSuccess() && File(outPath).existsSync()){
-        completer.complete(outPath);
-      } else {
-        final logs = await session.getAllLogsAsString();
-        completer.completeError('FFMPEG FAIL: $logs');
-      }
-    });
-
-    return completer.future.timeout(Duration(seconds: 60), onTimeout: (){
-      throw Exception('Convert timeout 60s - MP3 11MB terlalu besar');
-    });
-  }
-
-      Future<void> transcribeLyric(BuildContext context) async {
+        Future<void> transcribeLyric(BuildContext context) async {
     if(selectedMusicFile==null) return;
     isTranscribing=true;
 
@@ -283,7 +251,7 @@ class MusicController extends ChangeNotifier {
           diagSet = setSt;
           return AlertDialog(
             backgroundColor: Color(0xFF1E1E24),
-            title: Text('🔍 DIAGNOSTIC 15s', style: TextStyle(color: Colors.amber, fontSize:13, fontWeight: FontWeight.bold)),
+            title: Text('🔍 TRANSCRIBE 3 MENIT', style: TextStyle(color: Colors.amber, fontSize:13, fontWeight: FontWeight.bold)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -313,62 +281,83 @@ class MusicController extends ChangeNotifier {
       updateStep('1/5 CEK MODEL', prog:0.1);
       final mp = await _ensureModelWithDialog(context);
 
-      updateStep('2/5 CONVERT 15s', prog:0.3, msg:'Convert MP3 11MB -> WAV 15s...');
-      String wavPath = await _convertToWav(selectedMusicFile!.path, maxSeconds: 15);
+      updateStep('2/5 SKIP CONVERT', prog:0.3, msg:'MP3 11MB langsung baca tanpa FFmpeg');
+      // GAK CONVERT LAGI - LANGSUNG PAKAI FILE ASLI
+      String wavPath = selectedMusicFile!.path;
 
-      updateStep('3/5 BACA WAVE', prog:0.6, msg:'WAV ${File(wavPath).lengthSync()~/1024}KB');
-      final wave = sherpa.readWave(wavPath);
+      updateStep('3/5 BACA MP3', prog:0.5, msg:'readWave MP3 3 menit...');
+      late sherpa.WaveData wave;
+      wave = sherpa.readWave(wavPath); // bisa baca MP3 langsung
+
+      // POTONG 3 MENIT MAX = 180 DETIK
+      int targetSr = 16000;
       var samples = wave.samples;
-      int maxSamples = 16000 * 15;
-      if(samples.length > maxSamples) samples = samples.sublist(0, maxSamples);
+      // resample kalau bukan 16k
+      if(wave.sampleRate != targetSr){
+        double ratio = wave.sampleRate / targetSr;
+        int newLen = (samples.length / ratio).toInt();
+        if(newLen > targetSr * 180) newLen = targetSr * 180; // max 3 menit
+        var resampled = List<double>.filled(newLen, 0);
+        for(int i=0;i<newLen;i++){
+          int srcIdx = (i * ratio).toInt();
+          if(srcIdx < samples.length) resampled[i] = samples[srcIdx];
+        }
+        samples = Float32List.fromList(resampled);
+      } else {
+        if(samples.length > targetSr * 180) samples = samples.sublist(0, targetSr * 180);
+      }
 
-      updateStep('4/5 INIT TINY', prog:0.8);
+      updateStep('3/5 SIAP ${samples.length~/16000}s', prog:0.6, msg:'${samples.length} samples');
+
+      updateStep('4/5 INIT TINY', prog:0.7);
       final whisperCfg = sherpa.OfflineWhisperModelConfig(encoder: '$mp/encoder.onnx', decoder: '$mp/decoder.onnx', language: '', task: 'transcribe');
       final modelCfg = sherpa.OfflineModelConfig(whisper: whisperCfg, tokens: '$mp/tokens.txt', numThreads: 1);
       final recog = sherpa.OfflineRecognizer(sherpa.OfflineRecognizerConfig(model: modelCfg, decodingMethod: 'greedy', maxActivePaths: 1));
-      final stream = recog.createStream();
 
-      updateStep('5/5 DECODE', prog:0.9, msg:'Transcribe 15 detik...');
-      stream.acceptWaveform(sampleRate: 16000, samples: samples);
-      recog.decode(stream);
-      final result = recog.getResult(stream);
-      String raw = result.text.trim();
+      // CHUNK 30 DETIK BIAR GAK CRASH
+      int chunkSec = 30;
+      int chunkSamples = 16000 * chunkSec;
+      int totalChunks = (samples.length / chunkSamples).ceil();
+      List<TimedSentence> allSentences = [];
 
-      //... parsing jadi TimedSentence seperti kode sebelumnya
-      List<TimedWord> allWords = [];
-      try{
-        var tokens = result.tokens;
-        var times = result.timestamps;
-        if(tokens.isNotEmpty && times.isNotEmpty){
-          for(int i=0;i<tokens.length;i++){
-            String tok = tokens[i].replaceAll('<|','').replaceAll('|>','').trim();
-            if(tok.isEmpty) continue;
-            double s = times[i];
-            double e = (i+1<times.length)? times[i+1] : s+0.4;
-            allWords.add(TimedWord(tok, Duration(milliseconds:(s*1000).toInt()), Duration(milliseconds:(e*1000).toInt())));
+      for(int c=0;c<totalChunks;c++){
+        int start = c * chunkSamples;
+        int end = start + chunkSamples;
+        if(end > samples.length) end = samples.length;
+        var chunk = samples.sublist(start, end);
+
+        updateStep('5/5 DECODE ${c+1}/$totalChunks', prog:0.7 + 0.3*c/totalChunks, msg:'${(start/16000).toInt()}s-${(end/16000).toInt()}s / ${samples.length~/16000}s');
+
+        final stream = recog.createStream();
+        stream.acceptWaveform(sampleRate: 16000, samples: chunk);
+        recog.decode(stream);
+        final result = recog.getResult(stream);
+        String raw = result.text.trim();
+
+        double offsetSec = start / 16000.0;
+        if(raw.isNotEmpty){
+          var words = raw.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
+          for(int i=0;i<words.length;i+=6){
+            int en = (i+6<words.length)? i+6 : words.length;
+            var slice = words.sublist(i,en);
+            List<TimedWord> wds = [];
+            for(int j=0;j<slice.length;j++){
+              double s = offsetSec + (i+j)*0.5;
+              wds.add(TimedWord(slice[j], Duration(milliseconds:(s*1000).toInt()), Duration(milliseconds:((s+0.5)*1000).toInt())));
+            }
+            if(wds.isNotEmpty) allSentences.add(TimedSentence(wds, wds.first.start, wds.last.end));
           }
         }
-      }catch(_){}
-      if(allWords.isEmpty){
-        final words = raw.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
-        for(int i=0;i<words.length;i++){
-          allWords.add(TimedWord(words[i], Duration(milliseconds:i*500), Duration(milliseconds:i*500+500)));
-        }
+        stream.free();
+        await Future.delayed(Duration(milliseconds:150));
       }
-      List<TimedSentence> sentences = [];
-      for(int i=0;i<allWords.length;i+=6){
-        int end = (i+6 < allWords.length)? i+6 : allWords.length;
-        var slice = allWords.sublist(i,end);
-        sentences.add(TimedSentence(slice, slice.first.start, slice.last.end));
-      }
-      lyricSentences = sentences;
+
+      lyricSentences = allSentences;
       currentLyricIndex=0;
-      stream.free();
       recog.free();
-      try{ await File(wavPath).delete(); }catch(_){}
 
       if(context.mounted) Navigator.pop(context);
-      errorMessage='✅ ${sentences.length} baris - MP3 11MB sukses 15s';
+      errorMessage='✅ ${allSentences.length} baris - 3 menit sukses tanpa FFmpeg';
 
     }catch(e){
       if(context.mounted) Navigator.pop(context);
