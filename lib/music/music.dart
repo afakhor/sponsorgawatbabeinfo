@@ -115,21 +115,8 @@ class MusicController extends ChangeNotifier {
   }
 
   // FIX FINAL: CONVERT MP3 -> WAV PAKAI FFMPEG KALAU SHERPA GAK BISA BACA MP3
-  Future<String> _convertToWav(String inputPath, {int maxSeconds = 180}) async {
-    final dir = await getTemporaryDirectory();
-    final outPath = '${dir.path}/sherpa_${DateTime.now().millisecondsSinceEpoch}.wav';
-    // hapus wav lama
-    try{ final tmp = Directory(dir.path); await for(var f in tmp.list()){ if(f.path.contains('sherpa_') && f.path.endsWith('.wav')){ try{ await File(f.path).delete(); }catch(_){} } } }catch(_){}
-    // -ss 0 -t maxSeconds SEBELUM -i = streaming low RAM untuk MP3 11MB
-    final cmd = '-y -ss 0 -t $maxSeconds -i "$inputPath" -vn -sn -dn -threads 1 -ar 16000 -ac 1 -c:a pcm_s16le "$outPath"';
-    final completer = Completer<String>();
-    await FFmpegKit.executeAsync(cmd, (session) async {
-      final code = await session.getReturnCode();
-      if(code!=null && ReturnCode.isSuccess(code) && File(outPath).existsSync()){ if(!completer.isCompleted) completer.complete(outPath); }
-      else { final logs = await session.getAllLogsAsString(); if(!completer.isCompleted) completer.completeError('FFMPEG FAIL: $logs'); }
-    });
-    return completer.future.timeout(const Duration(seconds: 120), onTimeout: (){ throw Exception('Convert timeout 120s'); });
-  }
+  
+  Future<String> _convertToWav(String inputPath, {int maxSeconds = 180}) async => inputPath;
 
   Future<void> transcribeLyric(BuildContext context) async {
     if(selectedMusicFile==null) return;
