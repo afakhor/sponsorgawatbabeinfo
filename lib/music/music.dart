@@ -165,36 +165,100 @@ class MusicController extends ChangeNotifier {
       Float32List finalSamples = Float32List.fromList(samples);
       updateStep('3/5 SIAP ${finalSamples.length~/16000}s', prog:0.6, msg:'${finalSamples.length} samples valid');
 
-      updateStep('4/5 INIT TINY', prog:0.7);
-      final whisperCfg = sherpa.OfflineWhisperModelConfig(encoder: '$mp/encoder.onnx', decoder: '$mp/decoder.onnx', language: '', task: 'transcribe');
-      final modelCfg = sherpa.OfflineModelConfig(whisper: whisperCfg, tokens: '$mp/tokens.txt', numThreads: 1);
-      final recog = sherpa.OfflineRecognizer(sherpa.OfflineRecognizerConfig(model: modelCfg, decodingMethod: 'greedy', maxActivePaths: 1));
-      int chunkSec = 30; int chunkSamples = 16000 * chunkSec; int totalChunks = (finalSamples.length / chunkSamples).ceil(); if(totalChunks==0) totalChunks=1;
+            updateStep('4/5 INIT TINY', prog:0.7);
+      final whisperCfg = sherpa.OfflineWhisperModelConfig(
+        encoder: '$mp/encoder.onnx',
+        decoder: '$mp/decoder.onnx',
+        language: 'en',
+        task: 'transcribe'
+      );
+      final modelCfg = sherpa.OfflineModelConfig(
+        whisper: whisperCfg,
+        tokens: '$mp/tokens.txt',
+        numThreads: 1,
+        provider: 'cpu'
+      );
+      final recog = sherpa.OfflineRecognizer(
+        sherpa.OfflineRecognizerConfig(
+          model: modelCfg,
+          decodingMethod: 'greedy',
+          maxActivePaths: 1
+        )
+      );
+
+      int chunkSec = 10; // JANGAN 30 - 30 BIKIN CRASH
+      int chunkSamples = 16000 * chunkSec;
+      int totalChunks = (finalSamples.length / chunkSamples).ceil();
+      if(totalChunks==0) totalChunks=1;
       List<TimedSentence> allSentences = [];
+
       for(int c=0;c<totalChunks;c++){
-        int start = c * chunkSamples; int end = start + chunkSamples; if(end > finalSamples.length) end = finalSamples.length; if(start>=end) break;
+        int start = c * chunkSamples;
+        int end = start + chunkSamples;
+        if(end > finalSamples.length) end = finalSamples.length;
+        if(start>=end) break;
         var chunk = finalSamples.sublist(start, end);
-        updateStep('5/5 DECODE ${c+1}/$totalChunks', prog:0.7 + 0.3*c/totalChunks, msg:'${(start/16000).toInt()}s-${(end/16000).toInt()}s / ${finalSamples.length~/16000}s');
-        final stream = recog.createStream(); stream.acceptWaveform(sampleRate: 16000, samples: chunk); recog.decode(stream);
-        final result = recog.getResult(stream); String rawText = result.text.trim();
-        double offsetSec = start / 16000.0; if(offsetSec.isNaN ||!offsetSec.isFinite) offsetSec = 0;
-        if(rawText.isNotEmpty){
-          var words = rawText.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
-          for(int i=0;i<words.length;i+=6){ int en = (i+6<words.length)? i+6 : words.length; var slice = words.sublist(i,en); List<TimedWord> wds = []; for(int j=0;j<slice.length;j++){ double s = offsetSec + (i+j)*0.5; double e = s + 0.5; if(!s.isFinite) s = offsetSec; if(!e.isFinite) e = s + 0.5; wds.add(TimedWord(slice[j], Duration(milliseconds:(s*1000).floor()), Duration(milliseconds:(e*1000).floor()))); } if(wds.isNotEmpty) allSentences.add(TimedSentence(wds, wds.first.start, wds.last.end)); }
+
+        updateStep('5/5 DECODE ${c+1}/$totalChunks',
+          prog:0.7 + 0.3*c/totalChunks,
+          msg:'${(start/16000).toInt()}s-${(end/16000).toInt()}s / ${finalSamples.length~/16000}s'
+        );
+
+        try{
+          final stream = recog.createStream();
+          stream.acceptWaveform(sampleRate: 16000, samples: chunk);
+          recog.decode(stream);
+          final result = recog.getResult(stream);
+          String rawText = result.text.trim();
+          stream.free(); // FREE LANGSUNG
+
+          double offsetSec = start / 16000.0;
+          if(offsetSec.isNaN ||!offsetSec.isFinite) offsetSec = 0;
+
+          if(rawText.isNotEmpty){
+            var words = rawText.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
+            for(int i=0;i<words.length;i+=6){
+              int en = (i+6<words.length)? i+6 : words.length;
+              var slice = words.sublist(i,en);
+              List<TimedWord> wds = [];
+              for(int j=0;j<slice.length;j++){
+                double s = offsetSec + (i+j)*0.5;
+                double e = s + 0.5;
+                if(!s.isFinite) s = offsetSec;
+                if(!e.isFinite) e = s + 0.5;
+                wds.add(TimedWord(slice[j], Duration(milliseconds:(s*1000).floor()), Duration(milliseconds:(e*1000).floor())));
+              }
+              if(wds.isNotEmpty) allSentences.add(TimedSentence(wds, wds.first.start, wds.last.end));
+            }
+          }
+        }catch(e){
+          print('Skip chunk $c: $e');
         }
-        stream.free(); await Future.delayed(const Duration(milliseconds:150));
+
+        await Future.delayed(const Duration(milliseconds:300));
       }
-      lyricSentences = allSentences; currentLyricIndex=0; recog.free();
+
+      lyricSentences = allSentences;
+      currentLyricIndex=0;
+      recog.free();
       if(context.mounted) Navigator.pop(context);
-      errorMessage='✅ ${allSentences.length} baris - 3 menit sukses';
-      if(allSentences.isEmpty) errorMessage='⚠️ Lirik kosong - model tidak deteksi vokal, coba edit manual';
+      errorMessage='✅ ${allSentences.length} baris - ${finalSamples.length~/16000}s sukses';
+      if(allSentences.isEmpty) errorMessage='⚠️ Lirik kosong - edit manual';
     }catch(e){
       if(context.mounted) Navigator.pop(context);
       errorMessage='❌ GAGAL DI $currentStep: $e';
-      if(context.mounted){ showDialog(context: context, builder: (ctx)=>AlertDialog(backgroundColor: const Color(0xFF1E1E24), title: Text('❌ $currentStep', style: const TextStyle(color: Colors.redAccent)), content: Text('$e', style: const TextStyle(color: Colors.white70, fontSize:11)), actions: [ElevatedButton(onPressed: ()=>Navigator.pop(ctx), child: const Text('OK'))],)); }
-    }finally{ isTranscribing=false; notifyListeners(); }
-  }
-
+      if(context.mounted){
+        showDialog(context: context, builder: (ctx)=>AlertDialog(
+          backgroundColor: const Color(0xFF1E1E24),
+          title: Text('❌ $currentStep', style: const TextStyle(color: Colors.redAccent)),
+          content: Text('$e', style: const TextStyle(color: Colors.white70, fontSize:11)),
+          actions: [ElevatedButton(onPressed: ()=>Navigator.pop(ctx), child: const Text('OK'))],
+        ));
+      }
+    }finally{
+      isTranscribing=false;
+      notifyListeners();
+    }
   Future<void> pickMusic(BuildContext context) async {
     try{
       await _req(); final res=await FilePicker.platform.pickFiles(type: FileType.audio, withData:false);
