@@ -39,12 +39,17 @@ android {
         jvmTarget = "17" 
     }
 
-    defaultConfig {
+        defaultConfig {
         applicationId = "com.example.sponsorbabeinfogawat"
         minSdk = 24
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        multiDexEnabled true
+        ndk {
+            abiFilters "arm64-v8a", "armeabi-v7a"
+            debugSymbolLevel = "FULL"
+        }
     }
 
     buildTypes {
