@@ -108,79 +108,84 @@ class MusicController extends ChangeNotifier {
     return modelDir.path;
   }
 
-  Future<sherpa.WaveData> _readWavManual(String path) async {
+    Future<sherpa.WaveData> _readWavManual(String path) async {
     final bytes = await File(path).readAsBytes();
-    int dataPos = -1; int sampleRate = 16000; int channels = 1; int bits = 16;
-    // scan header
+    int dataPos = 0, sr = 16000, ch = 1, bits = 16;
     for(int i=12; i < bytes.length-8; i++){
-      if(i+24 < bytes.length && bytes[i]==0x66 && bytes[i+1]==0x6d && bytes[i+2]==0x74 && bytes[i+3]==0x20){
-        channels = bytes[i+10] | bytes[i+11]<<8;
-        sampleRate = bytes[i+12] | bytes[i+13]<<8 | bytes[i+14]<<16 | bytes[i+15]<<24;
+      if(bytes[i]==0x66 && bytes[i+1]==0x6D && bytes[i+2]==0x74 && bytes[i+3]==0x20){
+        ch = bytes[i+10] | bytes[i+11]<<8;
+        sr = bytes[i+12] | bytes[i+13]<<8 | bytes[i+14]<<16 | bytes[i+15]<<24;
         bits = bytes[i+22] | bytes[i+23]<<8;
       }
-      if(bytes[i]==0x64 && bytes[i+1]==0x61 && bytes[i+2]==0x74 && bytes[i+3]==0x61){
-        dataPos = i+8; break;
-      }
+      if(bytes[i]==0x64 && bytes[i+1]==0x61 && bytes[i+2]==0x74 && bytes[i+3]==0x61){ dataPos = i+8; break; }
     }
-    if(dataPos==-1) throw Exception('WAV header rusak');
-    List<double> samples = [];
+    if(dataPos==0) throw Exception('WAV header rusak');
+    List<double> out = [];
     if(bits==16){
-      for(int i=dataPos; i+1 < bytes.length; i+=2*channels){
-        int v = bytes[i] | bytes[i+1]<<8;
-        if(v>=32768) v-=65536;
-        samples.add(v/32768.0);
+      for(int i=dataPos; i+1 < bytes.length; i+=2*ch){
+        int v = bytes[i] | bytes[i+1]<<8; if(v>=32768) v-=65536; out.add(v/32768.0);
       }
-    }else if(bits==32){
+    } else {
       var bd = ByteData.sublistView(bytes);
-      for(int i=dataPos; i+3 < bytes.length; i+=4*channels){
-        double v = bd.getFloat32(i, Endian.little);
-        if(!v.isFinite) v=0;
-        samples.add(v.clamp(-1.0,1.0));
+      for(int i=dataPos; i+3 < bytes.length; i+=4*ch){
+        double v = bd.getFloat32(i, Endian.little); if(!v.isFinite) v=0; out.add(v.clamp(-1,1));
       }
     }
-    if(samples.isEmpty) throw Exception('WAV kosong setelah parse');
-    return sherpa.WaveData(samples: Float32List.fromList(samples), sampleRate: sampleRate);
+    if(out.isEmpty) throw Exception('WAV 0/kosong manual');
+    return sherpa.WaveData(samples: Float32List.fromList(out), sampleRate: sr);
   }
+
   Future<String> _convertToWav(String inputPath, {int maxSeconds = 180}) async => inputPath;
 
   Future<void> transcribeLyric(BuildContext context) async {
     if(selectedMusicFile==null) return;
-    isTranscribing=true; String currentStep = 'START'; double progress = 0; late StateSetter diagSet;
-    if(context.mounted){ showDialog(context: context, barrierDismissible: false, builder: (ctx) => StatefulBuilder(builder: (ctx,setSt){ diagSet = setSt; return AlertDialog(backgroundColor: const Color(0xFF1E1E24), title: const Text('🔍 TRANSCRIBE', style: TextStyle(color: Colors.amber, fontSize:13, fontWeight: FontWeight.bold)), content: Column(mainAxisSize: MainAxisSize.min, children: [ Text('File: $musicName', style: const TextStyle(color: Colors.white70, fontSize:11)), const SizedBox(height:8), Text('STEP: $currentStep', style: const TextStyle(color: Colors.cyan, fontSize:12, fontWeight: FontWeight.bold)), const SizedBox(height:8), LinearProgressIndicator(value: progress==0?null:progress, color: Colors.amber), ]),); })); }
-    void updateStep(String step, {double prog = 0, String? msg}){ currentStep = step; progress = prog; if(msg!=null) errorMessage = msg; try{ diagSet((){}); }catch(_){} notifyListeners(); }
+    isTranscribing=true; String currentStep='START'; double progress=0; late StateSetter diagSet;
+    if(context.mounted){ showDialog(context: context, barrierDismissible:false, builder:(ctx)=>StatefulBuilder(builder:(ctx,setSt){ diagSet=setSt; return AlertDialog(backgroundColor: const Color(0xFF1E1E24), title: const Text('🔍 TRANSCRIBE', style: TextStyle(color:Colors.amber, fontSize:13)), content: Column(mainAxisSize: MainAxisSize.min, children:[Text('STEP: $currentStep', style: const TextStyle(color:Colors.cyan, fontSize:12)), LinearProgressIndicator(value: progress==0?null:progress, color:Colors.amber)])); })); }
+    void updateStep(String step,{double prog=0, String? msg}){ currentStep=step; progress=prog; if(msg!=null) errorMessage=msg; try{diagSet((){});}catch(_){} notifyListeners(); }
     try{
       updateStep('1/5 CEK MODEL', prog:0.1); final mp = await _ensureModelWithDialog(context);
-            updateStep('2/5 BACA WAV MONO', prog:0.4);
+      updateStep('2/5 BACA WAV MONO', prog:0.4);
       String wavPath = selectedMusicFile!.path;
       late sherpa.WaveData wave;
-      wave = await _readWavManual(wavPath); // LANGSUNG MANUAL, JANGAN sherpa.readWave
+      wave = await _readWavManual(wavPath);
+
+      List<double> raw = wave.samples.map((e)=> e.isFinite? e : 0.0).where((e)=>e.isFinite).toList();
+      int targetSr = 16000; List<double> samples = raw;
+      if(wave.sampleRate!=targetSr && wave.sampleRate>0){
+        double ratio = wave.sampleRate/targetSr; int newLen = (samples.length/ratio).floor();
+        if(newLen > targetSr*60) newLen = targetSr*60;
+        if(newLen>0){ var resampled = List<double>.filled(newLen,0.0); for(int i=0;i<newLen;i++){ int srcIdx=(i*ratio).floor(); if(srcIdx>=0 && srcIdx<samples.length) resampled[i]=samples[srcIdx]; } samples=resampled; }
+      } else { if(samples.length > targetSr*60) samples=samples.sublist(0,targetSr*60); }
+      Float32List finalSamples = Float32List.fromList(samples);
+
       updateStep('3/5 SIAP ${finalSamples.length~/16000}s', prog:0.6);
       updateStep('4/5 INIT TINY', prog:0.7);
-      final whisperCfg = sherpa.OfflineWhisperModelConfig(encoder: '$mp/encoder.onnx', decoder: '$mp/decoder.onnx', language: 'en', task: 'transcribe');
-      final modelCfg = sherpa.OfflineModelConfig(whisper: whisperCfg, tokens: '$mp/tokens.txt', numThreads: 1, provider: 'cpu');
-      final recog = sherpa.OfflineRecognizer(sherpa.OfflineRecognizerConfig(model: modelCfg, decodingMethod: 'greedy', maxActivePaths: 1));
-      int chunkSec = 10; int chunkSamples = 16000 * chunkSec; int totalChunks = (finalSamples.length / chunkSamples).ceil(); if(totalChunks==0) totalChunks=1;
-      List<TimedSentence> allSentences = [];
+      final whisperCfg = sherpa.OfflineWhisperModelConfig(encoder:'$mp/encoder.onnx', decoder:'$mp/decoder.onnx', language:'en', task:'transcribe');
+      final modelCfg = sherpa.OfflineModelConfig(whisper:whisperCfg, tokens:'$mp/tokens.txt', numThreads:1, provider:'cpu');
+      final recog = sherpa.OfflineRecognizer(sherpa.OfflineRecognizerConfig(model:modelCfg, decodingMethod:'greedy', maxActivePaths:1));
+
+      int chunkSec=10; int chunkSamples=16000*chunkSec; int totalChunks=(finalSamples.length/chunkSamples).ceil(); if(totalChunks==0) totalChunks=1;
+      List<TimedSentence> allSentences=[];
       for(int c=0;c<totalChunks;c++){
-        int start = c * chunkSamples; int end = start + chunkSamples; if(end > finalSamples.length) end = finalSamples.length; if(start>=end) break;
-        var chunk = finalSamples.sublist(start, end);
-        updateStep('5/5 DECODE ${c+1}/$totalChunks', prog:0.7 + 0.3*c/totalChunks);
+        int start=c*chunkSamples; int end=start+chunkSamples; if(end>finalSamples.length) end=finalSamples.length; if(start>=end) break;
+        var chunk=finalSamples.sublist(start,end);
+        updateStep('5/5 DECODE ${c+1}/$totalChunks', prog:0.7+0.3*c/totalChunks);
         try{
-          final stream = recog.createStream(); stream.acceptWaveform(sampleRate: 16000, samples: chunk); recog.decode(stream);
-          final result = recog.getResult(stream); String rawText = result.text.trim(); stream.free();
-          double offsetSec = start / 16000.0; if(!offsetSec.isFinite) offsetSec = 0;
+          final stream=recog.createStream(); stream.acceptWaveform(sampleRate:16000, samples:chunk); recog.decode(stream);
+          final result=recog.getResult(stream); String rawText=result.text.trim(); stream.free();
+          double offsetSec=start/16000.0; if(!offsetSec.isFinite) offsetSec=0;
           if(rawText.isNotEmpty){
-            var words = rawText.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
+            var words=rawText.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).toList();
             for(int i=0;i<words.length;i+=6){
-              int en = (i+6<words.length)? i+6 : words.length; var slice = words.sublist(i,en);
-              List<TimedWord> wds = []; for(int j=0;j<slice.length;j++){ double s = offsetSec + (i+j)*0.5; double e = s + 0.5; wds.add(TimedWord(slice[j], Duration(milliseconds:(s*1000).floor()), Duration(milliseconds:(e*1000).floor()))); }
+              int en=(i+6<words.length)?i+6:words.length; var slice=words.sublist(i,en);
+              List<TimedWord> wds=[]; for(int j=0;j<slice.length;j++){ double s=offsetSec+(i+j)*0.5; wds.add(TimedWord(slice[j], Duration(milliseconds:(s*1000).floor()), Duration(milliseconds:((s+0.5)*1000).floor()))); }
               if(wds.isNotEmpty) allSentences.add(TimedSentence(wds, wds.first.start, wds.last.end));
             }
           }
         }catch(e){ print('skip $c $e'); }
         await Future.delayed(const Duration(milliseconds:300));
       }
-      lyricSentences = allSentences; currentLyricIndex=0; recog.free();
+      lyricSentences=allSentences; currentLyricIndex=0; recog.free();
       if(context.mounted) Navigator.pop(context);
       errorMessage='✅ ${allSentences.length} baris';
     }catch(e){
@@ -188,7 +193,6 @@ class MusicController extends ChangeNotifier {
       errorMessage='❌ $currentStep: $e';
     }finally{ isTranscribing=false; notifyListeners(); }
   }
-
   Future<void> pickMusic(BuildContext context) async {
     try{
       await _req(); final res=await FilePicker.platform.pickFiles(type: FileType.audio, withData:false);
