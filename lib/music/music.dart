@@ -338,7 +338,6 @@ class MusicController extends ChangeNotifier {
     return modelDir.path;
   }
 
-  // BACA WAV MONO PCM 16-BIT
   Future<sherpa.WaveData> _readWavManual(String path) async {
     final bytes = await File(path).readAsBytes();
     int dataPos = 0, sr = 16000, ch = 1, bits = 16;
@@ -374,7 +373,6 @@ class MusicController extends ChangeNotifier {
     return sherpa.WaveData(samples: Float32List.fromList(out), sampleRate: sr);
   }
 
-  // KONVERSI MP3/WAV/AAC KE WAV MONO 16K VIA FFMPEG KIT
   Future<String> _convertToWav(String inputPath, {int maxSeconds = 180}) async {
     final tempDir = await getTemporaryDirectory();
     final outputPath = '${tempDir.path}/transcribe_${DateTime.now().millisecondsSinceEpoch}.wav';
@@ -664,6 +662,46 @@ class MusicController extends ChangeNotifier {
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       notifyListeners();
     }
+  }
+
+  // DIALOG PASCA REKAMAN (DIPANGGIL DARI main.dart)
+  Future<void> showPostRecordDialog(BuildContext context) async {
+    if (recordedPath == null || !File(recordedPath!).existsSync()) {
+      errorMessage = 'Belum ada hasil rekaman';
+      notifyListeners();
+      return;
+    }
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E24),
+        title: const Text('🎬 Rekaman Selesai', style: TextStyle(color: Colors.amber, fontSize: 14, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Video berhasil direkam!', style: TextStyle(color: Colors.white70, fontSize: 12)),
+            const SizedBox(height: 8),
+            Text('Durasi: ${recordSeconds}s', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            onPressed: () {
+              Navigator.pop(ctx);
+              shareToWhatsApp();
+            },
+            icon: const Icon(Icons.share, size: 16),
+            label: const Text('Bagikan'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> showTrimDialog(BuildContext context) async {
@@ -1058,7 +1096,14 @@ class _MusicPanelState extends State<MusicPanel> {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      onPressed: ctrl.isRecording ? ctrl.stopRecord : () => ctrl.startRecord(),
+                      onPressed: ctrl.isRecording
+                          ? () async {
+                              await ctrl.stopRecord();
+                              if (context.mounted) {
+                                await ctrl.showPostRecordDialog(context);
+                              }
+                            }
+                          : () => ctrl.startRecord(),
                       icon: Icon(ctrl.isRecording ? Icons.stop : Icons.fiber_manual_record, size: 18),
                       label: Text(
                         ctrl.isRecording ? '${ctrl.recordSeconds}s STOP' : 'REC MERAH',
