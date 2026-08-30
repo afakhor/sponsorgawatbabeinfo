@@ -39,7 +39,7 @@ android {
         jvmTarget = "17" 
     }
 
-            defaultConfig {
+    defaultConfig {
         applicationId = "com.example.sponsorbabeinfogawat"
         minSdk = 24
         targetSdk = 36
@@ -47,7 +47,7 @@ android {
         versionName = flutter.versionName
         multiDexEnabled = true
         ndk {
-            abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
+            // HAPUS abiFilters karena bentrok dengan --split-per-abi
             debugSymbolLevel = "FULL"
         }
     }
