@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
+// RUNNING TEXT
 class RunningText extends StatefulWidget {
   final String text; final Color color; final double fontSize;
   const RunningText({super.key, required this.text, this.color = Colors.amber, this.fontSize = 14});
@@ -29,9 +30,11 @@ class _RunningTextState extends State<RunningText> with SingleTickerProviderStat
     })));
   }
 }
+
 class TimedWord { final String word; final Duration start; final Duration end; TimedWord(this.word, this.start, this.end); }
 class TimedSentence { final List<TimedWord> words; final Duration start; final Duration end; String get text => words.map((w)=>w.word).join(' '); TimedSentence(this.words, this.start, this.end); }
 
+// PER KALIMAT FOLDING IN/OUT + PER KATA AUTO KARAOKE HIJAU
 class LyricKaraoke extends StatelessWidget {
   final TimedSentence sentence; final Duration position;
   const LyricKaraoke({super.key, required this.sentence, required this.position});
@@ -39,16 +42,23 @@ class LyricKaraoke extends StatelessWidget {
     int activeWord = -1;
     for(int i=0;i<sentence.words.length;i++){
       if(position >= sentence.words[i].start && position < sentence.words[i].end){ activeWord = i; break; }
-      if(position >= sentence.words[i].end && i==sentence.words.length-1 && position < sentence.end + const Duration(milliseconds:300)){ activeWord = i; }
+      if(position >= sentence.words[i].end && i==sentence.words.length-1 && position < sentence.end + const Duration(milliseconds:600)){ activeWord = i; }
     }
     if(position > sentence.end) activeWord = sentence.words.length;
-    return TweenAnimationBuilder<double>(key: ValueKey(sentence.start), tween: Tween(begin: 0, end: 1), duration: const Duration(milliseconds: 350), curve: Curves.easeOutBack, builder: (ctx, val, child) {
-      return Opacity(opacity: val, child: Transform.translate(offset: Offset(0, (1-val)*14), child: Transform.scale(scale: 0.85 + val*0.15, child: child)));
-    }, child: Wrap(spacing: 6, runSpacing: 6, children: List.generate(sentence.words.length, (i){
-      final passed = activeWord>i; final current = i == activeWord;
-      Color col = passed? Colors.greenAccent : current? Colors.green : Colors.white;
-      return AnimatedContainer(duration: const Duration(milliseconds: 120), padding: EdgeInsets.symmetric(horizontal: current?8:0, vertical: current?4:2), decoration: current? BoxDecoration(color: Colors.green.withOpacity(0.22), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.greenAccent.withOpacity(0.8))) : null, child: Text(sentence.words[i].word, style: TextStyle(color: col, fontSize: current?16:13.5, fontWeight: passed||current?FontWeight.bold:FontWeight.w500)));
-    })));
+    return TweenAnimationBuilder<double>( // FOLDING IN/OUT PER KALIMAT
+      key: ValueKey(sentence.start),
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.easeOutBack,
+      builder: (ctx, val, child) {
+        return Opacity(opacity: val, child: Transform.translate(offset: Offset(0, (1-val)*18), child: Transform.scale(scale: 0.85 + val*0.15, child: child)));
+      },
+      child: Wrap(spacing: 6, runSpacing: 6, children: List.generate(sentence.words.length, (i){
+        final passed = activeWord>i; final current = i == activeWord;
+        Color col = passed? Colors.greenAccent : current? Colors.green : Colors.white;
+        return AnimatedContainer(duration: const Duration(milliseconds: 120), padding: EdgeInsets.symmetric(horizontal: current?10:0, vertical: current?4:2), decoration: current? BoxDecoration(color: Colors.green.withOpacity(0.25), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.greenAccent.withOpacity(0.9))) : null, child: Text(sentence.words[i].word, style: TextStyle(color: col, fontSize: current?17:13.5, fontWeight: passed||current?FontWeight.bold:FontWeight.w500, shadows: current? [const Shadow(color: Colors.black, blurRadius: 8)] : null)));
+      })),
+    );
   }
 }
 
@@ -59,8 +69,9 @@ class MusicController extends ChangeNotifier {
   String editableTitle='SPONSOR BABE INFO GAWAT • TAP UNTUK EDIT JUDUL';
   String editableBottomTitle='Babe Info Gawat - Tap untuk edit bawah';
   bool usePreTrim=false;
+  List<TimedSentence> lyricSentences=[];
   List<String> get lyricLines => lyricSentences.map((e)=>e.text).toList();
-  List<TimedSentence> lyricSentences=[]; int currentLyricIndex=0; Duration position=Duration.zero, duration=Duration.zero;
+  int currentLyricIndex=0; Duration position=Duration.zero, duration=Duration.zero;
   bool isPlaying=false, isLoading=false, isRecording=false, isTranscribing=false;
   String? errorMessage; String? recordedPath; Timer? recordTimer; int recordSeconds=0;
   Duration trimStart=Duration.zero; Duration trimEnd=const Duration(seconds:60);
@@ -108,7 +119,8 @@ class MusicController extends ChangeNotifier {
     return modelDir.path;
   }
 
-    Future<sherpa.WaveData> _readWavManual(String path) async {
+  // FIX WAV 0/kosong - BACA WAV MANUAL MONO (support 16bit & 32bit float)
+  Future<sherpa.WaveData> _readWavManual(String path) async {
     final bytes = await File(path).readAsBytes();
     int dataPos = 0, sr = 16000, ch = 1, bits = 16;
     for(int i=12; i < bytes.length-8; i++){
@@ -187,22 +199,30 @@ class MusicController extends ChangeNotifier {
       }
       lyricSentences=allSentences; currentLyricIndex=0; recog.free();
       if(context.mounted) Navigator.pop(context);
-      errorMessage='✅ ${allSentences.length} baris';
+      errorMessage='✅ ${allSentences.length} baris - ${finalSamples.length~/16000}s OK';
+      if(allSentences.isEmpty) errorMessage='⚠️ Lirik kosong - edit manual';
     }catch(e){
       if(context.mounted) Navigator.pop(context);
       errorMessage='❌ $currentStep: $e';
     }finally{ isTranscribing=false; notifyListeners(); }
   }
+
   Future<void> pickMusic(BuildContext context) async {
     try{
       await _req(); final res=await FilePicker.platform.pickFiles(type: FileType.audio, withData:false);
       if(res==null||res.files.isEmpty) return; final p=res.files.single; String? path=p.path; if(path==null) return;
+      // CEK MP3 -> SURUH CONVERT
+      if(path.toLowerCase().endsWith('.mp3')){
+        errorMessage='⚠️ File MP3 terdeteksi - convert dulu ke WAV MONO 16k 16-bit pakai app Audio Converter, lalu pilih WAV nya'; notifyListeners();
+        await Future.delayed(const Duration(milliseconds:500));
+      }
       selectedMusicFile=File(path); musicName=p.name; editableTitle=musicName; currentLyricIndex=0;
       isLoading=true; notifyListeners(); await audioPlayer.stop(); try{await waveformController.stopPlayer();}catch(_){}
       await audioPlayer.setAudioSource(ja.AudioSource.file(path)); duration=audioPlayer.duration??Duration.zero;
       trimStart=Duration.zero; trimEnd= duration.inSeconds>60? const Duration(seconds:60) : duration;
       try{ await waveformController.preparePlayer(path:path, shouldExtractWaveform:true, noOfSamples:100); await waveformController.stopPlayer(); }catch(_){}
-      isLoading=false; notifyListeners(); await transcribeLyric(context);
+      isLoading=false; notifyListeners();
+      if(path.toLowerCase().endsWith('.wav')) await transcribeLyric(context);
     }catch(e){ errorMessage='Gagal: $e'; isLoading=false; notifyListeners(); }
   }
   Future<void> togglePlay() async { if(selectedMusicFile==null){ errorMessage='Geser atas untuk pilih lagu 📁'; notifyListeners(); return; } if(audioPlayer.playing){ await audioPlayer.pause(); try{await waveformController.pausePlayer();}catch(_){} } else { await audioPlayer.play(); try{await waveformController.startPlayer();}catch(_){} } }
@@ -234,6 +254,7 @@ class MusicController extends ChangeNotifier {
   String fmt(Duration v){ return '${v.inMinutes.remainder(60).toString().padLeft(2,'0')}:${v.inSeconds.remainder(60).toString().padLeft(2,'0')}'; }
   double max(){ if(duration.inMilliseconds<=0) return 1.0; return duration.inMilliseconds.toDouble(); }
   double val(){ if(duration.inMilliseconds<=0) return 0; double c=position.inMilliseconds.toDouble(); double m=duration.inMilliseconds.toDouble(); if(c<0) return 0; if(c>m) return m; return c; }
+  @override void dispose(){ recordTimer?.cancel(); audioPlayer.dispose(); waveformController.dispose(); super.dispose(); }
 }
 
 class MusicPanel extends StatefulWidget {
