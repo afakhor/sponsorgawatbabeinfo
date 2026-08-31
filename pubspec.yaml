@@ -22,6 +22,7 @@ dependencies:
   flutter_screen_recording: ^2.0.25
   sherpa_onnx: ^1.10.20
   http: ^1.2.0
+  ffmpeg_kit_flutter_full_gpl: ^6.0.3
 
 dev_dependencies:
   flutter_test:
