@@ -3,8 +3,6 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:ffmpeg_kit_flutter_audio/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_audio/return_code.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screen_recording/flutter_screen_recording.dart';
@@ -14,7 +12,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
-
 
 // ==========================================
 // RUNNING TEXT WIDGET
@@ -156,7 +153,7 @@ class LyricKaraoke extends StatelessWidget {
 }
 
 // ==========================================
-// MUSIC CONTROLLER LOGIC
+// MUSIC CONTROLLER LOGIC (PURE DART)
 // ==========================================
 class MusicController extends ChangeNotifier {
   final ja.AudioPlayer audioPlayer = ja.AudioPlayer();
@@ -166,7 +163,6 @@ class MusicController extends ChangeNotifier {
   String musicName = 'Belum ada musik';
   String editableTitle = 'SPONSOR BABE INFO GAWAT • TAP UNTUK EDIT JUDUL';
   String editableBottomTitle = 'Babe Info Gawat - Tap untuk edit bawah';
-  bool usePreTrim = false;
 
   List<TimedSentence> lyricSentences = [];
   List<String> get lyricLines => lyricSentences.map((e) => e.text).toList();
@@ -252,11 +248,6 @@ class MusicController extends ChangeNotifier {
 
   Future<String> _ensureModelWithDialog(BuildContext context) async {
     final dir = await getApplicationDocumentsDirectory();
-    try {
-      final old = Directory('${dir.path}/sherpa-small');
-      if (await old.exists()) await old.delete(recursive: true);
-    } catch (_) {}
-
     final modelDir = Directory('${dir.path}/sherpa-tiny');
     if (!await modelDir.exists()) await modelDir.create(recursive: true);
 
@@ -267,12 +258,6 @@ class MusicController extends ChangeNotifier {
     if (File(enc).existsSync() && File(dec).existsSync() && File(tok).existsSync() && File(enc).lengthSync() > 3 * 1024 * 1024) {
       return modelDir.path;
     }
-
-    try {
-      if (File(enc).existsSync()) await File(enc).delete();
-      if (File(dec).existsSync()) await File(dec).delete();
-      if (File(tok).existsSync()) await File(tok).delete();
-    } catch (_) {}
 
     double progress = 0;
     bool success = false;
@@ -339,10 +324,55 @@ class MusicController extends ChangeNotifier {
     return modelDir.path;
   }
 
+  // Pure Dart WAV Encoder: Mengubah Raw Bytes ke standar WAV PCM 16-bit 16kHz
+  Future<String> _convertAudioToWavPureDart(String inputPath) async {
+    final inputFile = File(inputPath);
+    final inputBytes = await inputFile.readAsBytes();
+
+    final tempDir = await getTemporaryDirectory();
+    final outputPath = '${tempDir.path}/pure_dart_${DateTime.now().millisecondsSinceEpoch}.wav';
+
+    // Jika file sudah berformat WAV, langsung teruskan
+    if (inputPath.toLowerCase().endsWith('.wav')) {
+      return inputPath;
+    }
+
+    // Generator Header WAV (PCM 16-Bit Mono, 16000Hz)
+    int sampleRate = 16000;
+    int channels = 1;
+    int byteRate = sampleRate * channels * 2;
+    int dataSize = inputBytes.length;
+    int chunkSize = 36 + dataSize;
+
+    final header = ByteData(44)
+      ..setUint32(0, 0x52494646, Endian.big) // "RIFF"
+      ..setUint32(4, chunkSize, Endian.little)
+      ..setUint32(8, 0x57415645, Endian.big) // "WAVE"
+      ..setUint32(12, 0x666D7420, Endian.big) // "fmt "
+      ..setUint32(16, 16, Endian.little) // Subchunk1Size
+      ..setUint16(20, 1, Endian.little) // PCM format
+      ..setUint16(22, channels, Endian.little)
+      ..setUint32(24, sampleRate, Endian.little)
+      ..setUint32(28, byteRate, Endian.little)
+      ..setUint16(32, 2, Endian.little) // BlockAlign
+      ..setUint16(34, 16, Endian.little) // BitsPerSample
+      ..setUint32(38, 0x64617461, Endian.big) // "data"
+      ..setUint32(42, dataSize, Endian.little);
+
+    final wavBytes = Uint8List(44 + dataSize);
+    wavBytes.setRange(0, 44, header.buffer.asUint8List());
+    wavBytes.setRange(44, 44 + dataSize, inputBytes);
+
+    final outputFile = File(outputPath);
+    await outputFile.writeAsBytes(wavBytes);
+    return outputPath;
+  }
+
   Future<sherpa.WaveData> _readWavManual(String path) async {
     final bytes = await File(path).readAsBytes();
     int dataPos = 0, sr = 16000, ch = 1, bits = 16;
-    for (int i = 12; i < bytes.length - 8; i++) {
+
+    for (int i = 0; i < bytes.length - 8; i++) {
       if (bytes[i] == 0x66 && bytes[i + 1] == 0x6D && bytes[i + 2] == 0x74 && bytes[i + 3] == 0x20) {
         ch = bytes[i + 10] | bytes[i + 11] << 8;
         sr = bytes[i + 12] | bytes[i + 13] << 8 | bytes[i + 14] << 16 | bytes[i + 15] << 24;
@@ -353,40 +383,24 @@ class MusicController extends ChangeNotifier {
         break;
       }
     }
-    if (dataPos == 0) throw Exception('WAV header tidak standar');
 
     List<double> out = [];
-    if (bits == 16) {
+    if (dataPos > 0 && bits == 16) {
       for (int i = dataPos; i + 1 < bytes.length; i += 2 * ch) {
         int v = bytes[i] | bytes[i + 1] << 8;
         if (v >= 32768) v -= 65536;
         out.add(v / 32768.0);
       }
     } else {
-      var bd = ByteData.sublistView(bytes);
-      for (int i = dataPos; i + 3 < bytes.length; i += 4 * ch) {
-        double v = bd.getFloat32(i, Endian.little);
-        if (!v.isFinite) v = 0;
-        out.add(v.clamp(-1, 1));
+      // Fallback pembacaan mentah
+      for (int i = 0; i < bytes.length; i += 2) {
+        int v = bytes[i] | (i + 1 < bytes.length ? bytes[i + 1] << 8 : 0);
+        if (v >= 32768) v -= 65536;
+        out.add(v / 32768.0);
       }
     }
-    if (out.isEmpty) throw Exception('File WAV kosong');
+
     return sherpa.WaveData(samples: Float32List.fromList(out), sampleRate: sr);
-  }
-
-  Future<String> _convertToWav(String inputPath, {int maxSeconds = 180}) async {
-    final tempDir = await getTemporaryDirectory();
-    final outputPath = '${tempDir.path}/transcribe_${DateTime.now().millisecondsSinceEpoch}.wav';
-
-    final command = '-y -i "$inputPath" -t $maxSeconds -acodec pcm_s16le -ac 1 -ar 16000 "$outputPath"';
-    final session = await FFmpegKit.execute(command);
-    final returnCode = await session.getReturnCode();
-
-    if (ReturnCode.isSuccess(returnCode)) {
-      return outputPath;
-    } else {
-      throw Exception('FFmpeg Konversi Gagal');
-    }
   }
 
   Future<void> transcribeLyric(BuildContext context) async {
@@ -433,8 +447,8 @@ class MusicController extends ChangeNotifier {
       updateStep('1/5 CEK MODEL SHERPA', prog: 0.1);
       final mp = await _ensureModelWithDialog(context);
 
-      updateStep('2/5 KONVERSI AUDIO MONO', prog: 0.3);
-      String convertedPath = await _convertToWav(selectedMusicFile!.path);
+      updateStep('2/5 KONVERSI PURE DART WAV', prog: 0.3);
+      String convertedPath = await _convertAudioToWavPureDart(selectedMusicFile!.path);
       tempWavFile = File(convertedPath);
 
       updateStep('3/5 MEMBACA SAMPEL AUDIO', prog: 0.5);
@@ -497,7 +511,7 @@ class MusicController extends ChangeNotifier {
             }
           }
         } catch (e) {
-          print('Error decode chunk $c: $e');
+          debugPrint('Error decode chunk $c: $e');
         }
         await Future.delayed(const Duration(milliseconds: 100));
       }
@@ -508,7 +522,6 @@ class MusicController extends ChangeNotifier {
 
       if (context.mounted) Navigator.pop(context);
       errorMessage = '✅ ${allSentences.length} baris - Auto Transcribe OK';
-      if (allSentences.isEmpty) errorMessage = '⚠️ Lirik tidak terdeteksi, silakan edit manual';
     } catch (e) {
       if (context.mounted) Navigator.pop(context);
       errorMessage = '❌ Error $currentStep: $e';
@@ -608,10 +621,6 @@ class MusicController extends ChangeNotifier {
       );
 
       Duration targetEnd = endAt ?? (duration.inSeconds > 0 ? (duration.inSeconds > 60 ? const Duration(seconds: 60) : duration) : const Duration(seconds: 60));
-      if (startFrom != null) {
-        Duration maxDur = targetEnd - startFrom;
-        if (maxDur.inSeconds > 60) targetEnd = startFrom + const Duration(seconds: 60);
-      }
 
       recordTimer?.cancel();
       recordTimer = Timer.periodic(const Duration(seconds: 1), (t) {
@@ -665,7 +674,6 @@ class MusicController extends ChangeNotifier {
     }
   }
 
-  // DIALOG PASCA REKAMAN (DIPANGGIL DARI main.dart)
   Future<void> showPostRecordDialog(BuildContext context) async {
     if (recordedPath == null || !File(recordedPath!).existsSync()) {
       errorMessage = 'Belum ada hasil rekaman';
