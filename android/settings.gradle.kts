@@ -12,6 +12,7 @@ pluginManagement {
     repositories {
         google()
         mavenCentral()
+        maven { url = java.net.URI("https://storage.googleapis.com/download.flutter.io") }
         gradlePluginPortal()
     }
 }
@@ -27,7 +28,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // DUA REPOSITORI WAJIB UNTUK FLUTTER ENGINE & JITPACK/FFMPEG
+        maven { url = java.net.URI("https://storage.googleapis.com/download.flutter.io") }
         maven { url = java.net.URI("https://jitpack.io") }
+        
         flatDir {
             dirs(
                 file("${rootDir}/app/libs"),
