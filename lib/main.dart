@@ -7,6 +7,8 @@ import 'music/music.dart';
 
 void main() { 
   WidgetsFlutterBinding.ensureInitialized(); 
+// Wajib dipanggil sebelum menggunakan kelas/engine dari sherpa_onnx
+  sherpa.initBindings(); 
   runApp(const SponsorBabeApp()); 
 }
 
