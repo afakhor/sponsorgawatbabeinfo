@@ -23,19 +23,9 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          cache: false
+          cache: false # Matikan cache untuk mencegah engine/maven resolution mismatch
 
-      - name: Update Gradle Wrapper to 8.14
-        run: |
-          cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.14-all.zip
-          EOF
-
-      - name: Accept Licenses & Install NDK + SDK
+            - name: Accept Licenses & Install NDK + SDK
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
@@ -44,7 +34,8 @@ jobs:
             "platforms;android-36" \
             "build-tools;34.0.0" \
             "build-tools;36.0.0" \
-            "cmake;3.22.1" || true
+            "cmake;3.22.1" \
+            "cmake;3.31.4" || true
 
       - name: Flutter doctor
         run: flutter doctor -v
@@ -68,7 +59,7 @@ jobs:
           done
 
       - name: Build APK - Blackhole Gawat HD Bersuara
-        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation --no-tree-shake-icons
+        run: flutter build apk --release --split-per-abi --no-tree-shake-icons
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
