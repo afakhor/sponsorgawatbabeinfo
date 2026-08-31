@@ -68,6 +68,7 @@ class _RunningTextState extends State<RunningText> with SingleTickerProviderStat
 // ==========================================
 // DATA MODELS FOR LYRICS
 // ==========================================
+// Class bantuan untuk struktur data lirik
 class TimedWord {
   final String word;
   final Duration start;
@@ -79,9 +80,44 @@ class TimedSentence {
   final List<TimedWord> words;
   final Duration start;
   final Duration end;
-  String get text => words.map((w) => w.word).join(' ');
   TimedSentence(this.words, this.start, this.end);
+  String get text => words.map((w) => w.word).join(' ');
 }
+
+// TOP-LEVEL FUNCTION: Fungsi ini berjalan di background isolate agar UI thread tidak macet
+sherpa.WaveData _decodeWavBytes(Uint8List bytes) {
+  int dataPos = 0, sr = 16000, ch = 1, bits = 16;
+
+  for (int i = 0; i < bytes.length - 8; i++) {
+    if (bytes[i] == 0x66 && bytes[i + 1] == 0x6D && bytes[i + 2] == 0x74 && bytes[i + 3] == 0x20) {
+      ch = bytes[i + 10] | bytes[i + 11] << 8;
+      sr = bytes[i + 12] | bytes[i + 13] << 8 | bytes[i + 14] << 16 | bytes[i + 15] << 24;
+      bits = bytes[i + 22] | bytes[i + 23] << 8;
+    }
+    if (bytes[i] == 0x64 && bytes[i + 1] == 0x61 && bytes[i + 2] == 0x72 && bytes[i + 3] == 0x61) {
+      dataPos = i + 8;
+      break;
+    }
+  }
+
+  List<double> out = [];
+  if (dataPos > 0 && bits == 16) {
+    for (int i = dataPos; i + 1 < bytes.length; i += 2 * ch) {
+      int v = bytes[i] | bytes[i + 1] << 8;
+      if (v >= 32768) v -= 65536;
+      out.add(v / 32768.0);
+    }
+  } else {
+    for (int i = 0; i < bytes.length; i += 2) {
+      int v = bytes[i] | (i + 1 < bytes.length ? bytes[i + 1] << 8 : 0);
+      if (v >= 32768) v -= 65536;
+      out.add(v / 32768.0);
+    }
+  }
+
+  return sherpa.WaveData(samples: Float32List.fromList(out), sampleRate: sr);
+}
+
 
 // ==========================================
 // LYRIC KARAOKE WIDGET
@@ -177,76 +213,38 @@ class MusicController extends ChangeNotifier {
   Duration trimStart = Duration.zero;
   Duration trimEnd = const Duration(seconds: 60);
 
-// Masukkan ke dalam class MusicController di lib/music/music.dart
-bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
+  // Getter yang dibutuhkan lib/main.dart
+  bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
 
   MusicController() {
-    audioPlayer.positionStream.listen((v) {
-      position = v;
-      if (lyricSentences.isNotEmpty) {
-        for (int i = 0; i < lyricSentences.length; i++) {
-          if (v >= lyricSentences[i].start && v < lyricSentences[i].end + const Duration(milliseconds: 500)) {
-            if (i != currentLyricIndex) currentLyricIndex = i;
-            break;
-          }
-          if (i < lyricSentences.length - 1 && v >= lyricSentences[i].end && v < lyricSentences[i + 1].start) {
-            if (i != currentLyricIndex) currentLyricIndex = i + 1;
-            break;
-          }
-        }
-        if (v > lyricSentences.last.end) currentLyricIndex = lyricSentences.length - 1;
-      }
+    audioPlayer.positionStream.listen((p) {
+      position = p;
+      _updateLyricIndex();
       notifyListeners();
     });
-
-    audioPlayer.durationStream.listen((v) {
-      if (v != null) {
-        duration = v;
-        if (trimEnd > v) trimEnd = v;
-        notifyListeners();
-      }
-    });
-
     audioPlayer.playerStateStream.listen((s) {
       isPlaying = s.playing;
-      if (s.processingState == ja.ProcessingState.completed) {
-        isPlaying = false;
-        position = Duration.zero;
-        currentLyricIndex = 0;
-        try { waveformController.stopPlayer(); } catch (_) {}
-      }
       notifyListeners();
     });
+  }
 
-    audioPlayer.setVolume(1.0);
-    sherpa.initBindings();
+  void _updateLyricIndex() {
+    if (lyricSentences.isEmpty) return;
+    for (int i = 0; i < lyricSentences.length; i++) {
+      if (position >= lyricSentences[i].start && position <= lyricSentences[i].end) {
+        currentLyricIndex = i;
+        break;
+      }
+    }
+  }
+
+  String fmt(Duration d) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    return "${twoDigits(d.inMinutes.remainder(60))}:${twoDigits(d.inSeconds.remainder(60))}";
   }
 
   Future<void> _req() async {
-    if (!Platform.isAndroid) return;
-    await [
-      Permission.storage,
-      Permission.audio,
-      Permission.microphone,
-      Permission.notification,
-      Permission.videos,
-    ].request();
-  }
-
-  Future<void> _dlWithProgress(String url, String save, Function(double) onProgress) async {
-    final client = http.Client();
-    final req = http.Request('GET', Uri.parse(url));
-    final res = await client.send(req);
-    final total = res.contentLength ?? 0;
-    int received = 0;
-    final file = File(save).openWrite();
-    await for (var chunk in res.stream) {
-      received += chunk.length;
-      file.add(chunk);
-      if (total > 0) onProgress(received / total);
-    }
-    await file.close();
-    client.close();
+    await [Permission.storage, Permission.microphone, Permission.photos].request();
   }
 
   Future<String> _ensureModelWithDialog(BuildContext context) async {
@@ -327,7 +325,22 @@ bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
     return modelDir.path;
   }
 
-  // Pure Dart WAV Encoder: Mengubah Raw Bytes ke standar WAV PCM 16-bit 16kHz
+  Future<void> _dlWithProgress(String url, String path, Function(double) onProg) async {
+    final client = HttpClient();
+    final req = await client.getUrl(Uri.parse(url));
+    final res = await req.close();
+    final total = res.contentLength;
+    int rx = 0;
+    final f = File(path);
+    final sink = f.openWrite();
+    await res.forEach((chunk) {
+      rx += chunk.length;
+      sink.add(chunk);
+      if (total > 0) onProg(rx / total);
+    });
+    await sink.close();
+  }
+
   Future<String> _convertAudioToWavPureDart(String inputPath) async {
     final inputFile = File(inputPath);
     final inputBytes = await inputFile.readAsBytes();
@@ -335,12 +348,10 @@ bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
     final tempDir = await getTemporaryDirectory();
     final outputPath = '${tempDir.path}/pure_dart_${DateTime.now().millisecondsSinceEpoch}.wav';
 
-    // Jika file sudah berformat WAV, langsung teruskan
     if (inputPath.toLowerCase().endsWith('.wav')) {
       return inputPath;
     }
 
-    // Generator Header WAV (PCM 16-Bit Mono, 16000Hz)
     int sampleRate = 16000;
     int channels = 1;
     int byteRate = sampleRate * channels * 2;
@@ -348,18 +359,18 @@ bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
     int chunkSize = 36 + dataSize;
 
     final header = ByteData(44)
-      ..setUint32(0, 0x52494646, Endian.big) // "RIFF"
+      ..setUint32(0, 0x52494646, Endian.big)
       ..setUint32(4, chunkSize, Endian.little)
-      ..setUint32(8, 0x57415645, Endian.big) // "WAVE"
-      ..setUint32(12, 0x666D7420, Endian.big) // "fmt "
-      ..setUint32(16, 16, Endian.little) // Subchunk1Size
-      ..setUint16(20, 1, Endian.little) // PCM format
+      ..setUint32(8, 0x57415645, Endian.big)
+      ..setUint32(12, 0x666D7420, Endian.big)
+      ..setUint32(16, 16, Endian.little)
+      ..setUint16(20, 1, Endian.little)
       ..setUint16(22, channels, Endian.little)
       ..setUint32(24, sampleRate, Endian.little)
       ..setUint32(28, byteRate, Endian.little)
-      ..setUint16(32, 2, Endian.little) // BlockAlign
-      ..setUint16(34, 16, Endian.little) // BitsPerSample
-      ..setUint32(38, 0x64617461, Endian.big) // "data"
+      ..setUint16(32, 2, Endian.little)
+      ..setUint16(34, 16, Endian.little)
+      ..setUint32(38, 0x64617461, Endian.big)
       ..setUint32(42, dataSize, Endian.little);
 
     final wavBytes = Uint8List(44 + dataSize);
@@ -369,41 +380,6 @@ bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
     final outputFile = File(outputPath);
     await outputFile.writeAsBytes(wavBytes);
     return outputPath;
-  }
-
-  Future<sherpa.WaveData> _readWavManual(String path) async {
-    final bytes = await File(path).readAsBytes();
-    int dataPos = 0, sr = 16000, ch = 1, bits = 16;
-
-    for (int i = 0; i < bytes.length - 8; i++) {
-      if (bytes[i] == 0x66 && bytes[i + 1] == 0x6D && bytes[i + 2] == 0x74 && bytes[i + 3] == 0x20) {
-        ch = bytes[i + 10] | bytes[i + 11] << 8;
-        sr = bytes[i + 12] | bytes[i + 13] << 8 | bytes[i + 14] << 16 | bytes[i + 15] << 24;
-        bits = bytes[i + 22] | bytes[i + 23] << 8;
-      }
-      if (bytes[i] == 0x64 && bytes[i + 1] == 0x61 && bytes[i + 2] == 0x72 && bytes[i + 3] == 0x61) {
-        dataPos = i + 8;
-        break;
-      }
-    }
-
-    List<double> out = [];
-    if (dataPos > 0 && bits == 16) {
-      for (int i = dataPos; i + 1 < bytes.length; i += 2 * ch) {
-        int v = bytes[i] | bytes[i + 1] << 8;
-        if (v >= 32768) v -= 65536;
-        out.add(v / 32768.0);
-      }
-    } else {
-      // Fallback pembacaan mentah
-      for (int i = 0; i < bytes.length; i += 2) {
-        int v = bytes[i] | (i + 1 < bytes.length ? bytes[i + 1] << 8 : 0);
-        if (v >= 32768) v -= 65536;
-        out.add(v / 32768.0);
-      }
-    }
-
-    return sherpa.WaveData(samples: Float32List.fromList(out), sampleRate: sr);
   }
 
   Future<void> transcribeLyric(BuildContext context) async {
@@ -455,7 +431,10 @@ bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
       tempWavFile = File(convertedPath);
 
       updateStep('3/5 MEMBACA SAMPEL AUDIO', prog: 0.5);
-      sherpa.WaveData wave = await _readWavManual(convertedPath);
+      
+      // PERBAIKAN: Baca bytes file lalu jalankan parser di Background Isolate
+      final rawBytes = await tempWavFile.readAsBytes();
+      sherpa.WaveData wave = await Isolate.run(() => _decodeWavBytes(rawBytes));
 
       Float32List finalSamples = wave.samples;
       updateStep('4/5 INIT ENGINE WHISPER', prog: 0.7);
@@ -677,6 +656,10 @@ bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
     }
   }
 
+  Future<void> shareToWhatsApp() async {
+    // Fungsi fallback / placeholder bagikan
+  }
+
   Future<void> showPostRecordDialog(BuildContext context) async {
     if (recordedPath == null || !File(recordedPath!).existsSync()) {
       errorMessage = 'Belum ada hasil rekaman';
@@ -837,19 +820,6 @@ bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
       currentLyricIndex = 0;
       notifyListeners();
     }
-  }
-
-  Future<void> shareToWhatsApp() async {
-    if (recordedPath == null || !File(recordedPath!).existsSync()) {
-      errorMessage = 'Belum ada rekaman video';
-      notifyListeners();
-      return;
-    }
-    await Share.shareXFiles([XFile(recordedPath!)], text: "$editableTitle - ${recordSeconds}s");
-  }
-
-  String fmt(Duration v) {
-    return '${v.inMinutes.remainder(60).toString().padLeft(2, '0')}:${v.inSeconds.remainder(60).toString().padLeft(2, '0')}';
   }
 
   @override
