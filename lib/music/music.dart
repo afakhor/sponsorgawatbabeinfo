@@ -436,30 +436,35 @@ class MusicController extends ChangeNotifier {
       sherpa.WaveData wave = await compute(_decodeWavBytes, rawBytes);
 
       Float32List finalSamples = wave.samples;
-      updateStep('4/5 INIT ENGINE WHISPER', prog: 0.7);
+      // ... di dalam method transcribeLyric(...)
 
-      final whisperCfg = sherpa.OfflineWhisperModelConfig(
-        encoder: '$mp/encoder.onnx',
-        decoder: '$mp/decoder.onnx',
-        language: 'en',
-        task: 'transcribe',
-      );
-      final modelCfg = sherpa.OfflineModelConfig(whisper: whisperCfg, tokens: '$mp/tokens.txt', numThreads: 1, provider: 'cpu');
-      final recog = sherpa.OfflineRecognizer(sherpa.OfflineRecognizerConfig(model: modelCfg, decodingMethod: 'greedy', maxActivePaths: 1));
+updateStep('4/5 INIT ENGINE WHISPER', prog: 0.7);
 
-      int chunkSec = 10;
-      int chunkSamples = 16000 * chunkSec;
-      int totalChunks = (finalSamples.length / chunkSamples).ceil();
-      if (totalChunks == 0) totalChunks = 1;
+// Memastikan bindings native Sherpa ONNX sudah diinisialisasi
+sherpa.initBindings();
 
-      List<TimedSentence> allSentences = [];
-      for (int c = 0; c < totalChunks; c++) {
-        int start = c * chunkSamples;
-        int end = start + chunkSamples;
-        if (end > finalSamples.length) end = finalSamples.length;
-        if (start >= end) break;
+final whisperCfg = sherpa.OfflineWhisperModelConfig(
+  encoder: '$mp/encoder.onnx',
+  decoder: '$mp/decoder.onnx',
+  language: 'en',
+  task: 'transcribe',
+);
 
-        var chunk = finalSamples.sublist(start, end);
+final modelCfg = sherpa.OfflineModelConfig(
+  whisper: whisperCfg, 
+  tokens: '$mp/tokens.txt', 
+  numThreads: 1, 
+  provider: 'cpu',
+);
+
+final recog = sherpa.OfflineRecognizer(
+  sherpa.OfflineRecognizerConfig(
+    model: modelCfg, 
+    decodingMethod: 'greedy', 
+    maxActivePaths: 1,
+  ),
+);
+
         updateStep('5/5 DECODE TIMING ${c + 1}/$totalChunks', prog: 0.7 + (0.3 * c / totalChunks));
 
         try {
