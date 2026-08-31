@@ -22,15 +22,11 @@ dependencies:
   flutter_screen_recording: ^2.0.25
   sherpa_onnx: ^1.10.20
   http: ^1.2.0
-  # HAPUS FFMPEG - SUDAH GAK DIPAKAI, BIANG CRASH 2/5
-  # ffmpeg_kit_flutter_new: ^4.6.0
-  ffmpeg_kit_flutter_audio: ^6.0.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
-
 
 dependency_overrides:
   uuid: ^4.4.0
