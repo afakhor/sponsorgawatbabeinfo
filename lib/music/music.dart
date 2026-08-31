@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:isolate';
+
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -11,7 +11,6 @@ import 'package:flutter_screen_recording/flutter_screen_recording.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:http/http.dart' as http;
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
 // ==========================================
@@ -86,7 +85,7 @@ class TimedSentence {
 
 // ==========================================
 // ISOLATE TOP-LEVEL FUNCTION
-// Murni menerima Uint8List dan mengembalikan WaveData (Bebas dari state instance/this)
+// Murni menerima Uint8List dan mengembalikan WaveData
 // ==========================================
 sherpa.WaveData _decodeWavBytes(Uint8List bytes) {
   int dataPos = 0, sr = 16000, ch = 1, bits = 16;
@@ -191,7 +190,7 @@ class LyricKaraoke extends StatelessWidget {
 }
 
 // ==========================================
-// MUSIC CONTROLLER LOGIC (PURE DART)
+// MUSIC CONTROLLER LOGIC
 // ==========================================
 class MusicController extends ChangeNotifier {
   final ja.AudioPlayer audioPlayer = ja.AudioPlayer();
@@ -431,41 +430,45 @@ class MusicController extends ChangeNotifier {
       tempWavFile = File(convertedPath);
 
       updateStep('3/5 MEMBACA SAMPEL AUDIO', prog: 0.5);
-
       final rawBytes = await tempWavFile.readAsBytes();
       sherpa.WaveData wave = await compute(_decodeWavBytes, rawBytes);
 
-      Float32List finalSamples = wave.samples;
-      // ... di dalam method transcribeLyric(...)
+      updateStep('4/5 INIT ENGINE WHISPER', prog: 0.7);
+      sherpa.initBindings();
 
-updateStep('4/5 INIT ENGINE WHISPER', prog: 0.7);
+      final whisperCfg = sherpa.OfflineWhisperModelConfig(
+        encoder: '$mp/encoder.onnx',
+        decoder: '$mp/decoder.onnx',
+        language: 'en',
+        task: 'transcribe',
+      );
 
-// Memastikan bindings native Sherpa ONNX sudah diinisialisasi
-sherpa.initBindings();
+      final modelCfg = sherpa.OfflineModelConfig(
+        whisper: whisperCfg, 
+        tokens: '$mp/tokens.txt', 
+        numThreads: 1, 
+        provider: 'cpu',
+      );
 
-final whisperCfg = sherpa.OfflineWhisperModelConfig(
-  encoder: '$mp/encoder.onnx',
-  decoder: '$mp/decoder.onnx',
-  language: 'en',
-  task: 'transcribe',
-);
+      final recog = sherpa.OfflineRecognizer(
+        sherpa.OfflineRecognizerConfig(
+          model: modelCfg, 
+          decodingMethod: 'greedy', 
+          maxActivePaths: 1,
+        ),
+      );
 
-final modelCfg = sherpa.OfflineModelConfig(
-  whisper: whisperCfg, 
-  tokens: '$mp/tokens.txt', 
-  numThreads: 1, 
-  provider: 'cpu',
-);
+      List<TimedSentence> allSentences = [];
+      final samples = wave.samples;
+      int chunkSize = 16000 * 10; // 10 detik per chunk
+      int totalChunks = (samples.length / chunkSize).ceil();
 
-final recog = sherpa.OfflineRecognizer(
-  sherpa.OfflineRecognizerConfig(
-    model: modelCfg, 
-    decodingMethod: 'greedy', 
-    maxActivePaths: 1,
-  ),
-);
-
+      for (int c = 0; c < totalChunks; c++) {
         updateStep('5/5 DECODE TIMING ${c + 1}/$totalChunks', prog: 0.7 + (0.3 * c / totalChunks));
+
+        int start = c * chunkSize;
+        int end = (start + chunkSize > samples.length) ? samples.length : start + chunkSize;
+        final chunk = samples.sublist(start, end);
 
         try {
           final stream = recog.createStream();
