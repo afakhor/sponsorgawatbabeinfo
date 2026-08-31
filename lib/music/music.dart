@@ -4,14 +4,13 @@ import 'dart:typed_data';
 import 'dart:isolate';
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart'; // Ditambahkan untuk fungsi compute()
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screen_recording/flutter_screen_recording.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
@@ -85,7 +84,10 @@ class TimedSentence {
   String get text => words.map((w) => w.word).join(' ');
 }
 
-// TOP-LEVEL FUNCTION: Dijalankan oleh compute() di background Isolate secara terisolasi
+// ==========================================
+// ISOLATE TOP-LEVEL FUNCTION
+// Murni menerima Uint8List dan mengembalikan WaveData (Bebas dari state instance/this)
+// ==========================================
 sherpa.WaveData _decodeWavBytes(Uint8List bytes) {
   int dataPos = 0, sr = 16000, ch = 1, bits = 16;
 
@@ -430,7 +432,6 @@ class MusicController extends ChangeNotifier {
 
       updateStep('3/5 MEMBACA SAMPEL AUDIO', prog: 0.5);
 
-      // PERBAIKAN UTAMA: Gunakan compute() agar tidak terjadi leak variabel 'this' ke Isolate
       final rawBytes = await tempWavFile.readAsBytes();
       sherpa.WaveData wave = await compute(_decodeWavBytes, rawBytes);
 
