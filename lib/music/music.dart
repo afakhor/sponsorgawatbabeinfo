@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:isolate';
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart'; // Ditambahkan untuk fungsi compute()
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screen_recording/flutter_screen_recording.dart';
@@ -69,7 +70,6 @@ class _RunningTextState extends State<RunningText> with SingleTickerProviderStat
 // ==========================================
 // DATA MODELS FOR LYRICS
 // ==========================================
-// Class bantuan untuk struktur data lirik
 class TimedWord {
   final String word;
   final Duration start;
@@ -85,7 +85,7 @@ class TimedSentence {
   String get text => words.map((w) => w.word).join(' ');
 }
 
-// TOP-LEVEL FUNCTION: Fungsi ini berjalan di background isolate agar UI thread tidak macet
+// TOP-LEVEL FUNCTION: Dijalankan oleh compute() di background Isolate secara terisolasi
 sherpa.WaveData _decodeWavBytes(Uint8List bytes) {
   int dataPos = 0, sr = 16000, ch = 1, bits = 16;
 
@@ -118,7 +118,6 @@ sherpa.WaveData _decodeWavBytes(Uint8List bytes) {
 
   return sherpa.WaveData(samples: Float32List.fromList(out), sampleRate: sr);
 }
-
 
 // ==========================================
 // LYRIC KARAOKE WIDGET
@@ -214,7 +213,6 @@ class MusicController extends ChangeNotifier {
   Duration trimStart = Duration.zero;
   Duration trimEnd = const Duration(seconds: 60);
 
-  // Getter yang dibutuhkan lib/main.dart
   bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
 
   MusicController() {
@@ -264,7 +262,6 @@ class MusicController extends ChangeNotifier {
     double progress = 0;
     bool success = false;
     late StateSetter dialogSetState;
-
     if (context.mounted) {
       showDialog(
         context: context,
@@ -432,10 +429,10 @@ class MusicController extends ChangeNotifier {
       tempWavFile = File(convertedPath);
 
       updateStep('3/5 MEMBACA SAMPEL AUDIO', prog: 0.5);
-      
-      // PERBAIKAN: Baca bytes file lalu jalankan parser di Background Isolate
+
+      // PERBAIKAN UTAMA: Gunakan compute() agar tidak terjadi leak variabel 'this' ke Isolate
       final rawBytes = await tempWavFile.readAsBytes();
-      sherpa.WaveData wave = await Isolate.run(() => _decodeWavBytes(rawBytes));
+      sherpa.WaveData wave = await compute(_decodeWavBytes, rawBytes);
 
       Float32List finalSamples = wave.samples;
       updateStep('4/5 INIT ENGINE WHISPER', prog: 0.7);
@@ -657,9 +654,7 @@ class MusicController extends ChangeNotifier {
     }
   }
 
-  Future<void> shareToWhatsApp() async {
-    // Fungsi fallback / placeholder bagikan
-  }
+  Future<void> shareToWhatsApp() async {}
 
   Future<void> showPostRecordDialog(BuildContext context) async {
     if (recordedPath == null || !File(recordedPath!).existsSync()) {
