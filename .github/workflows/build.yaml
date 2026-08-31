@@ -25,7 +25,7 @@ jobs:
           channel: 'stable'
           cache: false # Matikan cache untuk mencegah engine/maven resolution mismatch
 
-            - name: Accept Licenses & Install NDK + SDK
+      - name: Accept Licenses & Install NDK + SDK
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
