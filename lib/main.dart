@@ -4,6 +4,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'globes/globe.dart';
 import 'music/music.dart';
+import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
+
 
 void main() { 
   WidgetsFlutterBinding.ensureInitialized(); 
