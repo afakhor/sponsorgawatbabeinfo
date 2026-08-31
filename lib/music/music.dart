@@ -87,38 +87,40 @@ class TimedSentence {
 // ISOLATE TOP-LEVEL FUNCTION
 // Murni menerima Uint8List dan mengembalikan WaveData
 // ==========================================
-sherpa.WaveData _decodeWavBytes(Uint8List bytes) {
-  int dataPos = 0, sr = 16000, ch = 1, bits = 16;
+// ==========================================
+// DECODER WAV LANGSUNG (HANDLES PCM 16-BIT)
+// ==========================================
+sherpa.WaveData _decodeWavNative(Uint8List bytes) {
+  int dataPos = 44; // Default WAV Header offset
+  int sampleRate = 16000;
+  int numChannels = 1;
 
-  for (int i = 0; i < bytes.length - 8; i++) {
+  // Manual Parsing Header sederhana
+  for (int i = 0; i < bytes.length - 12; i++) {
+    // Cari chunk 'fmt '
     if (bytes[i] == 0x66 && bytes[i + 1] == 0x6D && bytes[i + 2] == 0x74 && bytes[i + 3] == 0x20) {
-      ch = bytes[i + 10] | bytes[i + 11] << 8;
-      sr = bytes[i + 12] | bytes[i + 13] << 8 | bytes[i + 14] << 16 | bytes[i + 15] << 24;
-      bits = bytes[i + 22] | bytes[i + 23] << 8;
+      numChannels = bytes[i + 10] | (bytes[i + 11] << 8);
+      sampleRate = bytes[i + 12] | (bytes[i + 13] << 8) | (bytes[i + 14] << 16) | (bytes[i + 15] << 24);
     }
+    // Cari chunk 'data'
     if (bytes[i] == 0x64 && bytes[i + 1] == 0x61 && bytes[i + 2] == 0x72 && bytes[i + 3] == 0x61) {
       dataPos = i + 8;
       break;
     }
   }
 
-  List<double> out = [];
-  if (dataPos > 0 && bits == 16) {
-    for (int i = dataPos; i + 1 < bytes.length; i += 2 * ch) {
-      int v = bytes[i] | bytes[i + 1] << 8;
-      if (v >= 32768) v -= 65536;
-      out.add(v / 32768.0);
-    }
-  } else {
-    for (int i = 0; i < bytes.length; i += 2) {
-      int v = bytes[i] | (i + 1 < bytes.length ? bytes[i + 1] << 8 : 0);
-      if (v >= 32768) v -= 65536;
-      out.add(v / 32768.0);
-    }
+  final Int16List rawSamples = bytes.buffer.asInt16List(dataPos);
+  final Float32List floatSamples = Float32List(rawSamples.length ~/ numChannels);
+
+  // Ambil channel pertama saja jika stereo
+  int idx = 0;
+  for (int i = 0; i < rawSamples.length; i += numChannels) {
+    floatSamples[idx++] = rawSamples[i] / 32768.0;
   }
 
-  return sherpa.WaveData(samples: Float32List.fromList(out), sampleRate: sr);
+  return sherpa.WaveData(samples: floatSamples, sampleRate: sampleRate);
 }
+
 
 // ==========================================
 // LYRIC KARAOKE WIDGET
@@ -430,8 +432,11 @@ class MusicController extends ChangeNotifier {
       tempWavFile = File(convertedPath);
 
       updateStep('3/5 MEMBACA SAMPEL AUDIO', prog: 0.5);
-      final rawBytes = await tempWavFile.readAsBytes();
-      sherpa.WaveData wave = await compute(_decodeWavBytes, rawBytes);
+final rawBytes = await selectedMusicFile!.readAsBytes();
+
+// Gunakan fungsi decode langsung tanpa compute() Isolate
+sherpa.WaveData wave = _decodeWavNative(rawBytes);
+
 
       updateStep('4/5 INIT ENGINE WHISPER', prog: 0.7);
       sherpa.initBindings();
