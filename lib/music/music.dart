@@ -177,6 +177,9 @@ class MusicController extends ChangeNotifier {
   Duration trimStart = Duration.zero;
   Duration trimEnd = const Duration(seconds: 60);
 
+// Masukkan ke dalam class MusicController di lib/music/music.dart
+bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
+
   MusicController() {
     audioPlayer.positionStream.listen((v) {
       position = v;
