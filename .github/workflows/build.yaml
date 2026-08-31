@@ -23,67 +23,42 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-          cache: true
+          cache: false # Matikan cache untuk mencegah engine/maven resolution mismatch
 
-      - name: Accept Licenses & Install NDK 28 + SDK 36 + CMake 3.31.4
+      - name: Accept Licenses & Install NDK + SDK
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            "ndk;28.2.13676358" \
             "ndk;27.0.12077973" \
+            "platforms;android-34" \
             "platforms;android-36" \
-            "platforms;android-33" \
-            "build-tools;36.0.0" \
             "build-tools;34.0.0" \
-            "cmake;3.31.4" \
+            "build-tools;36.0.0" \
             "cmake;3.22.1" || true
-          echo "=== NDK ===" && ls $ANDROID_HOME/ndk/
-          echo "=== CMAKE ===" && ls $ANDROID_HOME/cmake/
-
-      - name: Link CMake 3.31.4
-        run: |
-          echo "cmake.dir=$ANDROID_HOME/cmake/3.31.4" >> android/local.properties
-          cat android/local.properties
-
-      - name: Fix Gradle Wrapper URL
-        run: |
-          cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          distributionUrl=https://services.gradle.org/distributions/gradle-8.13-all.zip
-          EOF
 
       - name: Flutter doctor
         run: flutter doctor -v
 
-      - name: Clean & Get
+      - name: Fetch Pub Dependencies
         run: |
           flutter clean
           flutter pub get
 
-      - name: Buat patch HD 1080p + Audio
+      - name: Apply Patch to flutter_screen_recording
         run: |
-          cat > android/patch_hd.sh << 'EOS'
-          #!/bin/bash
-          echo "Patching flutter_screen_recording for HD + Audio..."
-          FILE=$(find $HOME/.pub-cache -name "RecordService.java" | grep flutter_screen_recording | head -1)
-          if [ -f "$FILE" ]; then
-            echo "Found: $FILE"
-            sed -i 's/setVideoEncodingBitRate.*/setVideoEncodingBitRate(12000000);/' "$FILE" || true
-            sed -i 's/VIDEO_BITRATE.*/VIDEO_BITRATE = 12000000;/' "$FILE" || true
-            sed -i 's/setVideoFrameRate.*/setVideoFrameRate(30);/' "$FILE" || true
-            echo "Patched to 1080p HD 12Mbps"
-          else
-            echo "RecordService.java not found, will be created after pub get on next run"
-          fi
-          EOS
-          chmod +x android/patch_hd.sh
-          bash android/patch_hd.sh
+          echo "Patching flutter_screen_recording in pub-cache..."
+          FILES=$(find /home/runner/.pub-cache -name "RecordService.java" 2>/dev/null)
+          for FILE in $FILES; do
+            if [ -f "$FILE" ]; then
+              echo "Patching file: $FILE"
+              sed -i 's/setVideoEncodingBitRate.*/setVideoEncodingBitRate(12000000);/' "$FILE" || true
+              sed -i 's/VIDEO_BITRATE.*/VIDEO_BITRATE = 12000000;/' "$FILE" || true
+              sed -i 's/setVideoFrameRate.*/setVideoFrameRate(30);/' "$FILE" || true
+            fi
+          done
 
       - name: Build APK - Blackhole Gawat HD Bersuara
-        run: flutter build apk --release --split-per-abi --android-skip-build-dependency-validation --no-tree-shake-icons
+        run: flutter build apk --release --split-per-abi --no-tree-shake-icons
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
