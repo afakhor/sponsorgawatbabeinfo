@@ -215,8 +215,6 @@ class LyricKaraoke extends StatelessWidget {
 class MusicController extends ChangeNotifier {
   final ja.AudioPlayer audioPlayer = ja.AudioPlayer();
   final PlayerController waveformController = PlayerController();
-// Tambahkan di dalam class MusicController
-bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
 
   File? selectedMusicFile;
   String musicName = 'Belum ada musik';
@@ -236,6 +234,9 @@ bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
   Duration trimStart = Duration.zero;
   Duration trimEnd = const Duration(seconds: 60);
 
+  // Getter usePreTrim ditaruh setelah variabel pendukungnya terdeklarasi
+  bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
+
   MusicController() {
     audioPlayer.positionStream.listen((p) {
       position = p;
@@ -247,6 +248,7 @@ bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
       notifyListeners();
     });
   }
+
 
   void _updateLyricIndex() {
     if (lyricSentences.isEmpty) return;
