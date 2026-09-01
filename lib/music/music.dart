@@ -215,6 +215,8 @@ class LyricKaraoke extends StatelessWidget {
 class MusicController extends ChangeNotifier {
   final ja.AudioPlayer audioPlayer = ja.AudioPlayer();
   final PlayerController waveformController = PlayerController();
+// Tambahkan di dalam class MusicController
+bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
 
   File? selectedMusicFile;
   String musicName = 'Belum ada musik';
