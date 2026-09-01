@@ -362,8 +362,19 @@ class MusicController extends ChangeNotifier {
       updateStep('1/5 CEK MODEL SHERPA', prog: 0.1);
       final mp = await _ensureModelWithDialog(context);
 
-      updateStep('2/5 MENYIAPKAN DATA AUDIO', prog: 0.3);
-      final rawBytes = await selectedMusicFile!.readAsBytes();
+      // Cari bagian ini di dalam class MusicController:
+updateStep('2/5 MENYIAPKAN DATA AUDIO', prog: 0.3);
+
+if (selectedMusicFile == null || !await selectedMusicFile!.exists()) {
+  throw Exception('File audio tidak ditemukan atau akses ditolak.');
+}
+
+Uint8List rawBytes;
+try {
+  rawBytes = await selectedMusicFile!.readAsBytes();
+} catch (e) {
+  throw Exception('Gagal membaca file audio: Pastikan izin akses file diberikan.');
+}
 
       updateStep('3/5 MEMBACA SAMPEL AUDIO', prog: 0.5);
       sherpa.WaveData wave = _decodeWavSafe(rawBytes);
