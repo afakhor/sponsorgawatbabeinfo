@@ -314,7 +314,7 @@ class MusicController extends ChangeNotifier {
     }
   }
 
-  // PARSER OTOMATIS: MEMBEDAKAN LRC TIMESTAMP DAN TEKS BIASA
+    // PARSER OTOMATIS: MEMBEDAKAN LRC TIMESTAMP DAN TEKS BIASA (DENGAN FIX TEMPO PER KATA)
   void _processLyricsWithLrcSupport(String rawText) {
     var rawLines = rawText.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
     if (rawLines.isEmpty) return;
@@ -323,7 +323,7 @@ class MusicController extends ChangeNotifier {
     bool isLrcFormat = rawLines.any((line) => lrcRegExp.hasMatch(line));
 
     if (isLrcFormat) {
-      // 1. PROSES FORMAT LRC (TIMESTAMP MANUAL PRESISI)
+      // 1. PROSES FORMAT LRC (TIMESTAMP MANUAL PRESISI & AKURAT PER KATA)
       List<TimedSentence> generatedSentences = [];
       for (int i = 0; i < rawLines.length; i++) {
         var match = lrcRegExp.firstMatch(rawLines[i]);
@@ -337,6 +337,7 @@ class MusicController extends ChangeNotifier {
 
           if (text.isEmpty) continue;
 
+          // Estimasi waktu selesai baris berdasarkan waktu mulai baris berikutnya
           Duration end = start + const Duration(seconds: 4);
           if (i + 1 < rawLines.length) {
             var nextMatch = lrcRegExp.firstMatch(rawLines[i + 1]);
@@ -344,17 +345,27 @@ class MusicController extends ChangeNotifier {
               int nMin = int.parse(nextMatch.group(1)!);
               int nSec = int.parse(nextMatch.group(2)!);
               int nMs = int.parse(nextMatch.group(3)!.padRight(3, '0'));
-              end = Duration(minutes: nMin, seconds: nSec, milliseconds: nMs);
+              Duration nextStart = Duration(minutes: nMin, seconds: nSec, milliseconds: nMs);
+              
+              // Jika jeda ke baris berikutnya terlalu panjang (> 6 detik), gunakan durasi aktif maks 4.5 detik
+              if ((nextStart - start).inMilliseconds > 6000) {
+                end = start + const Duration(milliseconds: 4500);
+              } else {
+                end = nextStart;
+              }
             }
           }
 
           var words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-          int wordDurationMs = (end.inMilliseconds - start.inMilliseconds) ~/ (words.isNotEmpty ? words.length : 1);
+          int lineTotalMs = end.inMilliseconds - start.inMilliseconds;
+          
+          // Pembagian tepat durasi per kata agar sync langsung menyala dari detik pertama kata diucapkan
+          double msPerWord = lineTotalMs / (words.isNotEmpty ? words.length : 1);
 
           List<TimedWord> timedWords = [];
           for (int j = 0; j < words.length; j++) {
-            Duration wStart = start + Duration(milliseconds: j * wordDurationMs);
-            Duration wEnd = wStart + Duration(milliseconds: wordDurationMs);
+            Duration wStart = start + Duration(milliseconds: (j * msPerWord).floor());
+            Duration wEnd = start + Duration(milliseconds: ((j + 1) * msPerWord).floor());
             timedWords.add(TimedWord(words[j], wStart, wEnd));
           }
           generatedSentences.add(TimedSentence(timedWords, start, end));
@@ -370,6 +381,7 @@ class MusicController extends ChangeNotifier {
     currentLyricIndex = 0;
     notifyListeners();
   }
+
 
   // ALGORITMA SMART SYNC (UNTUK TEKS BIASA TANPA TIMESTAMP)
   void _processAndCacheLyricsSmart(String rawText) {
