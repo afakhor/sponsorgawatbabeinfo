@@ -252,6 +252,7 @@ class MusicController extends ChangeNotifier {
   }
 
   // DIALOG PASTE LIRIK & SYNC OTOMATIS (CACHED)
+    // DIALOG PASTE LIRIK (SUPPORT TEKS BIASA & FORMAT TIMESTAMP LRC)
   Future<void> openTranscribeDialog(BuildContext context) async {
     if (selectedMusicFile == null) {
       errorMessage = 'Upload musik (MP3/WAV) terlebih dahulu!';
@@ -264,7 +265,10 @@ class MusicController extends ChangeNotifier {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E24),
-        title: const Text('📝 Transcribe: Tempel Lirik Lagu', style: TextStyle(color: Colors.amber, fontSize: 13, fontWeight: FontWeight.bold)),
+        title: const Text(
+          '📝 Transcribe / Upload LRC Timestamp',
+          style: TextStyle(color: Colors.amber, fontSize: 13, fontWeight: FontWeight.bold),
+        ),
         content: SizedBox(
           width: double.maxFinite,
           height: 280,
@@ -273,7 +277,7 @@ class MusicController extends ChangeNotifier {
             maxLines: 15,
             style: const TextStyle(color: Colors.white, fontSize: 12),
             decoration: const InputDecoration(
-              hintText: 'Copy & Paste teks lirik di sini...\nSatu baris per kalimat.',
+              hintText: 'Tempel lirik biasa ATAU format .lrc bertimestamp:\n\nContoh LRC:\n[00:12.50] Biar saja ku tak sehebat matahari\n[00:18.20] Tapi slaluku coba tuk menghangatkanmu',
               hintStyle: TextStyle(color: Colors.white24, fontSize: 11),
               border: OutlineInputBorder(),
             ),
@@ -291,57 +295,69 @@ class MusicController extends ChangeNotifier {
     );
 
     if (res != null && res.trim().isNotEmpty) {
-      _processAndCacheLyrics(res.trim());
+      _processLyricsWithLrcSupport(res.trim());
     }
   }
 
-  void _processAndCacheLyrics(String rawText) {
-    var lines = rawText.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-    if (lines.isEmpty) return;
+  // PARSER OTOMATIS: MEMBEDAKAN LRC TIMESTAMP DAN TEKS BIASA
+  void _processLyricsWithLrcSupport(String rawText) {
+    var rawLines = rawText.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (rawLines.isEmpty) return;
 
-    List<TimedWord> allWords = [];
-    int totalMs = duration.inMilliseconds > 0 ? duration.inMilliseconds : lines.length * 3500;
-    int totalWordsCount = lines.join(' ').split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
-    if (totalWordsCount == 0) totalWordsCount = 1;
+    final lrcRegExp = RegExp(r'^\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)');
+    bool isLrcFormat = rawLines.any((line) => lrcRegExp.hasMatch(line));
 
-    int wordIdx = 0;
-    for (var line in lines) {
-      var wordsInLine = line.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-      for (var w in wordsInLine) {
-        int startMs = (wordIdx * totalMs ~/ totalWordsCount);
-        int endMs = startMs + 450;
-        allWords.add(TimedWord(w, Duration(milliseconds: startMs), Duration(milliseconds: endMs)));
-        wordIdx++;
+    if (isLrcFormat) {
+      // 1. PROSES FORMAT LRC (TIMESTAMP MANUAL PRESISI)
+      List<TimedSentence> generatedSentences = [];
+      for (int i = 0; i < rawLines.length; i++) {
+        var match = lrcRegExp.firstMatch(rawLines[i]);
+        if (match != null) {
+          int min = int.parse(match.group(1)!);
+          int sec = int.parse(match.group(2)!);
+          int ms = int.parse(match.group(3)!.padRight(3, '0'));
+          
+          Duration start = Duration(minutes: min, seconds: sec, milliseconds: ms);
+          String text = match.group(4)!.trim();
+
+          if (text.isEmpty) continue;
+
+          // Estimasi waktu selesai baris berdasarkan waktu mulai baris berikutnya
+          Duration end = start + const Duration(seconds: 4);
+          if (i + 1 < rawLines.length) {
+            var nextMatch = lrcRegExp.firstMatch(rawLines[i + 1]);
+            if (nextMatch != null) {
+              int nMin = int.parse(nextMatch.group(1)!);
+              int nSec = int.parse(nextMatch.group(2)!);
+              int nMs = int.parse(nextMatch.group(3)!.padRight(3, '0'));
+              end = Duration(minutes: nMin, seconds: nSec, milliseconds: nMs);
+            }
+          }
+
+          var words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+          int wordDurationMs = (end.inMilliseconds - start.inMilliseconds) ~/ (words.length > 0 ? words.length : 1);
+
+          List<TimedWord> timedWords = [];
+          for (int j = 0; j < words.length; j++) {
+            Duration wStart = start + Duration(milliseconds: j * wordDurationMs);
+            Duration wEnd = wStart + Duration(milliseconds: wordDurationMs);
+            timedWords.add(TimedWord(words[j], wStart, wEnd));
+          }
+
+          generatedSentences.add(TimedSentence(timedWords, start, end));
+        }
       }
+      lyricSentences = generatedSentences;
+      errorMessage = '✅ Sync LRC presisi berhasil (${lyricSentences.length} baris tersimpan)';
+    } else {
+      // 2. FALLBACK KE ESTIMASI OTOMATIS JIKA HANYA TEKS BIASA
+      _processAndCacheLyricsSmart(rawText);
     }
 
-    List<TimedSentence> generatedSentences = [];
-    for (int i = 0; i < allWords.length; i += 6) {
-      int endIdx = (i + 6 < allWords.length) ? i + 6 : allWords.length;
-      var slice = allWords.sublist(i, endIdx);
-      generatedSentences.add(TimedSentence(slice, slice.first.start, slice.last.end));
-    }
-
-    lyricSentences = generatedSentences;
     currentLyricIndex = 0;
-    errorMessage = '✅ Sync lirik berhasil (${lyricSentences.length} baris tersimpan)';
     notifyListeners();
   }
 
-  Future<void> togglePlay() async {
-    if (selectedMusicFile == null) {
-      errorMessage = 'Pilih lagu terlebih dahulu 📁';
-      notifyListeners();
-      return;
-    }
-    if (audioPlayer.playing) {
-      await audioPlayer.pause();
-      try { await waveformController.pausePlayer(); } catch (_) {}
-    } else {
-      await audioPlayer.play();
-      try { await waveformController.startPlayer(); } catch (_) {}
-    }
-  }
 
   Future<void> seekTo(Duration v) async {
     Duration safe = v;
