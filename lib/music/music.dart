@@ -384,7 +384,7 @@ class MusicController extends ChangeNotifier {
 
 
   // ALGORITMA SMART SYNC (UNTUK TEKS BIASA TANPA TIMESTAMP)
-  void _processAndCacheLyricsSmart(String rawText) {
+    void _processAndCacheLyricsSmart(String rawText) {
     var rawLines = rawText.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
     if (rawLines.isEmpty) return;
 
@@ -407,6 +407,7 @@ class MusicController extends ChangeNotifier {
     }
     if (totalWords == 0) totalWords = 1;
 
+    // Alokasi durasi dasar per kata
     double msPerWord = availableDurationMs / totalWords;
 
     List<TimedSentence> generatedSentences = [];
@@ -418,13 +419,23 @@ class MusicController extends ChangeNotifier {
       List<TimedWord> lineWords = [];
       int sentenceStartMs = currentMs;
 
-      for (var w in wordsInLine) {
+      // Hitung total durasi untuk baris kalimat ini tanpa jeda paksa antarkata
+      for (int i = 0; i < wordsInLine.length; i++) {
+        String w = wordsInLine[i];
         int wordStart = currentMs;
-        int wordDuration = (msPerWord * 0.9).clamp(250, 700).toInt();
+        
+        // Pembagian durasi tepat per kata berdasarkan alokasi msPerWord
+        int wordDuration = msPerWord.round();
         int wordEnd = wordStart + wordDuration;
 
-        lineWords.add(TimedWord(w, Duration(milliseconds: wordStart), Duration(milliseconds: wordEnd)));
-        currentMs = wordEnd + 80;
+        lineWords.add(TimedWord(
+          w, 
+          Duration(milliseconds: wordStart), 
+          Duration(milliseconds: wordEnd)
+        ));
+
+        // Kata berikutnya langsung menyambung tanpa delay tambahan 80ms
+        currentMs = wordEnd; 
       }
 
       int sentenceEndMs = currentMs;
@@ -434,21 +445,39 @@ class MusicController extends ChangeNotifier {
         Duration(milliseconds: sentenceEndMs)
       ));
 
-      currentMs += 400;
+      // Jeda antar-kalimat / antar-baris lirik (misal 350ms saat pindah baris)
+      currentMs += 350;
     }
 
     lyricSentences = generatedSentences;
     errorMessage = '✅ Smart Sync lirik berhasil (${lyricSentences.length} baris tersimpan)';
   }
 
-  Future<void> seekTo(Duration v) async {
+
+    Future<void> seekTo(Duration v) async {
     Duration safe = v;
     if (safe < Duration.zero) safe = Duration.zero;
     if (safe > duration) safe = duration;
+
     try { await audioPlayer.seek(safe); } catch (_) {}
     try { await waveformController.seekTo(safe.inMilliseconds); } catch (_) {}
+    
     position = safe;
+
+    // Update index lirik aktif sesuai posisi audio yang baru secara instan
+    _updateActiveLyricIndex(safe);
+
     notifyListeners();
+  }
+
+  void _updateActiveLyricIndex(Duration pos) {
+    if (lyricSentences.isEmpty) return;
+    for (int i = 0; i < lyricSentences.length; i++) {
+      if (pos >= lyricSentences[i].start && pos <= lyricSentences[i].end) {
+        currentLyricIndex = i;
+        break;
+      }
+    }
   }
 
   // OPSI 1: REC MERAH (REKAM LANGSUNG MAX 60 DETIK)
