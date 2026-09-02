@@ -1,6 +1,5 @@
-import 'dart0:async';
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:file_picker/file_picker.dart';
@@ -9,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screen_recording/flutter_screen_recording.dart';
 import 'package:just_audio/just_audio.dart' as ja;
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -162,8 +160,11 @@ class MusicController extends ChangeNotifier {
   File? selectedMusicFile;
   String musicName = 'Belum ada musik';
   String editableTitle = 'SPONSOR BABE INFO GAWAT • TAP UNTUK EDIT JUDUL';
+  String editableBottomTitle = 'Babe Info Gawat - Tap untuk edit bawah';
 
   List<TimedSentence> lyricSentences = [];
+  List<String> get lyricLines => lyricSentences.map((e) => e.text).toList();
+
   int currentLyricIndex = 0;
   Duration position = Duration.zero, duration = Duration.zero;
 
@@ -221,7 +222,7 @@ class MusicController extends ChangeNotifier {
       selectedMusicFile = File(path);
       musicName = p.name;
       editableTitle = musicName;
-      lyricSentences = []; // Reset lirik
+      lyricSentences = []; // Reset lirik saat ganti lagu
       currentLyricIndex = 0;
       errorMessage = null;
       isLoading = true;
