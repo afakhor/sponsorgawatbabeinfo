@@ -209,6 +209,22 @@ class MusicController extends ChangeNotifier {
     await [Permission.storage, Permission.microphone, Permission.photos].request();
   }
 
+  // CONTROLLER METHOD UNTUK PLAY/PAUSE
+  Future<void> togglePlay() async {
+    if (selectedMusicFile == null) {
+      errorMessage = 'Pilih lagu terlebih dahulu 📁';
+      notifyListeners();
+      return;
+    }
+    if (audioPlayer.playing) {
+      await audioPlayer.pause();
+      try { await waveformController.pausePlayer(); } catch (_) {}
+    } else {
+      await audioPlayer.play();
+      try { await waveformController.startPlayer(); } catch (_) {}
+    }
+  }
+
   // UPLOAD MUSIK (MP3 ATAU WAV)
   Future<void> pickMusic(BuildContext context) async {
     try {
@@ -251,8 +267,7 @@ class MusicController extends ChangeNotifier {
     }
   }
 
-  // DIALOG PASTE LIRIK & SYNC OTOMATIS (CACHED)
-    // DIALOG PASTE LIRIK (SUPPORT TEKS BIASA & FORMAT TIMESTAMP LRC)
+  // DIALOG PASTE LIRIK (SUPPORT TEKS BIASA & FORMAT TIMESTAMP LRC)
   Future<void> openTranscribeDialog(BuildContext context) async {
     if (selectedMusicFile == null) {
       errorMessage = 'Upload musik (MP3/WAV) terlebih dahulu!';
@@ -316,13 +331,12 @@ class MusicController extends ChangeNotifier {
           int min = int.parse(match.group(1)!);
           int sec = int.parse(match.group(2)!);
           int ms = int.parse(match.group(3)!.padRight(3, '0'));
-          
+
           Duration start = Duration(minutes: min, seconds: sec, milliseconds: ms);
           String text = match.group(4)!.trim();
 
           if (text.isEmpty) continue;
 
-          // Estimasi waktu selesai baris berdasarkan waktu mulai baris berikutnya
           Duration end = start + const Duration(seconds: 4);
           if (i + 1 < rawLines.length) {
             var nextMatch = lrcRegExp.firstMatch(rawLines[i + 1]);
@@ -335,7 +349,7 @@ class MusicController extends ChangeNotifier {
           }
 
           var words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-          int wordDurationMs = (end.inMilliseconds - start.inMilliseconds) ~/ (words.length > 0 ? words.length : 1);
+          int wordDurationMs = (end.inMilliseconds - start.inMilliseconds) ~/ (words.isNotEmpty ? words.length : 1);
 
           List<TimedWord> timedWords = [];
           for (int j = 0; j < words.length; j++) {
@@ -343,7 +357,6 @@ class MusicController extends ChangeNotifier {
             Duration wEnd = wStart + Duration(milliseconds: wordDurationMs);
             timedWords.add(TimedWord(words[j], wStart, wEnd));
           }
-
           generatedSentences.add(TimedSentence(timedWords, start, end));
         }
       }
@@ -358,6 +371,63 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ALGORITMA SMART SYNC (UNTUK TEKS BIASA TANPA TIMESTAMP)
+  void _processAndCacheLyricsSmart(String rawText) {
+    var rawLines = rawText.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (rawLines.isEmpty) return;
+
+    List<String> lines = [];
+    for (var l in rawLines) {
+      String cleaned = l.replaceAll(RegExp(r'^(reff|verse|chorus|bridge|intro)\s*:?', caseSensitive: false), '').trim();
+      if (cleaned.isNotEmpty) {
+        lines.add(cleaned);
+      }
+    }
+    if (lines.isEmpty) lines = rawLines;
+
+    int totalSongMs = duration.inMilliseconds > 0 ? duration.inMilliseconds : 180000;
+    int currentMs = totalSongMs > 30000 ? 5000 : 2000; 
+    int availableDurationMs = (totalSongMs - currentMs) > 10000 ? (totalSongMs - currentMs) : totalSongMs;
+
+    int totalWords = 0;
+    for (var line in lines) {
+      totalWords += line.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+    }
+    if (totalWords == 0) totalWords = 1;
+
+    double msPerWord = availableDurationMs / totalWords;
+
+    List<TimedSentence> generatedSentences = [];
+
+    for (var line in lines) {
+      var wordsInLine = line.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+      if (wordsInLine.isEmpty) continue;
+
+      List<TimedWord> lineWords = [];
+      int sentenceStartMs = currentMs;
+
+      for (var w in wordsInLine) {
+        int wordStart = currentMs;
+        int wordDuration = (msPerWord * 0.9).clamp(250, 700).toInt();
+        int wordEnd = wordStart + wordDuration;
+
+        lineWords.add(TimedWord(w, Duration(milliseconds: wordStart), Duration(milliseconds: wordEnd)));
+        currentMs = wordEnd + 80;
+      }
+
+      int sentenceEndMs = currentMs;
+      generatedSentences.add(TimedSentence(
+        lineWords, 
+        Duration(milliseconds: sentenceStartMs), 
+        Duration(milliseconds: sentenceEndMs)
+      ));
+
+      currentMs += 400;
+    }
+
+    lyricSentences = generatedSentences;
+    errorMessage = '✅ Smart Sync lirik berhasil (${lyricSentences.length} baris tersimpan)';
+  }
 
   Future<void> seekTo(Duration v) async {
     Duration safe = v;
