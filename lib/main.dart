@@ -6,17 +6,16 @@ import 'globes/globe.dart';
 import 'music/music.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
-
 void main() { 
   WidgetsFlutterBinding.ensureInitialized(); 
-// Wajib dipanggil sebelum menggunakan kelas/engine dari sherpa_onnx
+  // Wajib dipanggil sebelum menggunakan kelas/engine dari sherpa_onnx
   sherpa.initBindings(); 
   runApp(const SponsorBabeApp()); 
 }
 
 class SponsorBabeApp extends StatelessWidget {
   const SponsorBabeApp({super.key});
-  
+
   @override 
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -24,7 +23,7 @@ class SponsorBabeApp extends StatelessWidget {
       title: 'Sponsor Babe', 
       theme: ThemeData(
         brightness: Brightness.dark, 
-        scaffoldBackgroundColor: Colors.black, 
+        scaffoldBackgroundColor: Colors.transparent, 
         useMaterial3: true,
       ), 
       home: const SponsorBabePage(),
@@ -34,7 +33,7 @@ class SponsorBabeApp extends StatelessWidget {
 
 class SponsorBabePage extends StatefulWidget {
   const SponsorBabePage({super.key});
-  
+
   @override 
   State<SponsorBabePage> createState() => _SponsorBabePageState();
 }
@@ -98,7 +97,7 @@ class _SponsorBabePageState extends State<SponsorBabePage> with SingleTickerProv
         ),
       );
     }
-    
+
     if (fragmentProgram == null || textTexture == null) {
       return const Scaffold(
         backgroundColor: Colors.black, 
@@ -107,7 +106,7 @@ class _SponsorBabePageState extends State<SponsorBabePage> with SingleTickerProv
     }
 
     final isRec = musicController.isRecording;
-    
+
     return PopScope(
       canPop: !isRec,
       onPopInvokedWithResult: (didPop, _) async {
@@ -115,10 +114,18 @@ class _SponsorBabePageState extends State<SponsorBabePage> with SingleTickerProv
         if (isRec) await musicController.cancelRecord();
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: Colors.transparent,
         body: Stack(
           children: [
-            // GLOBE - RASIO 3:1 KETIKA NORMAL, FULL KETIKA REC
+            // BACKGROUND GAMBAR ASSETS/IMAGES/BG.PNG
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/bg.png',
+                fit: BoxFit.cover,
+              ),
+            ),
+
+            // GLOBE SHADER WIDGET
             Positioned.fill(
               child: GlobeShaderWidget(
                 program: fragmentProgram!, 
