@@ -1403,67 +1403,138 @@ class MusicController extends ChangeNotifier {
 // ==========================================
 // MUSIC PLAYER BAR
 // ==========================================
+
 class MusicPlayerBar extends StatelessWidget {
   final MusicController controller;
-  const MusicPlayerBar({super.key, required this.controller});
+
+  const MusicPlayerBar({
+    super.key,
+    required this.controller,
+  });
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
-        if (controller.selectedMusicFile == null) return const SizedBox.shrink();
+        if (controller.selectedMusicFile ==
+            null) {
+          return const SizedBox.shrink();
+        }
 
-        final pos = controller.position;
-        final dur = controller.duration;
-        double maxSec = dur.inSeconds.toDouble();
-        if (maxSec <= 0) maxSec = 1.0;
-        double curSec = pos.inSeconds.toDouble().clamp(0.0, maxSec);
+        final Duration pos =
+            controller.position;
+
+        final Duration dur =
+            controller.duration;
+
+        double maxSec =
+            dur.inSeconds.toDouble();
+
+        if (maxSec <= 0) {
+          maxSec = 1.0;
+        }
+
+        final double curSec =
+            pos.inSeconds
+                .toDouble()
+                .clamp(0.0, maxSec);
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          margin:
+              const EdgeInsets.only(bottom: 8),
+          padding:
+              const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 4,
+          ),
           decoration: BoxDecoration(
             color: const Color(0xFF1E1E24),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.amber.withOpacity(0.4)),
+            borderRadius:
+                BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.amber
+                  .withOpacity(0.4),
+            ),
           ),
           child: Row(
             children: [
               IconButton(
-                onPressed: controller.isLoading ? null : () => controller.togglePlay(),
+                onPressed: controller.isLoading
+                    ? null
+                    : controller.togglePlay,
                 icon: Icon(
-                  controller.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                  controller.isPlaying
+                      ? Icons.pause_circle_filled
+                      : Icons.play_circle_fill,
                   color: Colors.amber,
                   size: 36,
                 ),
               ),
               Expanded(
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisSize:
+                      MainAxisSize.min,
                   children: [
                     SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
+                      data:
+                          SliderTheme.of(context)
+                              .copyWith(
                         trackHeight: 3,
-                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                        activeTrackColor: Colors.amber,
-                        inactiveTrackColor: Colors.white24,
-                        thumbColor: Colors.amber,
+                        thumbShape:
+                            const RoundSliderThumbShape(
+                          enabledThumbRadius: 6,
+                        ),
+                        activeTrackColor:
+                            Colors.amber,
+                        inactiveTrackColor:
+                            Colors.white24,
+                        thumbColor:
+                            Colors.amber,
                       ),
                       child: Slider(
                         min: 0,
                         max: maxSec,
                         value: curSec,
-                        onChanged: (v) => controller.seekTo(Duration(seconds: v.floor())),
+                        onChanged: (double value) {
+                          controller.seekTo(
+                            Duration(
+                              milliseconds:
+                                  (value * 1000)
+                                      .round(),
+                            ),
+                          );
+                        },
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      padding:
+                          const EdgeInsets.symmetric(
+                        horizontal: 8,
+                      ),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        mainAxisAlignment:
+                            MainAxisAlignment
+                                .spaceBetween,
                         children: [
-                          Text(controller.fmt(pos), style: const TextStyle(color: Colors.white70, fontSize: 10)),
-                          Text(controller.fmt(dur), style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                          Text(
+                            controller.fmt(pos),
+                            style:
+                                const TextStyle(
+                              color:
+                                  Colors.white70,
+                              fontSize: 10,
+                            ),
+                          ),
+                          Text(
+                            controller.fmt(dur),
+                            style:
+                                const TextStyle(
+                              color:
+                                  Colors.white38,
+                              fontSize: 10,
+                            ),
+                          ),
                         ],
                       ),
                     ),
