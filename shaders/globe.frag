@@ -20,25 +20,45 @@ const float GLOBE_RADIUS = 0.27;
 const float ATMOSPHERE_GAP = 0.012;
 const float ATMOSPHERE_THICKNESS = 0.105;
 
-// ==================================================
-// RANDOM / NOISE
-// ==================================================
+const float GLOBE_ALPHA = 0.95;
+const float PLASMA_ALPHA = 0.70;
+const float BUBBLE_ALPHA = 0.60;
+const float ATMOSPHERE_ALPHA = 0.70;
+const float LIGHTNING_ALPHA = 0.70;
 
-float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
-}
+// ==================================================
+// RANDOM DAN NOISE
+// ==================================================
 
 float hash11(float p) {
-    return fract(sin(p * 127.1) * 43758.5453);
+    return fract(
+        sin(p * 127.1) *
+        43758.5453
+    );
+}
+
+float hash21(vec2 p) {
+    p = fract(
+        p * vec2(123.34, 456.21)
+    );
+
+    p += dot(
+        p,
+        p + 45.32
+    );
+
+    return fract(
+        p.x * p.y
+    );
 }
 
 float noise2(vec2 p) {
     vec2 i = floor(p);
     vec2 f = fract(p);
 
-    f = f * f * (3.0 - 2.0 * f);
+    f = f * f * (
+        3.0 - 2.0 * f
+    );
 
     float a = hash21(i);
     float b = hash21(i + vec2(1.0, 0.0));
@@ -53,10 +73,13 @@ float noise2(vec2 p) {
 }
 
 // ==================================================
-// ROTATION
+// ROTASI 3D
 // ==================================================
 
-vec3 rotateXPoint(vec3 p, float angle) {
+vec3 rotateXPoint(
+    vec3 p,
+    float angle
+) {
     float c = cos(angle);
     float s = sin(angle);
 
@@ -67,7 +90,10 @@ vec3 rotateXPoint(vec3 p, float angle) {
     );
 }
 
-vec3 rotateYPoint(vec3 p, float angle) {
+vec3 rotateYPoint(
+    vec3 p,
+    float angle
+) {
     float c = cos(angle);
     float s = sin(angle);
 
@@ -78,7 +104,10 @@ vec3 rotateYPoint(vec3 p, float angle) {
     );
 }
 
-vec3 rotateZPoint(vec3 p, float angle) {
+vec3 rotateZPoint(
+    vec3 p,
+    float angle
+) {
     float c = cos(angle);
     float s = sin(angle);
 
@@ -90,18 +119,22 @@ vec3 rotateZPoint(vec3 p, float angle) {
 }
 
 // ==================================================
-// GLOBE MASK
+// MASK GLOBE
 // ==================================================
 
-float globeMaskForRadius(float radius) {
+float globeMask(
+    float radius
+) {
     return 1.0 - smoothstep(
-        GLOBE_RADIUS - 0.006,
-        GLOBE_RADIUS + 0.006,
+        GLOBE_RADIUS - 0.007,
+        GLOBE_RADIUS + 0.007,
         radius
     );
 }
 
-float insideGlobeMask(float radius) {
+float globeInsideMask(
+    float radius
+) {
     return 1.0 - smoothstep(
         GLOBE_RADIUS - 0.010,
         GLOBE_RADIUS,
@@ -110,7 +143,7 @@ float insideGlobeMask(float radius) {
 }
 
 // ==================================================
-// BUIH TRANSPARAN
+// BUIH
 // ==================================================
 
 vec3 bubblesEffect(
@@ -124,31 +157,54 @@ vec3 bubblesEffect(
 
     vec3 result = vec3(0.0);
 
-    for (float layer = 0.0; layer < 3.0; layer += 1.0) {
-        vec2 c = cell + vec2(
-            layer * 17.17,
-            layer * 31.41
+    for (
+        float layer = 0.0;
+        layer < 3.0;
+        layer += 1.0
+    ) {
+        vec2 currentCell =
+            cell +
+            vec2(
+                layer * 17.17,
+                layer * 31.41
+            );
+
+        float seed = hash21(
+            currentCell
         );
 
-        float seed = hash21(c);
-
         if (seed > 0.64) {
-            vec2 randomPosition = vec2(
-                hash21(c + vec2(4.1, 8.7)),
-                hash21(c + vec2(9.3, 2.4))
-            ) - 0.5;
+            vec2 randomPosition =
+                vec2(
+                    hash21(
+                        currentCell +
+                        vec2(4.1, 8.7)
+                    ),
+                    hash21(
+                        currentCell +
+                        vec2(9.3, 2.4)
+                    )
+                ) - 0.5;
 
-            float cycle = 3.0 + seed * 3.0;
-            float phase = fract(time / cycle + seed);
+            float cycle =
+                3.0 + seed * 3.0;
 
-            vec2 position = local - randomPosition;
+            float phase = fract(
+                time / cycle + seed
+            );
+
+            vec2 position =
+                local - randomPosition;
 
             position.y += phase * 0.75;
+
             position.x += sin(
-                phase * TWO_PI + seed * 20.0
+                phase * TWO_PI +
+                seed * 20.0
             ) * 0.07;
 
-            float radius = length(position);
+            float distanceToBubble =
+                length(position);
 
             float size = mix(
                 0.010,
@@ -161,36 +217,54 @@ vec3 bubblesEffect(
             float body = 1.0 - smoothstep(
                 size * 0.55,
                 size,
-                radius
+                distanceToBubble
             );
 
             float edge = 1.0 - smoothstep(
                 size * 0.82,
                 size,
-                radius
+                distanceToBubble
             );
 
             edge *= smoothstep(
                 size * 0.42,
                 size * 0.82,
-                radius
+                distanceToBubble
             );
 
             float shine = 1.0 - smoothstep(
                 size * 0.02,
                 size * 0.28,
-                length(position - vec2(-size * 0.25, -size * 0.25))
+                length(
+                    position -
+                    vec2(
+                        -size * 0.25,
+                        -size * 0.25
+                    )
+                )
             );
 
             vec3 bubbleColor = mix(
                 vec3(0.20, 0.80, 0.95),
-                vec3(1.0, 0.90, 0.58),
+                vec3(1.00, 0.90, 0.58),
                 seed
             );
 
-            result += bubbleColor * body * 0.48;
-            result += vec3(1.0) * edge * 0.38;
-            result += vec3(1.0) * shine * body * 0.28;
+            result +=
+                bubbleColor *
+                body *
+                0.48;
+
+            result +=
+                vec3(1.0) *
+                edge *
+                0.38;
+
+            result +=
+                vec3(1.0) *
+                shine *
+                body *
+                0.28;
         }
     }
 
@@ -201,27 +275,44 @@ vec3 bubblesEffect(
 // BINTANG
 // ==================================================
 
-vec3 starsEffect(vec2 p, float time) {
-    vec2 cell = floor(p * 95.0);
-    float seed = hash21(cell);
-
-    float star = step(0.988, seed);
-
-    float twinkle = 0.65 + 0.35 * sin(
-        time * 2.5 + seed * 60.0
+vec3 starsEffect(
+    vec2 p,
+    float time
+) {
+    vec2 cell = floor(
+        p * 95.0
     );
 
-    return vec3(0.58, 0.78, 1.0) *
-        star *
-        twinkle *
-        0.22;
+    float seed = hash21(cell);
+
+    float star = step(
+        0.988,
+        seed
+    );
+
+    float twinkle =
+        0.65 +
+        0.35 *
+        sin(
+            time * 2.5 +
+            seed * 60.0
+        );
+
+    return vec3(
+        0.58,
+        0.78,
+        1.00
+    ) *
+    star *
+    twinkle *
+    0.22;
 }
 
 // ==================================================
 // PLASMA PUSARAN CAKRA BERDURI
 // ==================================================
 
-vec3 plasmaEffect(
+vec4 plasmaEffect(
     vec2 q,
     float time,
     float pulse
@@ -230,32 +321,32 @@ vec3 plasmaEffect(
     float angle = atan(q.y, q.x);
 
     float spiralAngle =
-        angle
-        - radius * 13.0
-        - time * 1.65
-        - pulse * 0.45;
+        angle -
+        radius * 13.0 -
+        time * 1.65 -
+        pulse * 0.45;
 
     float rayA = sin(
-        spiralAngle * 17.0
-        + sin(angle * 5.0 + time) * 1.8
+        spiralAngle * 17.0 +
+        sin(angle * 5.0 + time) * 1.8
     );
 
     float rayB = sin(
-        spiralAngle * 31.0
-        - radius * 18.0
-        - time * 2.4
+        spiralAngle * 31.0 -
+        radius * 18.0 -
+        time * 2.4
     );
 
     float rayC = sin(
-        angle * 53.0
-        + radius * 34.0
-        - time * 3.3
+        angle * 53.0 +
+        radius * 34.0 -
+        time * 3.3
     );
 
     float rays =
-        rayA * 0.48
-        + rayB * 0.32
-        + rayC * 0.20;
+        rayA * 0.48 +
+        rayB * 0.32 +
+        rayC * 0.20;
 
     rays = rays * 0.5 + 0.5;
 
@@ -265,28 +356,44 @@ vec3 plasmaEffect(
         rays
     );
 
-    float radialMask = smoothstep(
-        0.025,
-        0.12,
-        radius
-    ) * (
-        1.0 - smoothstep(
-            0.80,
-            1.0,
+    float radialMask =
+        smoothstep(
+            0.025,
+            0.12,
             radius
+        ) *
+        (
+            1.0 -
+            smoothstep(
+                0.80,
+                1.0,
+                radius
+            )
+        );
+
+    float smoke = noise2(
+        q * 8.0 +
+        vec2(
+            time * 0.24,
+            -time * 0.16
         )
     );
 
-    float wisps = noise2(
-        q * 8.0 + vec2(time * 0.24, -time * 0.16)
-    );
-
     float plasmaMask =
-        spikes
-        * radialMask
-        * (0.72 + wisps * 0.55);
+        spikes *
+        radialMask *
+        (
+            0.72 +
+            smoke * 0.55
+        );
 
-    plasmaMask *= 0.72 + pulse * 0.38;
+    plasmaMask *=
+        0.72 +
+        pulse * 0.38;
+
+    float core = exp(
+        -radius * 8.0
+    );
 
     vec3 purple = vec3(
         0.32,
@@ -303,48 +410,70 @@ vec3 plasmaEffect(
     vec3 blue = vec3(
         0.04,
         0.22,
-        1.0
+        1.00
     );
 
     vec3 color = mix(
         purple,
         magenta,
-        smoothstep(0.42, 0.78, rays)
+        smoothstep(
+            0.42,
+            0.78,
+            rays
+        )
     );
 
     color = mix(
         color,
         blue,
-        smoothstep(0.70, 1.0, wisps) * 0.42
+        smoothstep(
+            0.70,
+            1.0,
+            smoke
+        ) * 0.42
     );
 
-    float core = exp(-radius * 8.0);
-    color += vec3(1.0, 0.35, 0.85) * core * 0.70;
+    color += vec3(
+        1.0,
+        0.35,
+        0.85
+    ) *
+    core *
+    0.70;
 
-    return color * plasmaMask * 1.35;
+    float alpha =
+        plasmaMask *
+        PLASMA_ALPHA;
+
+    return vec4(
+        color * 1.35,
+        alpha
+    );
 }
 
 // ==================================================
 // ATMOSFER ASAP ANGKASA
 // ==================================================
 
-vec3 atmosphereEffect(
+vec4 atmosphereEffect(
     vec2 delta,
     float radius,
     float time,
     float pulse
 ) {
     float distanceFromGlobe =
-        radius - GLOBE_RADIUS;
+        radius -
+        GLOBE_RADIUS;
 
-    float start = smoothstep(
+    float startMask = smoothstep(
         ATMOSPHERE_GAP,
         ATMOSPHERE_GAP + 0.018,
         distanceFromGlobe
     );
 
     float endDistance =
-        ATMOSPHERE_GAP + ATMOSPHERE_THICKNESS;
+        ATMOSPHERE_GAP +
+        ATMOSPHERE_THICKNESS;
 
     float endMask = 1.0 - smoothstep(
         endDistance - 0.025,
@@ -352,41 +481,61 @@ vec3 atmosphereEffect(
         distanceFromGlobe
     );
 
-    float shellMask = start * endMask;
+    float shellMask =
+        startMask *
+        endMask;
 
-    vec2 smokeUV = delta * 18.0;
+    vec2 smokeUV =
+        delta * 18.0;
 
     float smokeA = noise2(
-        smokeUV + vec2(time * 0.24, -time * 0.12)
+        smokeUV +
+        vec2(
+            time * 0.24,
+            -time * 0.12
+        )
     );
 
     float smokeB = noise2(
-        smokeUV * 1.7 + vec2(-time * 0.16, time * 0.22)
+        smokeUV * 1.7 +
+        vec2(
+            -time * 0.16,
+            time * 0.22
+        )
     );
 
     float smokeC = noise2(
-        smokeUV * 3.2 + vec2(time * 0.35, time * 0.10)
+        smokeUV * 3.2 +
+        vec2(
+            time * 0.35,
+            time * 0.10
+        )
     );
 
     float smoke = smoothstep(
         0.28,
         0.78,
-        smokeA * 0.50
-        + smokeB * 0.32
-        + smokeC * 0.18
+        smokeA * 0.50 +
+        smokeB * 0.32 +
+        smokeC * 0.18
     );
 
-    float outerFade = exp(
-        -max(distanceFromGlobe - ATMOSPHERE_GAP, 0.0) * 8.0
+    float outwardFade = exp(
+        -max(
+            distanceFromGlobe -
+            ATMOSPHERE_GAP,
+            0.0
+        ) * 8.0
     );
 
-    float beatExpand = 1.0 + pulse * 0.12;
+    float beatExpansion =
+        1.0 + pulse * 0.12;
 
     float value =
-        smoke
-        * outerFade
-        * shellMask
-        * beatExpand;
+        smoke *
+        outwardFade *
+        shellMask *
+        beatExpansion;
 
     vec3 blue = vec3(
         0.015,
@@ -406,11 +555,18 @@ vec3 atmosphereEffect(
         smoke * 0.70
     );
 
-    return color * value * 0.70;
+    float alpha =
+        value *
+        ATMOSPHERE_ALPHA;
+
+    return vec4(
+        color,
+        alpha
+    );
 }
 
 // ==================================================
-// PETIR PADA JALURNYA SAJA
+// PETIR HANYA PADA JALURNYA
 // ==================================================
 
 float lightningEffect(
@@ -420,7 +576,8 @@ float lightningEffect(
     float pulse
 ) {
     float distanceFromGlobe =
-        radius - GLOBE_RADIUS;
+        radius -
+        GLOBE_RADIUS;
 
     float outsideMask = smoothstep(
         -0.005,
@@ -428,21 +585,32 @@ float lightningEffect(
         distanceFromGlobe
     );
 
-    float atmosphereLimit = 1.0 - smoothstep(
-        ATMOSPHERE_THICKNESS * 0.92,
-        ATMOSPHERE_THICKNESS,
-        distanceFromGlobe
-    );
+    float atmosphereLimit = 1.0 -
+        smoothstep(
+            ATMOSPHERE_THICKNESS * 0.92,
+            ATMOSPHERE_THICKNESS,
+            distanceFromGlobe
+        );
 
-    float pathMask = outsideMask * atmosphereLimit;
+    float allowedArea =
+        outsideMask *
+        atmosphereLimit;
 
     float total = 0.0;
 
-    for (float i = 0.0; i < 5.0; i += 1.0) {
-        float seed = i * 13.731;
+    for (
+        float i = 0.0;
+        i < 5.0;
+        i += 1.0
+    ) {
+        float seed =
+            i * 13.731;
+
+        float speed =
+            0.55 + i * 0.07;
 
         float strike = floor(
-            time * (0.55 + i * 0.07) + seed
+            time * speed + seed
         );
 
         float chance = hash11(
@@ -455,7 +623,7 @@ float lightningEffect(
             ) * TWO_PI;
 
             float life = fract(
-                time * (0.55 + i * 0.07) + seed
+                time * speed + seed
             );
 
             float visibility = exp(
@@ -463,20 +631,23 @@ float lightningEffect(
             );
 
             float pathAngle =
-                angle
-                + distanceFromGlobe * 30.0
-                - time * 1.2
-                + baseAngle;
+                angle +
+                distanceFromGlobe * 30.0 -
+                time * 1.2 +
+                baseAngle;
 
             float jagged = sin(
-                radius * 150.0
-                + time * 21.0
-                + seed
+                radius * 150.0 +
+                time * 21.0 +
+                seed
             ) * 0.065;
 
-            float path = abs(sin(
-                pathAngle * 0.5 + jagged
-            ));
+            float path = abs(
+                sin(
+                    pathAngle * 0.5 +
+                    jagged
+                )
+            );
 
             float core = smoothstep(
                 0.025,
@@ -484,24 +655,25 @@ float lightningEffect(
                 path
             );
 
-            float glowPath = smoothstep(
+            float aura = smoothstep(
                 0.085,
                 0.0,
                 path
             );
 
             total += (
-                core * 3.4
-                + glowPath * 0.65
-            )
-            * visibility
-            * pathMask;
+                core * 3.4 +
+                aura * 0.65
+            ) *
+            visibility *
+            allowedArea;
         }
     }
 
-    total *= 0.70 + pulse * 0.30;
-
-    return total;
+    return total * (
+        0.70 +
+        pulse * 0.30
+    );
 }
 
 // ==================================================
@@ -509,40 +681,54 @@ float lightningEffect(
 // ==================================================
 
 void main() {
-    vec2 fragCoord = FlutterFragCoord().xy;
+    vec2 fragCoord =
+        FlutterFragCoord().xy;
 
-    vec2 uv = fragCoord / iResolution.xy;
+    vec2 uv =
+        fragCoord /
+        iResolution.xy;
 
-    vec2 p = uv * 2.0 - 1.0;
+    vec2 p =
+        uv * 2.0 -
+        1.0;
 
-    p.x *= iResolution.x / iResolution.y;
+    p.x *=
+        iResolution.x /
+        iResolution.y;
 
     vec2 center = vec2(
         0.0,
         0.12
     );
 
-    vec2 delta = p - center;
+    vec2 delta =
+        p - center;
 
-    float radius = length(delta);
+    float radius =
+        length(delta);
 
-    float angle = atan(
-        delta.y,
-        delta.x
-    );
+    float angle =
+        atan(
+            delta.y,
+            delta.x
+        );
 
-    float pulse = clamp(
-        beatPulse,
-        0.0,
-        1.0
-    );
+    float pulse =
+        clamp(
+            beatPulse,
+            0.0,
+            1.0
+        );
 
-    vec3 color = vec3(0.0);
-    float alpha = 0.0;
+    vec3 color =
+        vec3(0.0);
 
-    // --------------------------------------------------
-    // BUIH DI LUAR GLOBE
-    // --------------------------------------------------
+    float alpha =
+        0.0;
+
+    // ==================================================
+    // BUIH
+    // ==================================================
 
     vec3 bubbles = bubblesEffect(
         p,
@@ -552,21 +738,29 @@ void main() {
 
     float bubbleValue = max(
         bubbles.r,
-        max(bubbles.g, bubbles.b)
+        max(
+            bubbles.g,
+            bubbles.b
+        )
     );
 
-    float bubbleAlpha = smoothstep(
-        0.01,
-        0.16,
-        bubbleValue
-    ) * 0.60;
+    float bubbleAlpha =
+        smoothstep(
+            0.01,
+            0.16,
+            bubbleValue
+        ) *
+        BUBBLE_ALPHA;
 
     color += bubbles;
-    alpha = max(alpha, bubbleAlpha);
+    alpha = max(
+        alpha,
+        bubbleAlpha
+    );
 
-    // --------------------------------------------------
-    // BINTANG DI LUAR GLOBE
-    // --------------------------------------------------
+    // ==================================================
+    // BINTANG
+    // ==================================================
 
     vec3 stars = starsEffect(
         p,
@@ -575,52 +769,56 @@ void main() {
 
     float starValue = max(
         stars.r,
-        max(stars.g, stars.b)
+        max(
+            stars.g,
+            stars.b
+        )
     );
 
-    float starAlpha = step(
-        0.01,
-        starValue
-    ) * 0.30;
+    float starAlpha =
+        step(
+            0.01,
+            starValue
+        ) *
+        0.30;
 
     color += stars;
-    alpha = max(alpha, starAlpha);
+    alpha = max(
+        alpha,
+        starAlpha
+    );
 
-    // --------------------------------------------------
+    // ==================================================
     // ATMOSFER
-    // --------------------------------------------------
+    // ==================================================
 
-    vec3 atmosphere = atmosphereEffect(
-        delta,
-        radius,
-        iTime,
-        pulse
+    vec4 atmosphere =
+        atmosphereEffect(
+            delta,
+            radius,
+            iTime,
+            pulse
+        );
+
+    color += atmosphere.rgb;
+
+    alpha = max(
+        alpha,
+        atmosphere.a *
+        clamp(glow, 0.0, 1.0)
     );
 
-    float atmosphereValue = max(
-        atmosphere.r,
-        max(atmosphere.g, atmosphere.b)
-    );
-
-    float atmosphereAlpha = smoothstep(
-        0.005,
-        0.24,
-        atmosphereValue
-    ) * glow;
-
-    color += atmosphere;
-    alpha = max(alpha, atmosphereAlpha);
-
-    // --------------------------------------------------
+    // ==================================================
     // PETIR
-    // --------------------------------------------------
+    // ==================================================
 
-    float bolt = lightningEffect(
-        angle,
-        radius,
-        iTime,
-        pulse
-    );
+    float bolt =
+        lightningEffect(
+            angle,
+            radius,
+            iTime,
+            pulse
+        );
 
     vec3 boltColor = vec3(
         1.0,
@@ -628,33 +826,49 @@ void main() {
         0.015
     );
 
-    float boltAlpha = smoothstep(
-        0.01,
-        0.40,
-        bolt
-    ) * 0.70;
+    float boltAlpha =
+        smoothstep(
+            0.01,
+            0.40,
+            bolt
+        ) *
+        LIGHTNING_ALPHA;
 
-    color += boltColor * bolt * 1.15;
-    alpha = max(alpha, boltAlpha);
+    color +=
+        boltColor *
+        bolt *
+        1.15;
 
-    // --------------------------------------------------
-    // GLOBE
-    // --------------------------------------------------
-
-    float globeMask = globeMaskForRadius(
-        radius
+    alpha = max(
+        alpha,
+        boltAlpha
     );
 
-    if (radius <= GLOBE_RADIUS + 0.01) {
-        vec2 sphereUV = delta / GLOBE_RADIUS;
+    // ==================================================
+    // GLOBE 3D
+    // ==================================================
 
-        float zSquared = 1.0 - dot(
-            sphereUV,
-            sphereUV
-        );
+    float mask =
+        globeMask(radius);
+
+    if (
+        radius <=
+        GLOBE_RADIUS + 0.01
+    ) {
+        vec2 sphereUV =
+            delta /
+            GLOBE_RADIUS;
+
+        float zSquared =
+            1.0 -
+            dot(
+                sphereUV,
+                sphereUV
+            );
 
         if (zSquared > 0.0) {
-            float z = sqrt(zSquared);
+            float z =
+                sqrt(zSquared);
 
             vec3 point = vec3(
                 sphereUV.x,
@@ -677,25 +891,40 @@ void main() {
                 axisTilt
             );
 
-            vec3 normal = normalize(point);
+            vec3 normal =
+                normalize(point);
 
-            vec3 lightDirection = normalize(
-                vec3(-0.65, 0.40, 0.90)
-            );
+            vec3 lightDirection =
+                normalize(
+                    vec3(
+                        -0.65,
+                        0.40,
+                        0.90
+                    )
+                );
 
-            float diffuse = max(
-                dot(normal, lightDirection),
-                0.0
-            );
+            float diffuse =
+                max(
+                    dot(
+                        normal,
+                        lightDirection
+                    ),
+                    0.0
+                );
 
-            float frontLight = smoothstep(
-                -0.20,
-                0.70,
-                normal.z
-            );
+            float frontLight =
+                smoothstep(
+                    -0.20,
+                    0.70,
+                    normal.z
+                );
 
             float rim = pow(
-                1.0 - max(normal.z, 0.0),
+                1.0 -
+                max(
+                    normal.z,
+                    0.0
+                ),
                 3.0
             );
 
@@ -717,46 +946,76 @@ void main() {
                 0.025
             );
 
-            vec3 globeColor = mix(
-                darkGold,
-                gold,
-                diffuse
-            );
+            vec3 globeColor =
+                mix(
+                    darkGold,
+                    gold,
+                    diffuse
+                );
 
             globeColor = mix(
                 globeColor,
                 brightGold,
-                diffuse * frontLight * 0.85
+                diffuse *
+                frontLight *
+                0.85
             );
 
-            // Plasma hanya di dalam globe.
-            vec3 plasma = plasmaEffect(
-                sphereUV,
-                iTime,
-                pulse
+            // Plasma hanya di dalam permukaan globe.
+            vec4 plasma =
+                plasmaEffect(
+                    sphereUV,
+                    iTime,
+                    pulse
+                );
+
+            float plasmaSurfaceAlpha =
+                plasma.a *
+                frontLight *
+                globeInsideMask(
+                    radius
+                );
+
+            globeColor = mix(
+                globeColor,
+                globeColor +
+                plasma.rgb * 0.70,
+                clamp(
+                    plasmaSurfaceAlpha,
+                    0.0,
+                    1.0
+                )
             );
 
-            globeColor += plasma
-                * frontLight
-                * 0.34;
+            // Tekstur tulisan globe.
+            float longitude =
+                atan(
+                    point.x,
+                    point.z
+                );
 
-            // Tekstur tulisan.
-            float longitude = atan(
-                point.x,
-                point.z
-            );
-
-            float latitude = asin(
-                clamp(point.y, -1.0, 1.0)
-            );
+            float latitude =
+                asin(
+                    clamp(
+                        point.y,
+                        -1.0,
+                        1.0
+                    )
+                );
 
             vec2 textUV = vec2(
-                longitude / TWO_PI + 0.5,
-                latitude / PI + 0.5
+                longitude /
+                TWO_PI +
+                0.5,
+
+                latitude /
+                PI +
+                0.5
             );
 
             textUV.x = fract(
-                textUV.x - windRot * 0.04
+                textUV.x -
+                windRot * 0.04
             );
 
             textUV.y = clamp(
@@ -765,16 +1024,18 @@ void main() {
                 0.999
             );
 
-            vec4 textPixel = texture(
-                textTexture,
-                textUV
-            );
+            vec4 textPixel =
+                texture(
+                    textTexture,
+                    textUV
+                );
 
-            float textAlpha = smoothstep(
-                0.015,
-                0.12,
-                textPixel.a
-            );
+            float textAlpha =
+                smoothstep(
+                    0.015,
+                    0.12,
+                    textPixel.a
+                );
 
             vec3 textColor = vec3(
                 1.0,
@@ -785,40 +1046,46 @@ void main() {
             globeColor = mix(
                 globeColor,
                 textColor * (
-                    0.80 + diffuse * 0.65
+                    0.80 +
+                    diffuse * 0.65
                 ),
                 textAlpha * 0.96
             );
 
-            // Garis tepi globe.
+            // Rim globe.
             globeColor += vec3(
                 1.0,
                 0.18,
                 0.002
-            ) * rim * 1.45;
+            ) *
+            rim *
+            1.45;
 
-            // Globe opacity tetap 0.95.
+            // Globe berada di atas efek luar.
             color = mix(
                 color,
                 globeColor,
-                globeMask
+                mask
             );
 
             alpha = max(
                 alpha,
-                globeMask * 0.95
+                mask * GLOBE_ALPHA
             );
         }
     }
 
-    // --------------------------------------------------
-    // OUTPUT TRANSPARAN
-    // --------------------------------------------------
+    // ==================================================
+    // OUTPUT ALPHA
+    // ==================================================
 
-    float vignette = 1.0 - dot(
-        p,
-        p
-    ) * 0.08;
+    float vignette =
+        1.0 -
+        dot(
+            p,
+            p
+        ) *
+        0.08;
 
     color *= max(
         vignette,
@@ -826,7 +1093,10 @@ void main() {
     );
 
     color = pow(
-        max(color, 0.0),
+        max(
+            color,
+            0.0
+        ),
         vec3(0.90)
     );
 
@@ -836,14 +1106,14 @@ void main() {
         0.95
     );
 
-    // Area kosong harus benar-benar transparan.
+    // Area kosong wajib transparan.
     if (alpha <= 0.001) {
         fragColor = vec4(0.0);
         return;
     }
 
-    // Jangan kalikan color dengan alpha.
-    // Flutter akan melakukan compositing terhadap bg.png.
+    // Jangan gunakan color *= alpha.
+    // Alpha diserahkan ke proses compositing Flutter.
     fragColor = vec4(
         color,
         alpha
