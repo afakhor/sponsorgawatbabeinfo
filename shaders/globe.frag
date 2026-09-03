@@ -1231,12 +1231,12 @@ void main() {
         uv * 2.0 -
         1.0;
 
-    // Koreksi aspect ratio
+    // Koreksi aspect ratio.
     p.x *=
         iResolution.x /
         iResolution.y;
 
-    // Posisi globe
+    // Posisi globe.
     vec2 center =
         vec2(
             0.0,
@@ -1257,99 +1257,149 @@ void main() {
         );
 
     float globeR =
-    GLOBE_RADIUS;
+        GLOBE_RADIUS;
 
-    
     // --------------------------------------------------
-// BUIH NEBULA LOOPING
-// --------------------------------------------------
+    // WARNA AWAL
+    // --------------------------------------------------
 
-vec3 color =
-    vec3(
-        0.001,
-        0.0015,
-        0.003
-    );
+    // Jangan gunakan warna hitam sebagai background.
+    // Area kosong akan menjadi alpha 0.0.
+    vec3 color =
+        vec3(
+            0.0
+        );
 
-// Buih nebula berada paling belakang
-color +=
-    spaceBubbles(
-        p,
-        iTime
-    ) *
-    1.8;
+    // --------------------------------------------------
+    // BUIH NEBULA
+    // --------------------------------------------------
 
-// Bintang kecil tambahan
-float stars =
-    hash2(
-        floor(
-            p *
-            110.0
-        )
-    );
+    vec3 bubbleLayer =
+        spaceBubbles(
+            p,
+            iTime
+        ) *
+        1.8;
 
-float starMask =
-    step(
-        0.992,
-        stars
-    );
+    color +=
+        bubbleLayer;
 
-color +=
-    vec3(
-        0.70,
-        0.85,
-        1.0
-    ) *
-    starMask *
-    0.30;
+    // Intensitas buih untuk menentukan alpha.
+    float bubbleBrightness =
+        max(
+            max(
+                bubbleLayer.r,
+                bubbleLayer.g
+            ),
+            bubbleLayer.b
+        );
 
+    float bubbleVisibility =
+        smoothstep(
+            0.015,
+            0.20,
+            bubbleBrightness
+        );
+
+    // Target alpha buih = 0.7.
+    float bubbleAlpha =
+        bubbleVisibility *
+        0.70;
+
+    // --------------------------------------------------
+    // BINTANG
+    // --------------------------------------------------
+
+    float stars =
+        hash2(
+            floor(
+                p *
+                110.0
+            )
+        );
+
+    float starMask =
+        step(
+            0.992,
+            stars
+        );
+
+    vec3 starColor =
+        vec3(
+            0.70,
+            0.85,
+            1.0
+        ) *
+        starMask *
+        0.30;
+
+    color +=
+        starColor;
+
+    // Bintang juga ikut transparan, tetapi tidak
+    // menjadi background hitam.
+    float starAlpha =
+        starMask *
+        0.80;
 
     // --------------------------------------------------
     // ATMOSFER LUAR
     // --------------------------------------------------
 
     float atmosphere =
-    globeAtmosphere(
-        radius,
-        angle,
-        iTime
-    );
+        globeAtmosphere(
+            radius,
+            angle,
+            iTime
+        );
 
-float lowerBowl =
-    1.0 -
-    smoothstep(
-        -0.18,
-        0.35,
-        delta.y
-    );
+    float lowerBowl =
+        1.0 -
+        smoothstep(
+            -0.18,
+            0.35,
+            delta.y
+        );
 
-vec3 blueAtmosphere =
-    vec3(
-        0.015,
-        0.32,
-        1.0
-    );
+    vec3 blueAtmosphere =
+        vec3(
+            0.015,
+            0.32,
+            1.0
+        );
 
-vec3 orangeAtmosphere =
-    vec3(
-        1.0,
-        0.16,
-        0.008
-    );
+    vec3 orangeAtmosphere =
+        vec3(
+            1.0,
+            0.16,
+            0.008
+        );
 
-vec3 atmosphereColor =
-    mix(
-        blueAtmosphere,
-        orangeAtmosphere,
-        lowerBowl
-    );
+    vec3 atmosphereColor =
+        mix(
+            blueAtmosphere,
+            orangeAtmosphere,
+            lowerBowl
+        );
 
-color +=
-    atmosphereColor *
-    atmosphere *
-    glow *
-    1.45;
+    color +=
+        atmosphereColor *
+        atmosphere *
+        glow *
+        1.45;
 
+    // Alpha atmosfer berdasarkan intensitas atmosfer.
+    float atmosphereVisibility =
+        smoothstep(
+            0.01,
+            0.18,
+            atmosphere
+        );
+
+    // Target alpha atmosfer = 0.8.
+    float atmosphereAlpha =
+        atmosphereVisibility *
+        0.80;
 
     // --------------------------------------------------
     // PETIR DI LUAR GLOBE
@@ -1363,57 +1413,83 @@ color +=
         );
 
     vec3 boltAura =
-    vec3(
-        1.0,
-        0.10,
-        0.001
-    ) *
-    bolt *
-    2.2;
+        vec3(
+            1.0,
+            0.10,
+            0.001
+        ) *
+        bolt *
+        2.2;
 
-vec3 boltCore =
-    vec3(
-        1.0,
-        0.88,
-        0.40
-    ) *
-    pow(
-        max(
-            bolt,
-            0.0
-        ),
-        1.25
-    ) *
-    5.5;
+    vec3 boltCore =
+        vec3(
+            1.0,
+            0.88,
+            0.40
+        ) *
+        pow(
+            max(
+                bolt,
+                0.0
+            ),
+            1.25
+        ) *
+        5.5;
 
-color +=
-    boltAura;
+    color +=
+        boltAura;
 
-color +=
-    boltCore;
+    color +=
+        boltCore;
 
-float vortexCenter =
-    exp(
-        -radius *
-        7.0
-    ) *
-    smoothstep(
-        0.32,
-        0.0,
-        radius
-    );
+    float boltVisibility =
+        smoothstep(
+            0.01,
+            0.25,
+            bolt
+        );
 
-color +=
-    vec3(
-        1.0,
-        0.16,
-        0.002
-    ) *
-    vortexCenter *
-    0.22;
+    // Target alpha petir = 0.8.
+    float boltAlpha =
+        boltVisibility *
+        0.80;
 
+    // --------------------------------------------------
+    // PUSARAN TENGAH
+    // --------------------------------------------------
 
-    // Kilatan global
+    float vortexCenter =
+        exp(
+            -radius *
+            7.0
+        ) *
+        smoothstep(
+            0.32,
+            0.0,
+            radius
+        );
+
+    color +=
+        vec3(
+            1.0,
+            0.16,
+            0.002
+        ) *
+        vortexCenter *
+        0.22;
+
+    float vortexAlpha =
+        smoothstep(
+            0.01,
+            0.15,
+            vortexCenter
+        ) *
+        0.80;
+
+    // --------------------------------------------------
+    // FLASH GLOBAL
+    // --------------------------------------------------
+
     float flash =
         lightningFlash(
             iTime
@@ -1428,330 +1504,345 @@ color +=
         flash *
         0.22;
 
+    float flashAlpha =
+        smoothstep(
+            0.01,
+            0.35,
+            flash
+        ) *
+        0.80;
+
     // --------------------------------------------------
     // PERMUKAAN GLOBE 3D
     // --------------------------------------------------
 
-   if (radius < globeR) {
-    vec2 sphereUV =
-        delta /
-        globeR;
-
-    float zSquared =
+    // Nilai ini akan menjadi 1.0 di dalam globe
+    // dan 0.0 di luar globe.
+    float globeMask =
         1.0 -
-        dot(
-            sphereUV,
-            sphereUV
+        smoothstep(
+            globeR - 0.008,
+            globeR + 0.008,
+            radius
         );
 
-    if (zSquared > 0.0) {
-        float z =
-            sqrt(
-                zSquared
-            );
+    if (radius < globeR) {
+        vec2 sphereUV =
+            delta /
+            globeR;
 
-        float c =
-            cos(
-                rotY
-            );
-
-        float s =
-            sin(
-                rotY
-            );
-
-        vec2 rotatedXZ =
-            vec2(
-                sphereUV.x * c -
-                z * s,
-
-                sphereUV.x * s +
-                z * c
-            );
-
-        vec3 normal =
-            normalize(
-                vec3(
-                    rotatedXZ.x,
-                    sphereUV.y,
-                    rotatedXZ.y
-                )
-            );
-
-
-vec3 plasma =
-    plasmaEffect(
-        sphereUV,
-        radius,
-        iTime
-    );
-
-
-        // ------------------------------------------
-        // LIGHTING
-        // ------------------------------------------
-
-        vec3 lightDirection =
-            normalize(
-                vec3(
-                    -0.65,
-                    0.40,
-                    0.90
-                )
-            );
-
-        float diffuse =
-            max(
-                0.0,
-                dot(
-                    normal,
-                    lightDirection
-                )
-            );
-
-        float frontLight =
-            smoothstep(
-                -0.20,
-                0.70,
-                normal.z
-            );
-
-        float rim =
-            pow(
-                1.0 -
-                max(
-                    0.0,
-                    normal.z
-                ),
-                3.0
-            );
-
-        // ------------------------------------------
-        // WARNA DASAR GLOBE
-        // ------------------------------------------
-
-        vec3 darkGold =
-            vec3(
-                0.055,
-                0.006,
-                0.001
-            );
-
-        vec3 gold =
-            vec3(
-                0.40,
-                0.075,
-                0.003
-            );
-
-        vec3 brightGold =
-            vec3(
-                1.0,
-                0.58,
-                0.045
-            );
-
-        vec3 globeColor =
-            mix(
-                darkGold,
-                gold,
-                diffuse
-            );
-
-        globeColor =
-            mix(
-                globeColor,
-                brightGold,
-                diffuse *
-                frontLight *
-                0.82
-            );
-
-        // ------------------------------------------
-        // PLASMA GLOBE
-        // ------------------------------------------
-
-        float plasmaVisibility =
-            smoothstep(
-                -0.20,
-                0.60,
-                normal.z
-            );
-
-        globeColor +=
-            plasma *
-            plasmaVisibility *
-            0.75;
-
-        // ------------------------------------------
-        // INTI PLASMA DI TENGAH
-        // ------------------------------------------
-
-        float centerDistance =
-            length(
+        float zSquared =
+            1.0 -
+            dot(
+                sphereUV,
                 sphereUV
             );
 
-        float centerOrb =
-            exp(
-                -centerDistance *
-                15.0
-            );
+        if (zSquared > 0.0) {
+            float z =
+                sqrt(
+                    zSquared
+                );
 
-        float centerOrbRing =
-            exp(
-                -abs(
-                    centerDistance -
-                    0.13
+            float c =
+                cos(
+                    rotY
+                );
+
+            float s =
+                sin(
+                    rotY
+                );
+
+            vec2 rotatedXZ =
+                vec2(
+                    sphereUV.x * c -
+                    z * s,
+
+                    sphereUV.x * s +
+                    z * c
+                );
+
+            vec3 normal =
+                normalize(
+                    vec3(
+                        rotatedXZ.x,
+                        sphereUV.y,
+                        rotatedXZ.y
+                    )
+                );
+
+            vec3 plasma =
+                plasmaEffect(
+                    sphereUV,
+                    radius,
+                    iTime
+                );
+
+            // ------------------------------------------
+            // LIGHTING
+            // ------------------------------------------
+
+            vec3 lightDirection =
+                normalize(
+                    vec3(
+                        -0.65,
+                        0.40,
+                        0.90
+                    )
+                );
+
+            float diffuse =
+                max(
+                    0.0,
+                    dot(
+                        normal,
+                        lightDirection
+                    )
+                );
+
+            float frontLight =
+                smoothstep(
+                    -0.20,
+                    0.70,
+                    normal.z
+                );
+
+            float rim =
+                pow(
+                    1.0 -
+                    max(
+                        0.0,
+                        normal.z
+                    ),
+                    3.0
+                );
+
+            // ------------------------------------------
+            // WARNA DASAR GLOBE
+            // ------------------------------------------
+
+            vec3 darkGold =
+                vec3(
+                    0.055,
+                    0.006,
+                    0.001
+                );
+
+            vec3 gold =
+                vec3(
+                    0.40,
+                    0.075,
+                    0.003
+                );
+
+            vec3 brightGold =
+                vec3(
+                    1.0,
+                    0.58,
+                    0.045
+                );
+
+            vec3 globeColor =
+                mix(
+                    darkGold,
+                    gold,
+                    diffuse
+                );
+
+            globeColor =
+                mix(
+                    globeColor,
+                    brightGold,
+                    diffuse *
+                    frontLight *
+                    0.82
+                );
+
+            // ------------------------------------------
+            // PLASMA GLOBE
+            // ------------------------------------------
+
+            float plasmaVisibility =
+                smoothstep(
+                    -0.20,
+                    0.60,
+                    normal.z
+                );
+
+            globeColor +=
+                plasma *
+                plasmaVisibility *
+                0.75;
+
+            // ------------------------------------------
+            // INTI PLASMA
+            // ------------------------------------------
+
+            float centerDistance =
+                length(
+                    sphereUV
+                );
+
+            float centerOrb =
+                exp(
+                    -centerDistance *
+                    15.0
+                );
+
+            float centerOrbRing =
+                exp(
+                    -abs(
+                        centerDistance -
+                        0.13
+                    ) *
+                    70.0
+                );
+
+            vec3 centerOrbColor =
+                vec3(
+                    1.0,
+                    0.04,
+                    0.60
                 ) *
-                70.0
-            );
+                centerOrb *
+                2.4;
 
-        vec3 centerOrbColor =
-            vec3(
-                1.0,
-                0.04,
-                0.60
-            ) *
-            centerOrb *
-            2.4;
-
-        centerOrbColor +=
-            vec3(
-                0.20,
-                0.50,
-                1.0
-            ) *
-            centerOrbRing *
-            1.7;
-
-        globeColor +=
-            centerOrbColor *
-            plasmaVisibility;
-
-        // ------------------------------------------
-        // TEXTURE BABE.INFO
-        // ------------------------------------------
-
-        float longitude =
-            atan(
-                rotatedXZ.x,
-                rotatedXZ.y
-            );
-
-        float latitude =
-            asin(
-                clamp(
-                    normal.y,
-                    -1.0,
+            centerOrbColor +=
+                vec3(
+                    0.20,
+                    0.50,
                     1.0
-                )
-            );
+                ) *
+                centerOrbRing *
+                1.7;
 
-        vec2 textUV =
-            vec2(
-                longitude /
-                TWO_PI +
-                0.5,
+            globeColor +=
+                centerOrbColor *
+                plasmaVisibility;
 
-                latitude /
-                PI +
-                0.5
-            );
+            // ------------------------------------------
+            // TEXTURE BABE.INFO
+            // ------------------------------------------
 
-        textUV.x =
-            fract(
-                textUV.x -
-                windRot *
-                0.04
-            );
+            float longitude =
+                atan(
+                    rotatedXZ.x,
+                    rotatedXZ.y
+                );
 
-        textUV.y =
-            clamp(
-                textUV.y,
-                0.001,
-                0.999
-            );
+            float latitude =
+                asin(
+                    clamp(
+                        normal.y,
+                        -1.0,
+                        1.0
+                    )
+                );
 
-        vec4 textPixel =
-            texture(
-                textTexture,
-                textUV
-            );
+            vec2 textUV =
+                vec2(
+                    longitude /
+                    TWO_PI +
+                    0.5,
 
-        float textAlpha =
-            smoothstep(
-                0.015,
-                0.12,
-                textPixel.a
-            );
+                    latitude /
+                    PI +
+                    0.5
+                );
 
-        vec3 textColor =
-            vec3(
-                1.0,
-                0.82,
-                0.25
-            );
+            textUV.x =
+                fract(
+                    textUV.x -
+                    windRot *
+                    0.04
+                );
 
-        float textLight =
-            0.80 +
-            diffuse *
-            0.65;
+            textUV.y =
+                clamp(
+                    textUV.y,
+                    0.001,
+                    0.999
+                );
 
-        globeColor =
-            mix(
-                globeColor,
-                textColor *
-                textLight,
-                textAlpha *
-                0.96
-            );
+            vec4 textPixel =
+                texture(
+                    textTexture,
+                    textUV
+                );
 
-        // ------------------------------------------
-        // PETIR PADA PERMUKAAN
-        // ------------------------------------------
+            float textAlpha =
+                smoothstep(
+                    0.015,
+                    0.12,
+                    textPixel.a
+                );
 
-        globeColor +=
-            vec3(
-                1.0,
-                0.20,
-                0.005
-            ) *
-            bolt *
-            0.30;
+            vec3 textColor =
+                vec3(
+                    1.0,
+                    0.82,
+                    0.25
+                );
 
-        globeColor +=
-            vec3(
-                1.0,
-                0.72,
-                0.16
-            ) *
-            flash *
-            0.48;
+            float textLight =
+                0.80 +
+                diffuse *
+                0.65;
 
-        // Rim globe
-        globeColor +=
-            vec3(
-                1.0,
-                0.18,
-                0.002
-            ) *
-            rim *
-            1.55;
+            globeColor =
+                mix(
+                    globeColor,
+                    textColor *
+                    textLight,
+                    textAlpha *
+                    0.96
+                );
 
-        color =
-    mix(
-        color,
-        globeColor,
-        1.0
-    );
+            // ------------------------------------------
+            // PETIR PADA PERMUKAAN
+            // ------------------------------------------
 
+            globeColor +=
+                vec3(
+                    1.0,
+                    0.20,
+                    0.005
+                ) *
+                bolt *
+                0.30;
+
+            globeColor +=
+                vec3(
+                    1.0,
+                    0.72,
+                    0.16
+                ) *
+                flash *
+                0.48;
+
+            // Rim globe.
+            globeColor +=
+                vec3(
+                    1.0,
+                    0.18,
+                    0.002
+                ) *
+                rim *
+                1.55;
+
+            // Globe menimpa warna luar hanya di area globe.
+            color =
+                mix(
+                    color,
+                    globeColor,
+                    globeMask
+                );
+        }
     }
-}
-
 
     // --------------------------------------------------
-    // VIGNETTE DAN COLOR GRADING
+    // VIGNETTE
     // --------------------------------------------------
 
     float vignette =
@@ -1768,6 +1859,8 @@ vec3 plasma =
             0.0
         );
 
+    // Color grading hanya pada warna.
+    // Tidak digunakan untuk membuat background.
     color =
         pow(
             max(
@@ -1779,16 +1872,67 @@ vec3 plasma =
             )
         );
 
+    // --------------------------------------------------
+    // ALPHA AKHIR
+    // --------------------------------------------------
+
+    // Globe       = 0.90
+    // Atmosfer    = 0.80
+    // Petir       = 0.80
+    // Buih        = 0.70
+    // Bintang     = 0.80
+    // Background  = 0.00
+
+    float finalAlpha =
+        globeMask *
+        0.90;
+
+    finalAlpha =
+        max(
+            finalAlpha,
+            atmosphereAlpha
+        );
+
+    finalAlpha =
+        max(
+            finalAlpha,
+            boltAlpha
+        );
+
+    finalAlpha =
+        max(
+            finalAlpha,
+            vortexAlpha
+        );
+
+    finalAlpha =
+        max(
+            finalAlpha,
+            flashAlpha
+        );
+
+    finalAlpha =
+        max(
+            finalAlpha,
+            bubbleAlpha
+        );
+
+    finalAlpha =
+        max(
+            finalAlpha,
+            starAlpha
+        );
+
+    finalAlpha =
+        clamp(
+            finalAlpha,
+            0.0,
+            1.0
+        );
+
     fragColor =
         vec4(
             color,
-            1.0
+            finalAlpha
         );
-float globeMask =
-    smoothstep(
-        globeR,
-        globeR - 0.008,
-        radius
-    );
-
 }
