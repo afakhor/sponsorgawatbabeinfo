@@ -87,21 +87,33 @@ class _SponsorBabePageState extends State<SponsorBabePage> with SingleTickerProv
     super.dispose(); 
   }
 
-  @override 
+   @override 
   Widget build(BuildContext context) {
-    if (error != null) {
+    // 1. DUA KONDISI INITIAL (ERROR / LOADING)
+    if (error != null || fragmentProgram == null || textTexture == null) {
       return Scaffold(
-        backgroundColor: Colors.black, 
-        body: Center(
-          child: Text('Error:\n$error', style: const TextStyle(color: Colors.redAccent)),
+        backgroundColor: Colors.transparent, // Tetap transparan
+        body: Stack(
+          children: [
+            // Background Utama
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/bg.png',
+                fit: BoxFit.cover,
+              ),
+            ),
+            // Tampilan Status (Error / Loading Spinner)
+            Center(
+              child: error != null
+                  ? Text(
+                      'Error:\n$error',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.redAccent),
+                    )
+                  : const CircularProgressIndicator(color: Color(0xFFFFD21F)),
+            ),
+          ],
         ),
-      );
-    }
-
-    if (fragmentProgram == null || textTexture == null) {
-      return const Scaffold(
-        backgroundColor: Colors.black, 
-        body: Center(child: CircularProgressIndicator(color: Color(0xFFFFD21F))),
       );
     }
 
@@ -117,7 +129,7 @@ class _SponsorBabePageState extends State<SponsorBabePage> with SingleTickerProv
         backgroundColor: Colors.transparent,
         body: Stack(
           children: [
-            // BACKGROUND GAMBAR ASSETS/IMAGES/BG.PNG
+            // BACKGROUND GAMBAR UTAMA
             Positioned.fill(
               child: Image.asset(
                 'assets/images/bg.png',
