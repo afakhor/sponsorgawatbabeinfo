@@ -67,17 +67,68 @@ class _SponsorBabePageState extends State<SponsorBabePage>
 
   String? _error;
 
+  // Mencegah dialog share tampil dua kali.
+  bool _postRecordDialogShowing = false;
+
   @override
   void initState() {
     super.initState();
 
     _musicController = MusicController();
 
+    // Memantau saat rekaman selesai otomatis maupun manual.
+    _musicController.addListener(
+      _handleRecordingFinished,
+    );
+
     _ticker = createTicker(
       _onTick,
     )..start();
 
     _loadShaderAndTexture();
+  }
+
+  // ==================================================
+  // DETEKSI REKAMAN SELESAI
+  // ==================================================
+
+  void _handleRecordingFinished() {
+    if (!mounted) {
+      return;
+    }
+
+    // Masih merekam, jangan tampilkan dialog.
+    if (_musicController.isRecording) {
+      return;
+    }
+
+    // Belum ada file rekaman.
+    if (_musicController.recordedPath == null ||
+        _musicController.recordedPath!.isEmpty) {
+      return;
+    }
+
+    // Dialog sudah sedang ditampilkan.
+    if (_postRecordDialogShowing) {
+      return;
+    }
+
+    _postRecordDialogShowing = true;
+
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) async {
+        if (!mounted) {
+          _postRecordDialogShowing = false;
+          return;
+        }
+
+        await _musicController.showPostRecordDialog(
+          context,
+        );
+
+        _postRecordDialogShowing = false;
+      },
+    );
   }
 
   // ==================================================
@@ -109,7 +160,10 @@ class _SponsorBabePageState extends State<SponsorBabePage>
 
     // Membatasi lonjakan waktu setelah aplikasi kembali
     // dari background.
-    delta = delta.clamp(0.0, 0.05);
+    delta = delta.clamp(
+      0.0,
+      0.05,
+    );
 
     setState(() {
       _time += delta;
@@ -201,6 +255,10 @@ class _SponsorBabePageState extends State<SponsorBabePage>
   void dispose() {
     _ticker.dispose();
 
+    _musicController.removeListener(
+      _handleRecordingFinished,
+    );
+
     _textTexture?.dispose();
 
     _musicController.dispose();
@@ -228,7 +286,10 @@ class _SponsorBabePageState extends State<SponsorBabePage>
 
     return AnimatedBuilder(
       animation: _musicController,
-      builder: (BuildContext context, Widget? child) {
+      builder: (
+        BuildContext context,
+        Widget? child,
+      ) {
         final bool isRecording =
             _musicController.isRecording;
 
@@ -270,7 +331,8 @@ class _SponsorBabePageState extends State<SponsorBabePage>
                     program: program,
                     textTexture: texture,
                     time: _time,
-                    beatPulse: _musicController.beatPulse,
+                    beatPulse:
+                        _musicController.beatPulse,
                   ),
                 ),
 
@@ -390,7 +452,8 @@ class _SponsorBabePageState extends State<SponsorBabePage>
               ),
               color: Colors.black.withOpacity(0.70),
               child: RunningText(
-                text: _musicController.editableTitle,
+                text:
+                    _musicController.editableTitle,
                 color: Colors.amber,
                 fontSize: 16,
               ),
@@ -407,7 +470,8 @@ class _SponsorBabePageState extends State<SponsorBabePage>
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.60),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius:
+                  BorderRadius.circular(14),
               border: Border.all(
                 color: Colors.amber.withOpacity(0.40),
               ),
@@ -444,7 +508,8 @@ class _SponsorBabePageState extends State<SponsorBabePage>
             ),
             color: Colors.black.withOpacity(0.70),
             child: RunningText(
-              text: _musicController.editableBottomTitle,
+              text:
+                  _musicController.editableBottomTitle,
               color: Colors.white70,
               fontSize: 14,
             ),
@@ -459,17 +524,14 @@ class _SponsorBabePageState extends State<SponsorBabePage>
           child: Center(
             child: GestureDetector(
               onTap: () async {
-                await _musicController.stopRecord();
-
-                if (!mounted) {
+                if (!_musicController.isRecording) {
                   return;
                 }
 
-                if (_musicController.recordedPath != null) {
-                  await _musicController.showPostRecordDialog(
-                    context,
-                  );
-                }
+                // stopRecord() akan mengisi recordedPath
+                // kemudian listener otomatis menampilkan
+                // dialog share WhatsApp.
+                await _musicController.stopRecord();
               },
               child: Container(
                 width: 78,
@@ -514,7 +576,8 @@ class _SponsorBabePageState extends State<SponsorBabePage>
             ),
             decoration: BoxDecoration(
               color: Colors.red,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius:
+                  BorderRadius.circular(20),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
