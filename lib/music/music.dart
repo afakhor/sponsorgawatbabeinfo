@@ -1,5 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:audio_decode/audio_decode.dart';
+
+import 'beat_detector.dart';
 
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:file_picker/file_picker.dart';
@@ -161,6 +166,14 @@ class MusicController extends ChangeNotifier {
   String musicName = 'Belum ada musik';
   String editableTitle = 'SPONSOR BABE INFO GAWAT • TAP UNTUK EDIT JUDUL';
   String editableBottomTitle = 'Babe Info Gawat - Tap untuk edit bawah';
+
+   List<double> beatTimes = <double>[];
+   int currentBeatIndex = 0;
+   double beatPulse = 0.0;
+   bool isAnalyzingBeats = false;
+   String? beatError;
+   int _beatGeneration = 0;
+
 
   List<TimedSentence> lyricSentences = [];
   List<String> get lyricLines => lyricSentences.map((e) => e.text).toList();
