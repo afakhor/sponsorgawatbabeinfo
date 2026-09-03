@@ -35,21 +35,7 @@ class GlobeShaderPainter extends CustomPainter {
     final ui.FragmentShader shader =
         program.fragmentShader();
 
-    // --------------------------------------------------
-    // URUTAN FLOAT SHADER
-    // --------------------------------------------------
-    //
-    // 0 = iResolution.x
-    // 1 = iResolution.y
-    // 2 = iTime
-    // 3 = rotY
-    // 4 = windRot
-    // 5 = glow
-    // 6 = beatPulse
-    // 7 = rotX
-    // 8 = axisTilt
-    //
-
+    // 0,1 = iResolution.x/y
     shader.setFloat(
       0,
       size.width,
@@ -60,43 +46,43 @@ class GlobeShaderPainter extends CustomPainter {
       size.height,
     );
 
+    // 2 = iTime
     shader.setFloat(
       2,
       time,
     );
 
-    // Rotasi globe dari satu jari dan inertia.
-    // Tidak menggunakan beatPulse.
+    // 3 = rotY
     shader.setFloat(
       3,
       rotationY,
     );
 
-    // Gerakan texture normal.
+    // 4 = windRot
     shader.setFloat(
       4,
       time * 1.20,
     );
 
-    // Glow dasar.
+    // 5 = glow
     shader.setFloat(
       5,
       4.0,
     );
 
-    // Beat hanya untuk efek wave/buih/atmosfer.
+    // 6 = beatPulse
     shader.setFloat(
       6,
-      beatPulse,
+      beatPulse.clamp(0.0, 1.0),
     );
 
-    // Rotasi vertikal dari drag satu jari.
+    // 7 = rotX
     shader.setFloat(
       7,
       rotationX,
     );
 
-    // Kemiringan poros dari dua jari.
+    // 8 = axisTilt
     shader.setFloat(
       8,
       axisTilt,
@@ -110,7 +96,9 @@ class GlobeShaderPainter extends CustomPainter {
     final Paint paint =
         Paint()
           ..shader = shader
-          ..filterQuality = FilterQuality.high;
+          ..blendMode = BlendMode.srcOver
+          ..filterQuality =
+              FilterQuality.high;
 
     canvas.drawRect(
       Offset.zero & size,
@@ -165,26 +153,19 @@ class _GlobeShaderWidgetState
   late final AnimationController
       _axisResetController;
 
-  // Rotasi globe.
   double _rotationX = 0.0;
   double _rotationY = 0.0;
-
-  // Kemiringan/poros globe.
   double _axisTilt = 0.0;
 
-  // Kecepatan rotasi terakhir.
   double _velocityX = 0.0;
   double _velocityY = 0.0;
 
-  // Data posisi pointer.
   final Map<int, Offset> _pointers =
       <int, Offset>{};
 
-  // Data dua jari.
   double? _lastTwoFingerAngle;
   Offset? _lastTwoFingerCenter;
 
-  // Nilai poros sebelum reset.
   double _axisTiltAtReset = 0.0;
 
   @override
@@ -212,64 +193,62 @@ class _GlobeShaderWidgetState
     );
   }
 
-  // ==================================================
-  // SATU JARI: ROTASI GLOBE
-  // ==================================================
+  // ==========================================
+  // SATU JARI
+  // ==========================================
 
   void _handleOneFingerMove(
     Offset delta,
   ) {
-    // Sensitivitas horizontal.
     const double horizontalSensitivity =
         0.010;
 
-    // Sensitivitas vertikal.
     const double verticalSensitivity =
         0.008;
 
-    final double deltaY =
+    final double horizontalDelta =
         delta.dx *
         horizontalSensitivity;
 
-    final double deltaX =
+    final double verticalDelta =
         delta.dy *
         verticalSensitivity;
 
     setState(() {
-      _rotationY += deltaY;
-      _rotationX += deltaX;
+      _rotationY += horizontalDelta;
+      _rotationX += verticalDelta;
 
-      // Batasi rotasi vertikal supaya globe
-      // tidak terbalik terlalu ekstrem.
       _rotationX =
           _rotationX.clamp(
         -1.35,
         1.35,
       );
 
-      // Kecepatan untuk inertia.
-      _velocityY = deltaY;
-      _velocityX = deltaX;
+      _velocityY =
+          horizontalDelta;
+
+      _velocityX =
+          verticalDelta;
     });
   }
 
-  // ==================================================
-  // DUA JARI: POROS/KEMIRINGAN GLOBE
-  // ==================================================
+  // ==========================================
+  // DUA JARI
+  // ==========================================
 
   void _handleTwoFingerMove() {
     if (_pointers.length < 2) {
       return;
     }
 
-    final List<Offset> positions =
+    final List<Offset> values =
         _pointers.values.toList();
 
     final Offset first =
-        positions[0];
+        values[0];
 
     final Offset second =
-        positions[1];
+        values[1];
 
     final Offset vector =
         second - first;
@@ -301,14 +280,14 @@ class _GlobeShaderWidgetState
         angle -
         _lastTwoFingerAngle!;
 
-    // Menghindari loncatan ketika sudut melewati
-    // -PI ke PI.
     if (angleDelta > math.pi) {
-      angleDelta -= 2.0 * math.pi;
+      angleDelta -=
+          2.0 * math.pi;
     }
 
     if (angleDelta < -math.pi) {
-      angleDelta += 2.0 * math.pi;
+      angleDelta +=
+          2.0 * math.pi;
     }
 
     final Offset centerDelta =
@@ -319,11 +298,9 @@ class _GlobeShaderWidgetState
     _lastTwoFingerCenter = center;
 
     setState(() {
-      // Rotasi dua jari memutar poros globe.
-      _axisTilt += angleDelta;
+      _axisTilt +=
+          angleDelta;
 
-      // Gerakan dua jari naik/turun juga memberi
-      // sedikit kemiringan poros.
       _axisTilt +=
           centerDelta.dy * 0.004;
 
@@ -335,9 +312,9 @@ class _GlobeShaderWidgetState
     });
   }
 
-  // ==================================================
-  // POINTER DOWN
-  // ==================================================
+  // ==========================================
+  // POINTER
+  // ==========================================
 
   void _onPointerDown(
     PointerDownEvent event,
@@ -353,10 +330,6 @@ class _GlobeShaderWidgetState
       _lastTwoFingerCenter = null;
     }
   }
-
-  // ==================================================
-  // POINTER MOVE
-  // ==================================================
 
   void _onPointerMove(
     PointerMoveEvent event,
@@ -379,14 +352,10 @@ class _GlobeShaderWidgetState
 
     if (_pointers.length == 1) {
       _handleOneFingerMove(delta);
-    } else if (_pointers.length >= 2) {
+    } else {
       _handleTwoFingerMove();
     }
   }
-
-  // ==================================================
-  // POINTER UP
-  // ==================================================
 
   void _onPointerUp(
     PointerUpEvent event,
@@ -404,10 +373,6 @@ class _GlobeShaderWidgetState
     }
   }
 
-  // ==================================================
-  // POINTER CANCEL
-  // ==================================================
-
   void _onPointerCancel(
     PointerCancelEvent event,
   ) {
@@ -422,9 +387,9 @@ class _GlobeShaderWidgetState
     }
   }
 
-  // ==================================================
-  // INERTIA ROTASI SATU JARI
-  // ==================================================
+  // ==========================================
+  // INERTIA
+  // ==========================================
 
   void _startInertia() {
     if (_velocityX.abs() < 0.0001 &&
@@ -444,12 +409,8 @@ class _GlobeShaderWidgetState
   }
 
   void _animateInertia() {
-    if (!mounted) {
-      return;
-    }
-
-    if (_pointers.isNotEmpty) {
-      _inertiaController.stop();
+    if (!mounted ||
+        _pointers.isNotEmpty) {
       return;
     }
 
@@ -490,9 +451,9 @@ class _GlobeShaderWidgetState
     }
   }
 
-  // ==================================================
-  // RESET POROS SETELAH DUA JARI LEPAS
-  // ==================================================
+  // ==========================================
+  // RESET POROS
+  // ==========================================
 
   void _startAxisReset() {
     if (_axisTilt.abs() < 0.0001) {
@@ -510,12 +471,8 @@ class _GlobeShaderWidgetState
   }
 
   void _animateAxisReset() {
-    if (!mounted) {
-      return;
-    }
-
-    if (_pointers.isNotEmpty) {
-      _axisResetController.stop();
+    if (!mounted ||
+        _pointers.isNotEmpty) {
       return;
     }
 
@@ -535,9 +492,9 @@ class _GlobeShaderWidgetState
     }
   }
 
-  // ==================================================
+  // ==========================================
   // BUILD
-  // ==================================================
+  // ==========================================
 
   @override
   Widget build(
@@ -546,14 +503,19 @@ class _GlobeShaderWidgetState
     return Listener(
       behavior:
           HitTestBehavior.opaque,
+
       onPointerDown:
           _onPointerDown,
+
       onPointerMove:
           _onPointerMove,
+
       onPointerUp:
           _onPointerUp,
+
       onPointerCancel:
           _onPointerCancel,
+
       child: SizedBox.expand(
         child: RepaintBoundary(
           child: CustomPaint(
@@ -582,13 +544,11 @@ class _GlobeShaderWidgetState
 
   @override
   void dispose() {
-    _inertiaController
-        .removeListener(
+    _inertiaController.removeListener(
       _animateInertia,
     );
 
-    _axisResetController
-        .removeListener(
+    _axisResetController.removeListener(
       _animateAxisReset,
     );
 
