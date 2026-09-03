@@ -182,4 +182,4 @@ class BeatDetector {
     // dibandingkan dengan energi sekitar.
     return value;
   }).toList();
-}
+}}
