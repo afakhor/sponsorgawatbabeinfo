@@ -4,8 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:sherpa_onnx/sherpa_onnx.dart'
-    as sherpa;
+import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
 import 'globes/globe.dart';
 import 'music/music.dart';
@@ -13,7 +12,7 @@ import 'music/music.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Wajib sebelum menggunakan sherpa_onnx.
+  // Wajib dipanggil sebelum menggunakan sherpa_onnx.
   sherpa.initBindings();
 
   runApp(
@@ -27,17 +26,14 @@ class SponsorBabeApp extends StatelessWidget {
   });
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
+  Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Sponsor Babe',
       theme: ThemeData(
         brightness: Brightness.dark,
         useMaterial3: true,
-        scaffoldBackgroundColor:
-            Colors.transparent,
+        scaffoldBackgroundColor: Colors.transparent,
       ),
       home: const SponsorBabePage(),
     );
@@ -55,153 +51,141 @@ class SponsorBabePage extends StatefulWidget {
   }
 }
 
-class _SponsorBabePageState
-    extends State<SponsorBabePage>
+class _SponsorBabePageState extends State<SponsorBabePage>
     with SingleTickerProviderStateMixin {
-  ui.FragmentProgram? fragmentProgram;
-  ui.Image? textTexture;
+  ui.FragmentProgram? _fragmentProgram;
+  ui.Image? _textTexture;
 
-  late final Ticker ticker;
-  late final MusicController musicController;
+  late final Ticker _ticker;
+  late final MusicController _musicController;
 
-  final DraggableScrollableController
-      sheetController =
+  final DraggableScrollableController _sheetController =
       DraggableScrollableController();
 
-  double time = 0.0;
-  Duration? previousElapsed;
-  String? error;
+  Duration? _previousElapsed;
+  double _time = 0.0;
+
+  String? _error;
 
   @override
   void initState() {
     super.initState();
 
-    musicController =
-        MusicController();
+    _musicController = MusicController();
 
-    musicController.addListener(
-      _onMusicChanged,
-    );
-
-    ticker = createTicker(
+    _ticker = createTicker(
       _onTick,
     )..start();
 
     _loadShaderAndTexture();
   }
 
-  // ==========================================
-  // LISTENER MUSIC CONTROLLER
-  // ==========================================
+  // ==================================================
+  // TICKER
+  // ==================================================
 
-  void _onMusicChanged() {
+  void _onTick(Duration elapsed) {
     if (!mounted) {
       return;
     }
 
-    setState(() {});
-  }
-
-  // ==========================================
-  // ANIMATION TIME SHADER
-  // ==========================================
-
-  void _onTick(
-    Duration elapsed,
-  ) {
-    if (!mounted) {
-      return;
-    }
-
-    if (previousElapsed == null) {
-      previousElapsed = elapsed;
+    if (_previousElapsed == null) {
+      _previousElapsed = elapsed;
       return;
     }
 
     final Duration difference =
-        elapsed -
-        previousElapsed!;
+        elapsed - _previousElapsed!;
 
-    previousElapsed = elapsed;
+    _previousElapsed = elapsed;
 
-    final double delta =
-        (difference.inMicroseconds /
-                Duration.microsecondsPerSecond)
-            .clamp(0.0, 0.05);
+    double delta =
+        difference.inMicroseconds /
+        Duration.microsecondsPerSecond;
+
+    if (!delta.isFinite || delta < 0.0) {
+      delta = 0.0;
+    }
+
+    // Membatasi lonjakan waktu setelah aplikasi kembali
+    // dari background.
+    delta = delta.clamp(0.0, 0.05);
 
     setState(() {
-      time += delta;
+      _time += delta;
     });
   }
 
-  // ==========================================
+  // ==================================================
   // LOAD SHADER DAN TEXTURE
-  // ==========================================
+  // ==================================================
 
   Future<void> _loadShaderAndTexture() async {
+    ui.Image? loadedImage;
+
     try {
-      final ui.FragmentProgram program =
+      final ui.FragmentProgram loadedProgram =
           await ui.FragmentProgram.fromAsset(
         'shaders/globe.frag',
       );
 
-      final ByteData data =
-          await rootBundle.load(
+      final ByteData data = await rootBundle.load(
         'assets/images/babe_info.png',
       );
 
-      final Uint8List bytes =
-          data.buffer.asUint8List(
+      final Uint8List bytes = data.buffer.asUint8List(
         data.offsetInBytes,
         data.lengthInBytes,
       );
 
       final ui.Codec codec =
-          await ui.instantiateImageCodec(
-        bytes,
-      );
+          await ui.instantiateImageCodec(bytes);
 
-      final ui.FrameInfo frame =
-          await codec.getNextFrame();
+      try {
+        final ui.FrameInfo frame =
+            await codec.getNextFrame();
 
-      codec.dispose();
+        loadedImage = frame.image;
+      } finally {
+        codec.dispose();
+      }
 
       if (!mounted) {
-        frame.image.dispose();
+        loadedImage?.dispose();
         return;
       }
 
       setState(() {
-        fragmentProgram = program;
-        textTexture = frame.image;
+        _fragmentProgram = loadedProgram;
+        _textTexture = loadedImage;
+        loadedImage = null;
       });
     } catch (e) {
+      loadedImage?.dispose();
+
       if (!mounted) {
         return;
       }
 
       setState(() {
-        error = e.toString();
+        _error = e.toString();
       });
     }
   }
 
-  // ==========================================
-  // LIRIK AKTIF YANG AMAN
-  // ==========================================
+  // ==================================================
+  // LIRIK AKTIF
+  // ==================================================
 
   String _currentLyricText() {
     final List<String> lines =
-        musicController.lyricLines;
+        _musicController.lyricLines;
 
     final int index =
-        musicController.currentLyricIndex;
+        _musicController.currentLyricIndex;
 
-    if (lines.isEmpty) {
-      return '';
-    }
-
-    if (index < 0 ||
+    if (lines.isEmpty ||
+        index < 0 ||
         index >= lines.length) {
       return '';
     }
@@ -209,122 +193,109 @@ class _SponsorBabePageState
     return lines[index];
   }
 
-  // ==========================================
+  // ==================================================
   // DISPOSE
-  // ==========================================
+  // ==================================================
 
   @override
   void dispose() {
-    musicController.removeListener(
-      _onMusicChanged,
-    );
+    _ticker.dispose();
 
-    ticker.dispose();
+    _textTexture?.dispose();
 
-    textTexture?.dispose();
+    _musicController.dispose();
 
-    musicController.dispose();
-
-    sheetController.dispose();
+    _sheetController.dispose();
 
     super.dispose();
   }
 
-  // ==========================================
+  // ==================================================
   // BUILD
-  // ==========================================
+  // ==================================================
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final bool shaderReady =
-        fragmentProgram != null &&
-            textTexture != null;
+  Widget build(BuildContext context) {
+    final ui.FragmentProgram? program =
+        _fragmentProgram;
 
-    if (!shaderReady) {
+    final ui.Image? texture =
+        _textTexture;
+
+    if (program == null || texture == null) {
       return _buildLoadingScreen();
     }
 
-    final bool isRecording =
-        musicController.isRecording;
+    return AnimatedBuilder(
+      animation: _musicController,
+      builder: (BuildContext context, Widget? child) {
+        final bool isRecording =
+            _musicController.isRecording;
 
-    return PopScope(
-      canPop: !isRecording,
-      onPopInvokedWithResult: (
-        bool didPop,
-        Object? result,
-      ) async {
-        if (didPop) {
-          return;
-        }
+        return PopScope(
+          canPop: !isRecording,
+          onPopInvokedWithResult: (
+            bool didPop,
+            Object? result,
+          ) async {
+            if (!didPop &&
+                _musicController.isRecording) {
+              await _musicController.cancelRecord();
+            }
+          },
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Stack(
+              fit: StackFit.expand,
+              children: [
+                // ==================================================
+                // BACKGROUND PALING BAWAH
+                // ==================================================
 
-        if (musicController.isRecording) {
-          await musicController.cancelRecord();
-        }
+                Positioned.fill(
+                  child: Image.asset(
+                    'assets/images/bg.png',
+                    fit: BoxFit.cover,
+                    alignment: Alignment.center,
+                    filterQuality: FilterQuality.high,
+                  ),
+                ),
+
+                // ==================================================
+                // SHADER GLOBE DI ATAS BACKGROUND
+                // ==================================================
+
+                Positioned.fill(
+                  child: GlobeShaderWidget(
+                    program: program,
+                    textTexture: texture,
+                    time: _time,
+                    beatPulse: _musicController.beatPulse,
+                  ),
+                ),
+
+                // ==================================================
+                // OVERLAY RECORDING ATAU MUSIC SHEET
+                // ==================================================
+
+                if (isRecording)
+                  _buildRecordingOverlay()
+                else
+                  _buildMusicSheet(),
+              ],
+            ),
+          ),
+        );
       },
-      child: Scaffold(
-        // Scaffold transparan supaya bg.png terlihat.
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            // ==========================================
-            // BACKGROUND PALING BELAKANG
-            // ==========================================
-
-            Positioned.fill(
-              child: Image.asset(
-                'assets/images/bg.png',
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-              ),
-            ),
-
-            // ==========================================
-            // GLOBE DI ATAS BACKGROUND
-            // ==========================================
-
-            Positioned.fill(
-              child: GlobeShaderWidget(
-                program: fragmentProgram!,
-                textTexture: textTexture!,
-                time: time,
-
-                // Beat hanya memengaruhi wave,
-                // atmosfer, plasma, atau buih.
-                beatPulse:
-                    musicController.beatPulse,
-              ),
-            ),
-
-            // ==========================================
-            // MODE RECORDING
-            // ==========================================
-
-            if (isRecording)
-              _buildRecordingOverlay(),
-
-            // ==========================================
-            // PANEL NORMAL
-            // ==========================================
-
-            if (!isRecording)
-              _buildMusicSheet(),
-          ],
-        ),
-      ),
     );
   }
 
-  // ==========================================
-  // LOADING / ERROR SCREEN
-  // ==========================================
+  // ==================================================
+  // LOADING SCREEN
+  // ==================================================
 
   Widget _buildLoadingScreen() {
     return Scaffold(
-      // Fallback gelap hanya ketika shader belum selesai
-      // dimuat. Tidak memengaruhi layar utama.
       backgroundColor: const Color(0xFF050509),
       body: Stack(
         fit: StackFit.expand,
@@ -332,27 +303,23 @@ class _SponsorBabePageState
           Image.asset(
             'assets/images/bg.png',
             fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
           ),
           Center(
-            child: error != null
+            child: _error != null
                 ? Padding(
-                    padding:
-                        const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(24),
                     child: Text(
-                      'Error:\n$error',
-                      textAlign:
-                          TextAlign.center,
-                      style:
-                          const TextStyle(
-                        color:
-                            Colors.redAccent,
+                      'Shader gagal dimuat:\n\n$_error',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.redAccent,
                         fontSize: 13,
                       ),
                     ),
                   )
                 : const CircularProgressIndicator(
-                    color:
-                        Color(0xFFFFD21F),
+                    color: Color(0xFFFFD21F),
                   ),
           ),
         ],
@@ -360,18 +327,18 @@ class _SponsorBabePageState
     );
   }
 
-  // ==========================================
+  // ==================================================
   // MUSIC SHEET
-  // ==========================================
+  // ==================================================
 
   Widget _buildMusicSheet() {
     return DraggableScrollableSheet(
-      controller: sheetController,
+      controller: _sheetController,
       initialChildSize: 0.28,
       minChildSize: 0.18,
       maxChildSize: 0.85,
       snap: true,
-      snapSizes: const [
+      snapSizes: const <double>[
         0.18,
         0.28,
         0.85,
@@ -382,11 +349,8 @@ class _SponsorBabePageState
       ) {
         return Container(
           decoration: BoxDecoration(
-            // Gunakan opacity agar bg/glow di belakang
-            // tidak terasa tertutup warna hitam pekat.
             color: Colors.black.withOpacity(0.72),
-            borderRadius:
-                const BorderRadius.vertical(
+            borderRadius: const BorderRadius.vertical(
               top: Radius.circular(22),
             ),
             border: const Border(
@@ -396,19 +360,18 @@ class _SponsorBabePageState
             ),
           ),
           child: MusicPanel(
-            controller: musicController,
-            scrollController:
-                scrollController,
-            sheetController: sheetController,
+            controller: _musicController,
+            scrollController: scrollController,
+            sheetController: _sheetController,
           ),
         );
       },
     );
   }
 
-  // ==========================================
+  // ==================================================
   // RECORDING OVERLAY
-  // ==========================================
+  // ==================================================
 
   Widget _buildRecordingOverlay() {
     return Stack(
@@ -421,16 +384,13 @@ class _SponsorBabePageState
           right: 0,
           child: SafeArea(
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(
+              padding: const EdgeInsets.symmetric(
                 horizontal: 12,
                 vertical: 10,
               ),
-              color:
-                  Colors.black.withOpacity(0.70),
+              color: Colors.black.withOpacity(0.70),
               child: RunningText(
-                text: musicController
-                    .editableTitle,
+                text: _musicController.editableTitle,
                 color: Colors.amber,
                 fontSize: 16,
               ),
@@ -444,29 +404,23 @@ class _SponsorBabePageState
           right: 12,
           bottom: 130,
           child: Container(
-            padding:
-                const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color:
-                  Colors.black.withOpacity(0.60),
-              borderRadius:
-                  BorderRadius.circular(14),
+              color: Colors.black.withOpacity(0.60),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: Colors.amber
-                    .withOpacity(0.40),
+                color: Colors.amber.withOpacity(0.40),
               ),
             ),
             child: Text(
               _currentLyricText(),
               textAlign: TextAlign.center,
               maxLines: 3,
-              overflow:
-                  TextOverflow.ellipsis,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.amber,
                 fontSize: 20,
-                fontWeight:
-                    FontWeight.w900,
+                fontWeight: FontWeight.w900,
                 shadows: [
                   Shadow(
                     color: Colors.black,
@@ -484,16 +438,13 @@ class _SponsorBabePageState
           right: 0,
           bottom: 90,
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(
+            padding: const EdgeInsets.symmetric(
               horizontal: 12,
               vertical: 10,
             ),
-            color:
-                Colors.black.withOpacity(0.70),
+            color: Colors.black.withOpacity(0.70),
             child: RunningText(
-              text: musicController
-                  .editableBottomTitle,
+              text: _musicController.editableBottomTitle,
               color: Colors.white70,
               fontSize: 14,
             ),
@@ -508,20 +459,14 @@ class _SponsorBabePageState
           child: Center(
             child: GestureDetector(
               onTap: () async {
-                await musicController
-                    .stopRecord();
+                await _musicController.stopRecord();
 
                 if (!mounted) {
                   return;
                 }
 
-                if (!musicController
-                        .usePreTrim &&
-                    musicController
-                            .recordedPath !=
-                        null) {
-                  await musicController
-                      .showPostRecordDialog(
+                if (_musicController.recordedPath != null) {
+                  await _musicController.showPostRecordDialog(
                     context,
                   );
                 }
@@ -538,20 +483,17 @@ class _SponsorBabePageState
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.red
-                          .withOpacity(0.70),
+                      color: Colors.red.withOpacity(0.70),
                       blurRadius: 25,
                     ),
                   ],
                 ),
                 child: Center(
                   child: Text(
-                    '${musicController.recordSeconds}s',
-                    style:
-                        const TextStyle(
+                    '${_musicController.recordSeconds}s',
+                    style: const TextStyle(
                       color: Colors.white,
-                      fontWeight:
-                          FontWeight.bold,
+                      fontWeight: FontWeight.bold,
                       fontSize: 15,
                     ),
                   ),
@@ -561,43 +503,37 @@ class _SponsorBabePageState
           ),
         ),
 
-        // Status waktu recording.
+        // Status rekaman.
         Positioned(
           top: 56,
           right: 12,
           child: Container(
-            padding:
-                const EdgeInsets.symmetric(
+            padding: const EdgeInsets.symmetric(
               horizontal: 12,
               vertical: 6,
             ),
             decoration: BoxDecoration(
               color: Colors.red,
-              borderRadius:
-                  BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
-              mainAxisSize:
-                  MainAxisSize.min,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
                   width: 8,
                   height: 8,
-                  decoration:
-                      const BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  '${musicController.recordSeconds}s / 60s',
-                  style:
-                      const TextStyle(
+                  '${_musicController.recordSeconds}s / 60s',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
