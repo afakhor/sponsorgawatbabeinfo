@@ -279,86 +279,85 @@ class MusicController extends ChangeNotifier {
   // ==========================================
 
   Future<void> analyzeBeats(
-    String path,
-  ) async {
-    final int generation =
-        ++_beatGeneration;
+  String path,
+) async {
+  final int generation =
+      ++_beatGeneration;
 
-    try {
-      isAnalyzingBeats = true;
-      beatError = null;
-      beatTimes = <double>[];
-      currentBeatIndex = 0;
-      beatPulse = 0.0;
+  try {
+    isAnalyzingBeats = true;
+    beatError = null;
+    beatTimes = <double>[];
+    currentBeatIndex = 0;
+    beatPulse = 0.0;
 
-      notifyListeners();
+    notifyListeners();
 
-      final List<int> bytes =
-          await File(path).readAsBytes();
+    final Uint8List bytes =
+        await File(path).readAsBytes();
 
-      final PcmAudio pcm =
-          decodeAudio(bytes);
+    final PcmAudio pcm =
+        decodeAudio(bytes);
 
-      if (generation != _beatGeneration) {
-        return;
-      }
-
-      final BeatDetector detector =
-          BeatDetector(
-        sampleRate: pcm.sampleRate,
-        channels: pcm.channels,
-      );
-
-      // pcm.samples bertipe Int16List.
-      // Konversi nilainya menjadi double -1.0 sampai 1.0.
-      final List<double> samples =
-          pcm.samples
-              .map(
-                (int sample) {
-                  return sample / 32768.0;
-                },
-              )
-              .toList();
-
-      final List<double> detected =
-          await Future<List<double>>.microtask(
-        () {
-          return detector.detectBeatTimes(
-            samples,
-          );
-        },
-      );
-
-      if (generation != _beatGeneration) {
-        return;
-      }
-
-      beatTimes = detected;
-      currentBeatIndex = 0;
-      beatPulse = 0.0;
-      isAnalyzingBeats = false;
-
-      errorMessage =
-          'Beat terdeteksi: '
-          '${beatTimes.length} titik';
-
-      notifyListeners();
-    } catch (e) {
-      if (generation != _beatGeneration) {
-        return;
-      }
-
-      isAnalyzingBeats = false;
-
-      beatError =
-          'Analisis beat gagal: $e';
-
-      errorMessage =
-          beatError;
-
-      notifyListeners();
+    if (generation != _beatGeneration) {
+      return;
     }
+
+    final BeatDetector detector =
+        BeatDetector(
+      sampleRate: pcm.sampleRate,
+      channels: pcm.channels,
+    );
+
+    final List<double> samples =
+        pcm.samples
+            .map(
+              (int sample) {
+                return sample / 32768.0;
+              },
+            )
+            .toList();
+
+    final List<double> detected =
+        await Future<List<double>>.microtask(
+      () {
+        return detector.detectBeatTimes(
+          samples,
+        );
+      },
+    );
+
+    if (generation != _beatGeneration) {
+      return;
+    }
+
+    beatTimes = detected;
+    currentBeatIndex = 0;
+    beatPulse = 0.0;
+    isAnalyzingBeats = false;
+
+    errorMessage =
+        'Beat terdeteksi: '
+        '${beatTimes.length} titik';
+
+    notifyListeners();
+  } catch (e) {
+    if (generation != _beatGeneration) {
+      return;
+    }
+
+    isAnalyzingBeats = false;
+
+    beatError =
+        'Analisis beat gagal: $e';
+
+    errorMessage =
+        beatError;
+
+    notifyListeners();
   }
+}
+
 
   // ==========================================
   // UPDATE BEAT SESUAI POSISI MUSIK
@@ -1117,6 +1116,207 @@ class MusicController extends ChangeNotifier {
         'Smart Sync lirik berhasil '
         '(${lyricSentences.length} baris)';
   }
+
+
+// ==========================================
+// TRIM REC KUNING
+// ==========================================
+
+Future<void> showTrimDialog(
+  BuildContext context,
+) async {
+  if (selectedMusicFile == null ||
+      duration == Duration.zero) {
+    errorMessage =
+        'Upload lagu terlebih dahulu';
+
+    notifyListeners();
+
+    return;
+  }
+
+  Duration tempStart =
+      Duration.zero;
+
+  Duration tempEnd =
+      duration.inSeconds > 60
+          ? const Duration(seconds: 60)
+          : duration;
+
+  await showDialog<void>(
+    context: context,
+    builder: (BuildContext ctx) {
+      return StatefulBuilder(
+        builder: (
+          BuildContext ctx,
+          void Function(void Function()) setSt,
+        ) {
+          double maxSec =
+              duration.inSeconds.toDouble();
+
+          if (!maxSec.isFinite ||
+              maxSec <= 0) {
+            maxSec = 60.0;
+          }
+
+          double startSec =
+              tempStart.inMilliseconds /
+                  1000.0;
+
+          double endSec =
+              tempEnd.inMilliseconds /
+                  1000.0;
+
+          startSec =
+              startSec.clamp(0.0, maxSec);
+
+          endSec =
+              endSec.clamp(0.0, maxSec);
+
+          if (endSec <= startSec) {
+            endSec =
+                (startSec + 1.0)
+                    .clamp(0.0, maxSec);
+          }
+
+          return AlertDialog(
+            backgroundColor:
+                const Color(0xFF1E1E24),
+            title: const Text(
+              'TRIM REC KUNING',
+              style: TextStyle(
+                color: Colors.amber,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${fmt(tempStart)} - ${fmt(tempEnd)} '
+                  '(${(tempEnd - tempStart).inSeconds}s)',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                RangeSlider(
+                  min: 0.0,
+                  max: maxSec,
+                  values: RangeValues(
+                    startSec,
+                    endSec,
+                  ),
+                  activeColor: Colors.amber,
+                  inactiveColor: Colors.white24,
+                  labels: RangeLabels(
+                    fmt(tempStart),
+                    fmt(tempEnd),
+                  ),
+                  onChanged: (
+                    RangeValues value,
+                  ) {
+                    Duration newStart =
+                        Duration(
+                      milliseconds:
+                          (value.start * 1000)
+                              .round(),
+                    );
+
+                    Duration newEnd =
+                        Duration(
+                      milliseconds:
+                          (value.end * 1000)
+                              .round(),
+                    );
+
+                    if (newEnd <= newStart) {
+                      newEnd =
+                          newStart +
+                              const Duration(
+                                seconds: 1,
+                              );
+                    }
+
+                    if (newEnd - newStart >
+                        const Duration(
+                          seconds: 60,
+                        )) {
+                      newEnd =
+                          newStart +
+                              const Duration(
+                                seconds: 60,
+                              );
+
+                      if (newEnd > duration) {
+                        newEnd = duration;
+                        newStart =
+                            newEnd -
+                                const Duration(
+                                  seconds: 60,
+                                );
+
+                        if (newStart <
+                            Duration.zero) {
+                          newStart =
+                              Duration.zero;
+                        }
+                      }
+                    }
+
+                    setSt(() {
+                      tempStart = newStart;
+                      tempEnd = newEnd;
+                    });
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                },
+                child: const Text(
+                  'Batal',
+                ),
+              ),
+              ElevatedButton(
+                style:
+                    ElevatedButton.styleFrom(
+                  backgroundColor:
+                      Colors.amber,
+                  foregroundColor:
+                      Colors.black,
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+
+                  trimStart =
+                      tempStart;
+
+                  trimEnd =
+                      tempEnd;
+
+                  await startRecord(
+                    startFrom: trimStart,
+                    endAt: trimEnd,
+                  );
+                },
+                child: const Text(
+                  'Mulai Trim REC',
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
 
   // ==========================================
   // REKAM LAYAR
