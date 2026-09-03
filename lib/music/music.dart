@@ -1323,87 +1323,87 @@ Future<void> showTrimDialog(
   // ==========================================
 
   Future<void> startRecord({
-    Duration? startFrom,
-    Duration? endAt,
-  }) async {
-    try {
-      await _req();
+  Duration? startFrom,
+  Duration? endAt,
+}) async {
+  try {
+    await _req();
 
-      if (selectedMusicFile != null) {
-        await seekTo(
-          startFrom ?? Duration.zero,
-        );
-
-        await audioPlayer.play();
-
-        try {
-          await waveformController
-              .startPlayer();
-        } catch (_) {}
-      }
-
-      await SystemChrome
-          .setEnabledSystemUIMode(
-        SystemUiMode.immersiveSticky,
+    if (selectedMusicFile != null) {
+      await seekTo(
+        startFrom ?? Duration.zero,
       );
 
-      isRecording = true;
-      recordSeconds = 0;
-      recordedPath = null;
+      await audioPlayer.play();
 
-      notifyListeners();
-
-      final String fileName =
-          'babe_${DateTime.now().millisecondsSinceEpoch}';
-
-      await FlutterScreenRecording
-          .startRecordScreenAndAudio(
-        fileName,
-        titleNotification:
-            'Babe Info REC 60s',
-        messageNotification:
-            'Recording music video...',
-      );
-
-      final Duration targetEnd =
-          endAt ??
-              (duration.inSeconds > 60
-                  ? const Duration(seconds: 60)
-                  : duration);
-
-      recordTimer?.cancel();
-
-      recordTimer = Timer.periodic(
-        const Duration(seconds: 1),
-        (Timer timer) {
-          recordSeconds++;
-          notifyListeners();
-
-          if (startFrom != null &&
-              position >= targetEnd) {
-            stopRecord();
-          } else if (recordSeconds >= 60 ||
-              (startFrom == null &&
-                  recordSeconds >=
-                      targetEnd.inSeconds)) {
-            stopRecord();
-          }
-        },
-      );
-    } catch (e) {
-      isRecording = false;
-
-      await SystemChrome
-          .setEnabledSystemUIMode(
-        SystemUiMode.edgeToEdge,
-      );
-
-      errorMessage =
-          'Record gagal: $e';
-
-      notifyListeners();
+      try {
+        await waveformController
+            .startPlayer();
+      } catch (_) {}
     }
+
+    await SystemChrome
+        .setEnabledSystemUIMode(
+      SystemUiMode.immersiveSticky,
+    );
+
+    isRecording = true;
+    recordSeconds = 0;
+    recordedPath = null;
+
+    notifyListeners();
+
+    final String fileName =
+        'babe_${DateTime.now().millisecondsSinceEpoch}';
+
+    await FlutterScreenRecording
+        .startRecordScreenAndAudio(
+      fileName,
+      titleNotification:
+          'Babe Info REC 60s',
+      messageNotification:
+          'Recording music video...',
+    );
+
+    final Duration targetEnd =
+        endAt ??
+            (duration.inSeconds > 60
+                ? const Duration(seconds: 60)
+                : duration);
+
+    recordTimer?.cancel();
+
+    recordTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (Timer timer) {
+        recordSeconds++;
+        notifyListeners();
+
+        if (startFrom != null &&
+            position >= targetEnd) {
+          stopRecord();
+        } else if (recordSeconds >= 60 ||
+            (startFrom == null &&
+                recordSeconds >=
+                    targetEnd.inSeconds)) {
+          stopRecord();
+        }
+      },
+    );
+  } catch (e) {
+    isRecording = false;
+
+    await SystemChrome
+        .setEnabledSystemUIMode(
+      SystemUiMode.edgeToEdge,
+    );
+
+    errorMessage =
+        'Record gagal: $e';
+
+    notifyListeners();
   }
+}
 
   Future<void> stopRecord() async {
     try {
