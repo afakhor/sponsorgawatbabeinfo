@@ -461,71 +461,15 @@ void dispose() {
   // ==================================================
 
   Widget _buildRecordingOverlay() {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Running text atas.
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: SafeArea(
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
-              color: Colors.black.withOpacity(0.70),
-              child: RunningText(
-                text:
-                    _musicController.editableTitle,
-                color: Colors.amber,
-                fontSize: 16,
-              ),
-            ),
-          ),
-        ),
-
-        // Lirik aktif.
-        Positioned(
-          left: 12,
-          right: 12,
-          bottom: 130,
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.60),
-              borderRadius:
-                  BorderRadius.circular(14),
-              border: Border.all(
-                color: Colors.amber.withOpacity(0.40),
-              ),
-            ),
-            child: Text(
-              _currentLyricText(),
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.amber,
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                shadows: [
-                  Shadow(
-                    color: Colors.black,
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-
-        // Running text bawah.
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 90,
+  return Stack(
+    fit: StackFit.expand,
+    children: [
+      // Running text atas.
+      Positioned(
+        top: 0,
+        left: 0,
+        right: 0,
+        child: SafeArea(
           child: Container(
             padding: const EdgeInsets.symmetric(
               horizontal: 12,
@@ -533,102 +477,148 @@ void dispose() {
             ),
             color: Colors.black.withOpacity(0.70),
             child: RunningText(
-              text:
-                  _musicController.editableBottomTitle,
-              color: Colors.white70,
-              fontSize: 14,
+              text: _musicController.editableTitle,
+              color: Colors.amber,
+              fontSize: 16,
             ),
           ),
         ),
+      ),
 
-        // Tombol stop recording.
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 18,
-          child: Center(
-            child: GestureDetector(
-              onTap: () async {
-                if (!_musicController.isRecording) {
-                  return;
-                }
-
-                // stopRecord() akan mengisi recordedPath
-                // kemudian listener otomatis menampilkan
-                // dialog share WhatsApp.
-                await _musicController.stopRecord();
-              },
-              child: Container(
-                width: 78,
-                height: 78,
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.red.withOpacity(0.70),
-                      blurRadius: 25,
-                    ),
-                  ],
+      // Lirik aktif.
+      Positioned(
+        left: 12,
+        right: 12,
+        bottom: 130,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.60),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: Colors.amber.withOpacity(0.40),
+            ),
+          ),
+          child: Text(
+            _currentLyricText(),
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.amber,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              shadows: [
+                Shadow(
+                  color: Colors.black,
+                  blurRadius: 10,
                 ),
-                child: Center(
-                  child: Text(
-                    '${_musicController.recordSeconds}s',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
+              ],
+            ),
+          ),
+        ),
+      ),
+
+      // Running text bawah.
+      Positioned(
+        left: 0,
+        right: 0,
+        bottom: 90,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 10,
+          ),
+          color: Colors.black.withOpacity(0.70),
+          child: RunningText(
+            text: _musicController.editableBottomTitle,
+            color: Colors.white70,
+            fontSize: 14,
+          ),
+        ),
+      ),
+
+      // Tombol stop recording.
+      Positioned(
+        left: 0,
+        right: 0,
+        bottom: 18,
+        child: Center(
+          child: GestureDetector(
+            onTap: _musicController.isRecording
+                ? () async {
+                    await _musicController.stopRecord();
+                  }
+                : null,
+            child: Container(
+              width: 78,
+              height: 78,
+              decoration: BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white,
+                  width: 5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.red.withOpacity(0.70),
+                    blurRadius: 25,
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  '${_musicController.recordSeconds}s',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
                   ),
                 ),
               ),
             ),
           ),
         ),
+      ),
 
-        // Status rekaman.
-        Positioned(
-          top: 56,
-          right: 12,
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 6,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.red,
-              borderRadius:
-                  BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
+      // Status rekaman.
+      Positioned(
+        top: 56,
+        right: 12,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 6,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.red,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  '${_musicController.recordSeconds}s / 60s',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '${_musicController.recordSeconds}s / 60s',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
 }
