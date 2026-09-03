@@ -159,714 +159,1079 @@ class LyricKaraoke extends StatelessWidget {
 // MUSIC CONTROLLER
 // ==========================================
 class MusicController extends ChangeNotifier {
-  final ja.AudioPlayer audioPlayer = ja.AudioPlayer();
-  final PlayerController waveformController = PlayerController();
+  // ==========================================
+// MUSIC CONTROLLER
+// ==========================================
+
+class MusicController extends ChangeNotifier {
+  final ja.AudioPlayer audioPlayer =
+      ja.AudioPlayer();
+
+  final PlayerController waveformController =
+      PlayerController();
 
   File? selectedMusicFile;
-  String musicName = 'Belum ada musik';
-  String editableTitle = 'SPONSOR BABE INFO GAWAT • TAP UNTUK EDIT JUDUL';
-  String editableBottomTitle = 'Babe Info Gawat - Tap untuk edit bawah';
 
-   List<double> beatTimes = <double>[];
-   int currentBeatIndex = 0;
-   double beatPulse = 0.0;
-   bool isAnalyzingBeats = false;
-   String? beatError;
-   int _beatGeneration = 0;
-Future<void> analyzeBeats(
-  String path,
-) async {
-  final int generation =
-      ++_beatGeneration;
+  String musicName =
+      'Belum ada musik';
 
-  try {
-    isAnalyzingBeats = true;
-    beatError = null;
-    beatTimes = <double>[];
-    currentBeatIndex = 0;
-    beatPulse = 0.0;
+  String editableTitle =
+      'SPONSOR BABE INFO GAWAT • TAP UNTUK EDIT JUDUL';
 
-    notifyListeners();
+  String editableBottomTitle =
+      'Babe Info Gawat - Tap untuk edit bawah';
 
-    final Uint8List bytes =
-        await File(path).readAsBytes();
+  // ==========================================
+  // DATA LIRIK
+  // ==========================================
 
-    final PcmAudio pcm =
-        decodeAudio(bytes);
+  List<TimedSentence> lyricSentences =
+      <TimedSentence>[];
 
-    if (generation != _beatGeneration) {
-      return;
-    }
+  List<String> get lyricLines {
+    return lyricSentences
+        .map((TimedSentence e) => e.text)
+        .toList();
+  }
 
-    final detector =
-        BeatDetector(
-      sampleRate: pcm.sampleRate,
-      channels: pcm.channels,
-    );
+  int currentLyricIndex = 0;
 
-    final List<double> detected =
-        await Future<List<double>>.microtask(
-      () {
-        return detector.detectBeatTimes(
-          pcm.samples,
-        );
+  // ==========================================
+  // DATA AUDIO
+  // ==========================================
+
+  Duration position =
+      Duration.zero;
+
+  Duration duration =
+      Duration.zero;
+
+  bool isPlaying = false;
+  bool isLoading = false;
+  bool isRecording = false;
+  bool isTranscribing = false;
+
+  String? errorMessage;
+  String? recordedPath;
+
+  Timer? recordTimer;
+  int recordSeconds = 0;
+
+  Duration trimStart =
+      Duration.zero;
+
+  Duration trimEnd =
+      const Duration(seconds: 60);
+
+  bool get usePreTrim {
+    return trimStart > Duration.zero ||
+        trimEnd < duration;
+  }
+
+  // ==========================================
+  // DATA BEAT
+  // ==========================================
+
+  List<double> beatTimes =
+      <double>[];
+
+  int currentBeatIndex = 0;
+
+  double beatPulse = 0.0;
+
+  bool isAnalyzingBeats = false;
+
+  String? beatError;
+
+  int _beatGeneration = 0;
+
+  // ==========================================
+  // CONSTRUCTOR
+  // ==========================================
+
+  MusicController() {
+    audioPlayer.positionStream.listen(
+      (Duration value) {
+        position = value;
+
+        _updateLyricIndex();
+
+        updateBeatFromPosition(value);
+
+        notifyListeners();
       },
     );
 
-    if (generation != _beatGeneration) {
-      return;
-    }
+    audioPlayer.playerStateStream.listen(
+      (ja.PlayerState state) {
+        isPlaying = state.playing;
 
-    beatTimes = detected;
-    currentBeatIndex = 0;
-    isAnalyzingBeats = false;
+        if (state.processingState ==
+            ja.ProcessingState.completed) {
+          currentBeatIndex = 0;
+          beatPulse = 0.0;
+        }
 
-    errorMessage =
-        'Beat terdeteksi: '
-        '${beatTimes.length} titik';
-
-    notifyListeners();
-  } catch (e) {
-    if (generation != _beatGeneration) {
-      return;
-    }
-
-    isAnalyzingBeats = false;
-    beatError =
-        'Analisis beat gagal: $e';
-
-    errorMessage =
-        beatError;
-
-    notifyListeners();
+        notifyListeners();
+      },
+    );
   }
-}
 
+  // ==========================================
+  // ANALISIS BEAT OFFLINE
+  // ==========================================
 
-  List<TimedSentence> lyricSentences = [];
-  List<String> get lyricLines => lyricSentences.map((e) => e.text).toList();
+  Future<void> analyzeBeats(
+    String path,
+  ) async {
+    final int generation =
+        ++_beatGeneration;
 
-  int currentLyricIndex = 0;
-  Duration position = Duration.zero, duration = Duration.zero;
-
-  bool isPlaying = false, isLoading = false, isRecording = false, isTranscribing = false;
-  String? errorMessage;
-  String? recordedPath;
-  Timer? recordTimer;
-  int recordSeconds = 0;
-  Duration trimStart = Duration.zero;
-  Duration trimEnd = const Duration(seconds: 60);
-
-  bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
-
-  MusicController() {
-  audioPlayer.positionStream.listen(
-    (Duration value) {
-      position = value;
-
-      _updateLyricIndex();
-
-      updateBeatFromPosition(
-        value,
-      );
+    try {
+      isAnalyzingBeats = true;
+      beatError = null;
+      beatTimes = <double>[];
+      currentBeatIndex = 0;
+      beatPulse = 0.0;
 
       notifyListeners();
-    },
-  );
 
-  audioPlayer.playerStateStream.listen(
-    (ja.PlayerState state) {
-      isPlaying =
-          state.playing;
+      final List<int> bytes =
+          await File(path).readAsBytes();
 
-      if (state.processingState ==
-          ja.ProcessingState.completed) {
-        currentBeatIndex = 0;
+      final PcmAudio pcm =
+          decodeAudio(bytes);
+
+      if (generation != _beatGeneration) {
+        return;
+      }
+
+      final BeatDetector detector =
+          BeatDetector(
+        sampleRate: pcm.sampleRate,
+        channels: pcm.channels,
+      );
+
+      // pcm.samples bertipe Int16List.
+      // Konversi nilainya menjadi double -1.0 sampai 1.0.
+      final List<double> samples =
+          pcm.samples
+              .map(
+                (int sample) {
+                  return sample / 32768.0;
+                },
+              )
+              .toList();
+
+      final List<double> detected =
+          await Future<List<double>>.microtask(
+        () {
+          return detector.detectBeatTimes(
+            samples,
+          );
+        },
+      );
+
+      if (generation != _beatGeneration) {
+        return;
+      }
+
+      beatTimes = detected;
+      currentBeatIndex = 0;
+      beatPulse = 0.0;
+      isAnalyzingBeats = false;
+
+      errorMessage =
+          'Beat terdeteksi: '
+          '${beatTimes.length} titik';
+
+      notifyListeners();
+    } catch (e) {
+      if (generation != _beatGeneration) {
+        return;
+      }
+
+      isAnalyzingBeats = false;
+
+      beatError =
+          'Analisis beat gagal: $e';
+
+      errorMessage =
+          beatError;
+
+      notifyListeners();
+    }
+  }
+
+  // ==========================================
+  // UPDATE BEAT SESUAI POSISI MUSIK
+  // ==========================================
+
+  void updateBeatFromPosition(
+    Duration currentPosition,
+  ) {
+    if (!isPlaying ||
+        beatTimes.isEmpty) {
+      beatPulse *= 0.84;
+
+      if (beatPulse < 0.01) {
         beatPulse = 0.0;
       }
 
-      notifyListeners();
-    },
-  );
-}
+      return;
+    }
 
+    final double seconds =
+        currentPosition.inMicroseconds /
+            Duration.microsecondsPerSecond;
 
-  void _updateLyricIndex() {
-    if (lyricSentences.isEmpty) return;
-    for (int i = 0; i < lyricSentences.length; i++) {
-      if (position >= lyricSentences[i].start && position <= lyricSentences[i].end) {
-        currentLyricIndex = i;
-        break;
+    while (
+        currentBeatIndex <
+            beatTimes.length &&
+        beatTimes[currentBeatIndex] <=
+            seconds) {
+      final double difference =
+          seconds -
+          beatTimes[currentBeatIndex];
+
+      if (difference >= 0.0 &&
+          difference < 0.14) {
+        beatPulse = 1.0;
       }
-    }
-  }
 
-  String fmt(Duration d) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    return "${twoDigits(d.inMinutes.remainder(60))}:${twoDigits(d.inSeconds.remainder(60))}";
-  }
-
-  Future<void> _req() async {
-    await [Permission.storage, Permission.microphone, Permission.photos].request();
-  }
-
-  // CONTROLLER METHOD UNTUK PLAY/PAUSE
-  Future<void> togglePlay() async {
-  if (selectedMusicFile == null) {
-    errorMessage =
-        'Pilih lagu terlebih dahulu';
-
-    notifyListeners();
-
-    return;
-  }
-
-  if (audioPlayer.playing) {
-    await audioPlayer.pause();
-
-    try {
-      await waveformController.pausePlayer();
-    } catch (_) {}
-  } else {
-    await audioPlayer.play();
-
-    try {
-      await waveformController.startPlayer();
-    } catch (_) {}
-  }
-}
-
-
-  // UPLOAD MUSIK (MP3 ATAU WAV)
-  Future<void> pickMusic(
-  BuildContext context,
-) async {
-  try {
-    await _req();
-
-    final FilePickerResult? res =
-        await FilePicker.platform.pickFiles(
-      type: FileType.audio,
-      withData: false,
-    );
-
-    if (res == null ||
-        res.files.isEmpty) {
-      return;
+      currentBeatIndex++;
     }
 
-    final PlatformFile picked =
-        res.files.single;
-
-    final String? path =
-        picked.path;
-
-    if (path == null) {
-      return;
-    }
-
-    await audioPlayer.stop();
-
-    try {
-      await waveformController.stopPlayer();
-    } catch (_) {}
-
-    selectedMusicFile =
-        File(path);
-
-    musicName =
-        picked.name;
-
-    editableTitle =
-        musicName;
-
-    lyricSentences =
-        <TimedSentence>[];
-
-    currentLyricIndex = 0;
-
-    beatTimes =
-        <double>[];
-
-    currentBeatIndex = 0;
-
-    beatPulse = 0.0;
-
-    errorMessage = null;
-
-    beatError = null;
-
-    isLoading = true;
-
-    notifyListeners();
-
-    await audioPlayer.setAudioSource(
-      ja.AudioSource.file(path),
-    );
-
-    duration =
-        audioPlayer.duration ??
-            Duration.zero;
-
-    trimStart =
-        Duration.zero;
-
-    trimEnd =
-        duration.inSeconds > 60
-            ? const Duration(seconds: 60)
-            : duration;
-
-    try {
-      await waveformController.preparePlayer(
-        path: path,
-        shouldExtractWaveform: true,
-        noOfSamples: 100,
-      );
-
-      await waveformController.stopPlayer();
-    } catch (_) {}
-
-    isLoading = false;
-
-    notifyListeners();
-
-    // Analisis file secara offline.
-    await analyzeBeats(path);
-
-    if (!isAnalyzingBeats) {
-      errorMessage =
-          'Musik siap diputar. '
-          'Beat: ${beatTimes.length}';
-    }
-
-    notifyListeners();
-  } catch (e) {
-    isLoading = false;
-
-    errorMessage =
-        'Gagal upload file: $e';
-
-    notifyListeners();
-  }
-}
-
-void updateBeatFromPosition(
-  Duration currentPosition,
-) {
-  if (beatTimes.isEmpty) {
-    beatPulse *= 0.84;
+    beatPulse *= 0.78;
 
     if (beatPulse < 0.01) {
       beatPulse = 0.0;
     }
-
-    return;
   }
 
-  final double seconds =
-      currentPosition.inMicroseconds /
-      1000000.0;
+  // ==========================================
+  // UPDATE LIRIK
+  // ==========================================
 
-  // Jika posisi mundur karena seek,
-  // cari ulang index beat dari posisi sekarang.
-  if (currentBeatIndex > 0 &&
-      currentBeatIndex < beatTimes.length &&
-      seconds <
-          beatTimes[currentBeatIndex - 1]) {
-    currentBeatIndex = 0;
+  void _updateLyricIndex() {
+    _updateActiveLyricIndex(position);
   }
 
-  while (
-      currentBeatIndex <
-          beatTimes.length &&
-      beatTimes[currentBeatIndex] <=
-          seconds) {
-    final double difference =
-        seconds -
-        beatTimes[currentBeatIndex];
-
-    // Window toleransi beat.
-    if (difference >= 0.0 &&
-        difference < 0.14) {
-      beatPulse = 1.0;
-    }
-
-    currentBeatIndex++;
-  }
-
-  // Decay cepat supaya pulse berbentuk hentakan.
-  beatPulse *= 0.78;
-
-  if (beatPulse < 0.01) {
-    beatPulse = 0.0;
-  }
-}
-
-
-  // DIALOG PASTE LIRIK (SUPPORT TEKS BIASA & FORMAT TIMESTAMP LRC)
-  Future<void> openTranscribeDialog(BuildContext context) async {
-    if (selectedMusicFile == null) {
-      errorMessage = 'Upload musik (MP3/WAV) terlebih dahulu!';
-      notifyListeners();
+  void _updateActiveLyricIndex(
+    Duration pos,
+  ) {
+    if (lyricSentences.isEmpty) {
       return;
     }
 
-    final controller = TextEditingController();
-    final res = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E24),
-        title: const Text(
-          '📝 Transcribe / Upload LRC Timestamp',
-          style: TextStyle(color: Colors.amber, fontSize: 13, fontWeight: FontWeight.bold),
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 280,
-          child: TextField(
-            controller: controller,
-            maxLines: 15,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-            decoration: const InputDecoration(
-              hintText: 'Tempel lirik biasa ATAU format .lrc bertimestamp:\n\nContoh LRC:\n[00:12.50] Biar saja ku tak sehebat matahari\n[00:18.20] Tapi slaluku coba tuk menghangatkanmu',
-              hintStyle: TextStyle(color: Colors.white24, fontSize: 11),
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
-            child: const Text('Simpan & Sync Lirik'),
-          ),
-        ],
-      ),
-    );
+    for (
+      int i = 0;
+      i < lyricSentences.length;
+      i++
+    ) {
+      final TimedSentence sentence =
+          lyricSentences[i];
 
-    if (res != null && res.trim().isNotEmpty) {
-      _processLyricsWithLrcSupport(res.trim());
+      if (pos >= sentence.start &&
+          pos <= sentence.end) {
+        currentLyricIndex = i;
+        return;
+      }
     }
   }
 
-    // PARSER OTOMATIS: MEMBEDAKAN LRC TIMESTAMP DAN TEKS BIASA (DENGAN FIX TEMPO PER KATA)
-  void _processLyricsWithLrcSupport(String rawText) {
-    var rawLines = rawText.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-    if (rawLines.isEmpty) return;
+  // ==========================================
+  // FORMAT DURASI
+  // ==========================================
 
-    final lrcRegExp = RegExp(r'^\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)');
-    bool isLrcFormat = rawLines.any((line) => lrcRegExp.hasMatch(line));
-
-    if (isLrcFormat) {
-      // 1. PROSES FORMAT LRC (TIMESTAMP MANUAL PRESISI & AKURAT PER KATA)
-      List<TimedSentence> generatedSentences = [];
-      for (int i = 0; i < rawLines.length; i++) {
-        var match = lrcRegExp.firstMatch(rawLines[i]);
-        if (match != null) {
-          int min = int.parse(match.group(1)!);
-          int sec = int.parse(match.group(2)!);
-          int ms = int.parse(match.group(3)!.padRight(3, '0'));
-
-          Duration start = Duration(minutes: min, seconds: sec, milliseconds: ms);
-          String text = match.group(4)!.trim();
-
-          if (text.isEmpty) continue;
-
-          // Estimasi waktu selesai baris berdasarkan waktu mulai baris berikutnya
-          Duration end = start + const Duration(seconds: 4);
-          if (i + 1 < rawLines.length) {
-            var nextMatch = lrcRegExp.firstMatch(rawLines[i + 1]);
-            if (nextMatch != null) {
-              int nMin = int.parse(nextMatch.group(1)!);
-              int nSec = int.parse(nextMatch.group(2)!);
-              int nMs = int.parse(nextMatch.group(3)!.padRight(3, '0'));
-              Duration nextStart = Duration(minutes: nMin, seconds: nSec, milliseconds: nMs);
-              
-              // Jika jeda ke baris berikutnya terlalu panjang (> 6 detik), gunakan durasi aktif maks 4.5 detik
-              if ((nextStart - start).inMilliseconds > 6000) {
-                end = start + const Duration(milliseconds: 4500);
-              } else {
-                end = nextStart;
-              }
-            }
-          }
-
-          var words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-          int lineTotalMs = end.inMilliseconds - start.inMilliseconds;
-          
-          // Pembagian tepat durasi per kata agar sync langsung menyala dari detik pertama kata diucapkan
-          double msPerWord = lineTotalMs / (words.isNotEmpty ? words.length : 1);
-
-          List<TimedWord> timedWords = [];
-          for (int j = 0; j < words.length; j++) {
-            Duration wStart = start + Duration(milliseconds: (j * msPerWord).floor());
-            Duration wEnd = start + Duration(milliseconds: ((j + 1) * msPerWord).floor());
-            timedWords.add(TimedWord(words[j], wStart, wEnd));
-          }
-          generatedSentences.add(TimedSentence(timedWords, start, end));
-        }
-      }
-      lyricSentences = generatedSentences;
-      errorMessage = '✅ Sync LRC presisi berhasil (${lyricSentences.length} baris tersimpan)';
-    } else {
-      // 2. FALLBACK KE ESTIMASI OTOMATIS JIKA HANYA TEKS BIASA
-      _processAndCacheLyricsSmart(rawText);
+  String fmt(Duration d) {
+    String twoDigits(int n) {
+      return n
+          .toString()
+          .padLeft(2, '0');
     }
 
-    currentLyricIndex = 0;
+    return '${twoDigits(d.inMinutes.remainder(60))}:'
+        '${twoDigits(d.inSeconds.remainder(60))}';
+  }
+
+  // ==========================================
+  // PERMISSION
+  // ==========================================
+
+  Future<void> _req() async {
+    await <Permission>[
+      Permission.storage,
+      Permission.microphone,
+      Permission.photos,
+    ].request();
+  }
+
+  // ==========================================
+  // PLAY / PAUSE
+  // ==========================================
+
+  Future<void> togglePlay() async {
+    if (selectedMusicFile == null) {
+      errorMessage =
+          'Pilih lagu terlebih dahulu';
+
+      notifyListeners();
+
+      return;
+    }
+
+    try {
+      if (audioPlayer.playing) {
+        await audioPlayer.pause();
+
+        try {
+          await waveformController.pausePlayer();
+        } catch (_) {}
+      } else {
+        await audioPlayer.play();
+
+        try {
+          await waveformController.startPlayer();
+        } catch (_) {}
+      }
+    } catch (e) {
+      errorMessage =
+          'Gagal memutar musik: $e';
+
+      notifyListeners();
+    }
+  }
+
+  // ==========================================
+  // PILIH DAN ANALISIS MUSIK
+  // ==========================================
+
+  Future<void> pickMusic(
+    BuildContext context,
+  ) async {
+    try {
+      await _req();
+
+      final FilePickerResult? result =
+          await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        withData: false,
+      );
+
+      if (result == null ||
+          result.files.isEmpty) {
+        return;
+      }
+
+      final PlatformFile picked =
+          result.files.single;
+
+      final String? path =
+          picked.path;
+
+      if (path == null ||
+          path.isEmpty) {
+        return;
+      }
+
+      _beatGeneration++;
+
+      await audioPlayer.stop();
+
+      try {
+        await waveformController.stopPlayer();
+      } catch (_) {}
+
+      selectedMusicFile =
+          File(path);
+
+      musicName =
+          picked.name;
+
+      editableTitle =
+          musicName;
+
+      lyricSentences =
+          <TimedSentence>[];
+
+      currentLyricIndex = 0;
+
+      beatTimes =
+          <double>[];
+
+      currentBeatIndex = 0;
+
+      beatPulse = 0.0;
+
+      beatError = null;
+      errorMessage = null;
+      isLoading = true;
+
+      notifyListeners();
+
+      await audioPlayer.setAudioSource(
+        ja.AudioSource.file(path),
+      );
+
+      duration =
+          audioPlayer.duration ??
+              Duration.zero;
+
+      trimStart =
+          Duration.zero;
+
+      trimEnd =
+          duration.inSeconds > 60
+              ? const Duration(seconds: 60)
+              : duration;
+
+      try {
+        await waveformController.preparePlayer(
+          path: path,
+          shouldExtractWaveform: true,
+          noOfSamples: 100,
+        );
+
+        await waveformController.stopPlayer();
+      } catch (_) {}
+
+      isLoading = false;
+
+      notifyListeners();
+
+      // Analisis file dilakukan satu kali.
+      await analyzeBeats(path);
+
+      if (beatTimes.isNotEmpty) {
+        errorMessage =
+            'Musik siap diputar. '
+            'Beat: ${beatTimes.length}';
+      } else {
+        errorMessage =
+            'Musik siap diputar, '
+            'tetapi beat tidak terdeteksi';
+      }
+
+      notifyListeners();
+    } catch (e) {
+      isLoading = false;
+
+      errorMessage =
+          'Gagal upload file: $e';
+
+      notifyListeners();
+    }
+  }
+
+  // ==========================================
+  // SEEK MUSIK
+  // ==========================================
+
+  Future<void> seekTo(
+    Duration value,
+  ) async {
+    Duration safe =
+        value;
+
+    if (safe < Duration.zero) {
+      safe = Duration.zero;
+    }
+
+    if (safe > duration) {
+      safe = duration;
+    }
+
+    try {
+      await audioPlayer.seek(safe);
+    } catch (_) {}
+
+    try {
+      await waveformController.seekTo(
+        safe.inMilliseconds,
+      );
+    } catch (_) {}
+
+    position = safe;
+    beatPulse = 0.0;
+    currentBeatIndex = 0;
+
+    final double seconds =
+        safe.inMicroseconds /
+            Duration.microsecondsPerSecond;
+
+    while (
+        currentBeatIndex <
+            beatTimes.length &&
+        beatTimes[currentBeatIndex] <
+            seconds) {
+      currentBeatIndex++;
+    }
+
+    _updateActiveLyricIndex(safe);
+
     notifyListeners();
   }
 
+  // ==========================================
+  // PARSER LIRIK LRC DAN TEKS BIASA
+  // ==========================================
 
-  // ALGORITMA SMART SYNC (UNTUK TEKS BIASA TANPA TIMESTAMP)
-    void _processAndCacheLyricsSmart(String rawText) {
-    var rawLines = rawText.split('\n').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-    if (rawLines.isEmpty) return;
+  Future<void> openTranscribeDialog(
+    BuildContext context,
+  ) async {
+    if (selectedMusicFile == null) {
+      errorMessage =
+          'Upload musik terlebih dahulu';
 
-    List<String> lines = [];
-    for (var l in rawLines) {
-      String cleaned = l.replaceAll(RegExp(r'^(reff|verse|chorus|bridge|intro)\s*:?', caseSensitive: false), '').trim();
+      notifyListeners();
+
+      return;
+    }
+
+    final TextEditingController controller =
+        TextEditingController();
+
+    final String? result =
+        await showDialog<String>(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          backgroundColor:
+              const Color(0xFF1E1E24),
+          title: const Text(
+            'Transcribe / Upload LRC Timestamp',
+            style: TextStyle(
+              color: Colors.amber,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 280,
+            child: TextField(
+              controller: controller,
+              maxLines: 15,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+              ),
+              decoration:
+                  const InputDecoration(
+                hintText:
+                    'Tempel lirik biasa atau LRC:\n\n'
+                    '[00:12.50] Biar saja ku tak sehebat matahari\n'
+                    '[00:18.20] Tapi slaluku coba tuk menghangatkanmu',
+                hintStyle: TextStyle(
+                  color: Colors.white24,
+                  fontSize: 11,
+                ),
+                border:
+                    OutlineInputBorder(),
+              ),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+              },
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(
+                  ctx,
+                  controller.text,
+                );
+              },
+              style:
+                  ElevatedButton.styleFrom(
+                backgroundColor:
+                    Colors.amber,
+                foregroundColor:
+                    Colors.black,
+              ),
+              child: const Text(
+                'Simpan & Sync Lirik',
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (result != null &&
+        result.trim().isNotEmpty) {
+      _processLyricsWithLrcSupport(
+        result.trim(),
+      );
+    }
+  }
+
+  void _processLyricsWithLrcSupport(
+    String rawText,
+  ) {
+    final List<String> rawLines =
+        rawText
+            .split('\n')
+            .map((String e) => e.trim())
+            .where(
+              (String e) => e.isNotEmpty,
+            )
+            .toList();
+
+    if (rawLines.isEmpty) {
+      return;
+    }
+
+    final RegExp lrcRegExp =
+        RegExp(
+      r'^\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)',
+    );
+
+    final bool isLrcFormat =
+        rawLines.any(
+      (String line) =>
+          lrcRegExp.hasMatch(line),
+    );
+
+    if (isLrcFormat) {
+      final List<TimedSentence>
+          generatedSentences =
+          <TimedSentence>[];
+
+      for (
+        int i = 0;
+        i < rawLines.length;
+        i++
+      ) {
+        final RegExpMatch? match =
+            lrcRegExp.firstMatch(
+          rawLines[i],
+        );
+
+        if (match == null) {
+          continue;
+        }
+
+        final int minutes =
+            int.parse(match.group(1)!);
+
+        final int seconds =
+            int.parse(match.group(2)!);
+
+        final int milliseconds =
+            int.parse(
+          match.group(3)!.padRight(
+                3,
+                '0',
+              ),
+        );
+
+        final Duration start =
+            Duration(
+          minutes: minutes,
+          seconds: seconds,
+          milliseconds: milliseconds,
+        );
+
+        final String text =
+            match.group(4)!.trim();
+
+        if (text.isEmpty) {
+          continue;
+        }
+
+        Duration end =
+            start +
+                const Duration(
+                  seconds: 4,
+                );
+
+        if (i + 1 < rawLines.length) {
+          final RegExpMatch? nextMatch =
+              lrcRegExp.firstMatch(
+            rawLines[i + 1],
+          );
+
+          if (nextMatch != null) {
+            final Duration nextStart =
+                Duration(
+              minutes: int.parse(
+                nextMatch.group(1)!,
+              ),
+              seconds: int.parse(
+                nextMatch.group(2)!,
+              ),
+              milliseconds: int.parse(
+                nextMatch
+                    .group(3)!
+                    .padRight(
+                      3,
+                      '0',
+                    ),
+              ),
+            );
+
+            final Duration gap =
+                nextStart - start;
+
+            end = gap.inMilliseconds >
+                    6000
+                ? start +
+                    const Duration(
+                      milliseconds: 4500,
+                    )
+                : nextStart;
+          }
+        }
+
+        final List<String> words =
+            text
+                .split(RegExp(r'\s+'))
+                .where(
+                  (String word) =>
+                      word.isNotEmpty,
+                )
+                .toList();
+
+        final int totalMs =
+            end.inMilliseconds -
+                start.inMilliseconds;
+
+        final double msPerWord =
+            totalMs /
+                (words.isEmpty
+                    ? 1
+                    : words.length);
+
+        final List<TimedWord>
+            timedWords =
+            <TimedWord>[];
+
+        for (
+          int j = 0;
+          j < words.length;
+          j++
+        ) {
+          final Duration wordStart =
+              start +
+                  Duration(
+                    milliseconds:
+                        (j * msPerWord)
+                            .floor(),
+                  );
+
+          final Duration wordEnd =
+              start +
+                  Duration(
+                    milliseconds:
+                        ((j + 1) *
+                                msPerWord)
+                            .floor(),
+                  );
+
+          timedWords.add(
+            TimedWord(
+              words[j],
+              wordStart,
+              wordEnd,
+            ),
+          );
+        }
+
+        generatedSentences.add(
+          TimedSentence(
+            timedWords,
+            start,
+            end,
+          ),
+        );
+      }
+
+      lyricSentences =
+          generatedSentences;
+
+      errorMessage =
+          'Sync LRC berhasil '
+          '(${lyricSentences.length} baris)';
+    } else {
+      _processAndCacheLyricsSmart(
+        rawText,
+      );
+    }
+
+    currentLyricIndex = 0;
+
+    notifyListeners();
+  }
+
+  void _processAndCacheLyricsSmart(
+    String rawText,
+  ) {
+    final List<String> rawLines =
+        rawText
+            .split('\n')
+            .map((String e) => e.trim())
+            .where(
+              (String e) => e.isNotEmpty,
+            )
+            .toList();
+
+    if (rawLines.isEmpty) {
+      return;
+    }
+
+    final List<String> lines =
+        <String>[];
+
+    for (final String line in rawLines) {
+      final String cleaned =
+          line
+              .replaceAll(
+                RegExp(
+                  r'^(reff|verse|chorus|bridge|intro)\s*:?',
+                  caseSensitive: false,
+                ),
+                '',
+              )
+              .trim();
+
       if (cleaned.isNotEmpty) {
         lines.add(cleaned);
       }
     }
-    if (lines.isEmpty) lines = rawLines;
 
-    int totalSongMs = duration.inMilliseconds > 0 ? duration.inMilliseconds : 180000;
-    int currentMs = totalSongMs > 30000 ? 5000 : 2000; 
-    int availableDurationMs = (totalSongMs - currentMs) > 10000 ? (totalSongMs - currentMs) : totalSongMs;
+    if (lines.isEmpty) {
+      lines.addAll(rawLines);
+    }
+
+    final int totalSongMs =
+        duration.inMilliseconds > 0
+            ? duration.inMilliseconds
+            : 180000;
+
+    int currentMs =
+        totalSongMs > 30000
+            ? 5000
+            : 2000;
+
+    final int availableDurationMs =
+        totalSongMs - currentMs > 10000
+            ? totalSongMs - currentMs
+            : totalSongMs;
 
     int totalWords = 0;
-    for (var line in lines) {
-      totalWords += line.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+
+    for (final String line in lines) {
+      totalWords += line
+          .split(RegExp(r'\s+'))
+          .where(
+            (String word) =>
+                word.isNotEmpty,
+          )
+          .length;
     }
-    if (totalWords == 0) totalWords = 1;
 
-    // Alokasi durasi dasar per kata
-    double msPerWord = availableDurationMs / totalWords;
+    if (totalWords == 0) {
+      totalWords = 1;
+    }
 
-    List<TimedSentence> generatedSentences = [];
+    final double msPerWord =
+        availableDurationMs /
+            totalWords;
 
-    for (var line in lines) {
-      var wordsInLine = line.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
-      if (wordsInLine.isEmpty) continue;
+    final List<TimedSentence>
+        generatedSentences =
+        <TimedSentence>[];
 
-      List<TimedWord> lineWords = [];
-      int sentenceStartMs = currentMs;
+    for (final String line in lines) {
+      final List<String> words =
+          line
+              .split(RegExp(r'\s+'))
+              .where(
+                (String word) =>
+                    word.isNotEmpty,
+              )
+              .toList();
 
-      // Hitung total durasi untuk baris kalimat ini tanpa jeda paksa antarkata
-      for (int i = 0; i < wordsInLine.length; i++) {
-        String w = wordsInLine[i];
-        int wordStart = currentMs;
-        
-        // Pembagian durasi tepat per kata berdasarkan alokasi msPerWord
-        int wordDuration = msPerWord.round();
-        int wordEnd = wordStart + wordDuration;
-
-        lineWords.add(TimedWord(
-          w, 
-          Duration(milliseconds: wordStart), 
-          Duration(milliseconds: wordEnd)
-        ));
-
-        // Kata berikutnya langsung menyambung tanpa delay tambahan 80ms
-        currentMs = wordEnd; 
+      if (words.isEmpty) {
+        continue;
       }
 
-      int sentenceEndMs = currentMs;
-      generatedSentences.add(TimedSentence(
-        lineWords, 
-        Duration(milliseconds: sentenceStartMs), 
-        Duration(milliseconds: sentenceEndMs)
-      ));
+      final int sentenceStartMs =
+          currentMs;
 
-      // Jeda antar-kalimat / antar-baris lirik (misal 350ms saat pindah baris)
+      final List<TimedWord>
+          lineWords =
+          <TimedWord>[];
+
+      for (final String word in words) {
+        final int wordStart =
+            currentMs;
+
+        final int wordEnd =
+            wordStart +
+                msPerWord.round();
+
+        lineWords.add(
+          TimedWord(
+            word,
+            Duration(
+              milliseconds: wordStart,
+            ),
+            Duration(
+              milliseconds: wordEnd,
+            ),
+          ),
+        );
+
+        currentMs = wordEnd;
+      }
+
+      final int sentenceEndMs =
+          currentMs;
+
+      generatedSentences.add(
+        TimedSentence(
+          lineWords,
+          Duration(
+            milliseconds:
+                sentenceStartMs,
+          ),
+          Duration(
+            milliseconds:
+                sentenceEndMs,
+          ),
+        ),
+      );
+
       currentMs += 350;
     }
 
-    lyricSentences = generatedSentences;
-    errorMessage = '✅ Smart Sync lirik berhasil (${lyricSentences.length} baris tersimpan)';
+    lyricSentences =
+        generatedSentences;
+
+    errorMessage =
+        'Smart Sync lirik berhasil '
+        '(${lyricSentences.length} baris)';
   }
 
+  // ==========================================
+  // REKAM LAYAR
+  // ==========================================
 
-    Future<void> seekTo(
-  Duration value,
-) async {
-  Duration safe =
-      value;
-
-  if (safe < Duration.zero) {
-    safe = Duration.zero;
-  }
-
-  if (safe > duration) {
-    safe = duration;
-  }
-
-  try {
-    await audioPlayer.seek(safe);
-  } catch (_) {}
-
-  try {
-    await waveformController.seekTo(
-      safe.inMilliseconds,
-    );
-  } catch (_) {}
-
-  position = safe;
-
-  currentBeatIndex = 0;
-
-  final double seconds =
-      safe.inMicroseconds /
-      1000000.0;
-
-  while (
-      currentBeatIndex <
-          beatTimes.length &&
-      beatTimes[currentBeatIndex] <
-          seconds) {
-    currentBeatIndex++;
-  }
-
-  beatPulse = 0.0;
-
-  _updateActiveLyricIndex(safe);
-
-  notifyListeners();
-}
-
-
-  void _updateActiveLyricIndex(Duration pos) {
-    if (lyricSentences.isEmpty) return;
-    for (int i = 0; i < lyricSentences.length; i++) {
-      if (pos >= lyricSentences[i].start && pos <= lyricSentences[i].end) {
-        currentLyricIndex = i;
-        break;
-      }
-    }
-  }
-
-  // OPSI 1: REC MERAH (REKAM LANGSUNG MAX 60 DETIK)
-  Future<void> startRecord({Duration? startFrom, Duration? endAt}) async {
+  Future<void> startRecord({
+    Duration? startFrom,
+    Duration? endAt,
+  }) async {
     try {
       await _req();
+
       if (selectedMusicFile != null) {
-        await seekTo(startFrom ?? Duration.zero);
+        await seekTo(
+          startFrom ?? Duration.zero,
+        );
+
         await audioPlayer.play();
-        try { await waveformController.startPlayer(); } catch (_) {}
+
+        try {
+          await waveformController
+              .startPlayer();
+        } catch (_) {}
       }
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+
+      await SystemChrome
+          .setEnabledSystemUIMode(
+        SystemUiMode.immersiveSticky,
+      );
+
       isRecording = true;
       recordSeconds = 0;
       recordedPath = null;
+
       notifyListeners();
 
-      final fileName = 'babe_${DateTime.now().millisecondsSinceEpoch}';
-      await FlutterScreenRecording.startRecordScreenAndAudio(
+      final String fileName =
+          'babe_${DateTime.now().millisecondsSinceEpoch}';
+
+      await FlutterScreenRecording
+          .startRecordScreenAndAudio(
         fileName,
-        titleNotification: "Babe Info REC 60s",
-        messageNotification: "Recording music video...",
+        titleNotification:
+            'Babe Info REC 60s',
+        messageNotification:
+            'Recording music video...',
       );
 
-      Duration targetEnd = endAt ?? (duration.inSeconds > 0 ? (duration.inSeconds > 60 ? const Duration(seconds: 60) : duration) : const Duration(seconds: 60));
+      final Duration targetEnd =
+          endAt ??
+              (duration.inSeconds > 60
+                  ? const Duration(seconds: 60)
+                  : duration);
 
       recordTimer?.cancel();
-      recordTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-        recordSeconds++;
-        notifyListeners();
-        if (startFrom != null && position >= targetEnd) {
-          stopRecord();
-        } else if (recordSeconds >= 60 || (startFrom == null && recordSeconds >= targetEnd.inSeconds)) {
-          stopRecord();
-        }
-      });
+
+      recordTimer = Timer.periodic(
+        const Duration(seconds: 1),
+        (Timer timer) {
+          recordSeconds++;
+          notifyListeners();
+
+          if (startFrom != null &&
+              position >= targetEnd) {
+            stopRecord();
+          } else if (recordSeconds >= 60 ||
+              (startFrom == null &&
+                  recordSeconds >=
+                      targetEnd.inSeconds)) {
+            stopRecord();
+          }
+        },
+      );
     } catch (e) {
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       isRecording = false;
-      errorMessage = 'Record gagal: $e';
+
+      await SystemChrome
+          .setEnabledSystemUIMode(
+        SystemUiMode.edgeToEdge,
+      );
+
+      errorMessage =
+          'Record gagal: $e';
+
       notifyListeners();
     }
-  }
-
-  // OPSI 2: TRIM REC KUNING (DURASI 60s MAX TERPILIH)
-  Future<void> showTrimDialog(BuildContext context) async {
-    if (selectedMusicFile == null || duration == Duration.zero) {
-      errorMessage = 'Upload lagu dulu 📁';
-      notifyListeners();
-      return;
-    }
-    Duration tempStart = Duration.zero;
-    Duration tempEnd = duration.inSeconds > 60 ? const Duration(seconds: 60) : duration;
-
-    await showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSt) {
-            double maxSec = duration.inSeconds.toDouble();
-            if (!maxSec.isFinite || maxSec == 0) maxSec = 60;
-            return AlertDialog(
-              backgroundColor: const Color(0xFF1E1E24),
-              title: const Text('TRIM REC KUNING (MAX 1 MENIT)', style: TextStyle(color: Colors.amber, fontSize: 13, fontWeight: FontWeight.bold)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('${fmt(tempStart)} - ${fmt(tempEnd)} (${(tempEnd - tempStart).inSeconds}s)', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                  const SizedBox(height: 12),
-                  RangeSlider(
-                    min: 0,
-                    max: maxSec,
-                    values: RangeValues(tempStart.inSeconds.toDouble().clamp(0, maxSec), tempEnd.inSeconds.toDouble().clamp(0, maxSec)),
-                    activeColor: Colors.amber,
-                    inactiveColor: Colors.white24,
-                    labels: RangeLabels(fmt(tempStart), fmt(tempEnd)),
-                    onChanged: (v) {
-                      Duration ns = Duration(seconds: v.start.floor());
-                      Duration ne = Duration(seconds: v.end.floor());
-                      if ((ne - ns).inSeconds > 60) ne = ns + const Duration(seconds: 60);
-                      setSt(() {
-                        tempStart = ns;
-                        tempEnd = ne;
-                      });
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    trimStart = tempStart;
-                    trimEnd = tempEnd;
-                    await startRecord(startFrom: trimStart, endAt: trimEnd);
-                  },
-                  child: const Text('Mulai Trim REC'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
   }
 
   Future<void> stopRecord() async {
     try {
       recordTimer?.cancel();
+
       try {
         await audioPlayer.pause();
-        await waveformController.pausePlayer();
+        await waveformController
+            .pausePlayer();
       } catch (_) {}
-      recordedPath = await FlutterScreenRecording.stopRecordScreen;
+
+      recordedPath =
+          await FlutterScreenRecording
+              .stopRecordScreen;
     } catch (e) {
-      errorMessage = 'Stop gagal: $e';
+      errorMessage =
+          'Stop gagal: $e';
     } finally {
       isRecording = false;
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+      await SystemChrome
+          .setEnabledSystemUIMode(
+        SystemUiMode.edgeToEdge,
+      );
+
       notifyListeners();
     }
   }
@@ -874,85 +1239,167 @@ void updateBeatFromPosition(
   Future<void> cancelRecord() async {
     try {
       recordTimer?.cancel();
-      await FlutterScreenRecording.stopRecordScreen;
+
+      await FlutterScreenRecording
+          .stopRecordScreen;
+
       try {
         await audioPlayer.pause();
-        await waveformController.pausePlayer();
+        await waveformController
+            .pausePlayer();
       } catch (_) {}
-    } catch (_) {} finally {
+    } catch (_) {
+      // Tidak melakukan apa-apa
+      // jika rekaman sudah berhenti.
+    } finally {
       isRecording = false;
       recordedPath = null;
       recordSeconds = 0;
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+      await SystemChrome
+          .setEnabledSystemUIMode(
+        SystemUiMode.edgeToEdge,
+      );
+
       notifyListeners();
     }
   }
 
-  // SHARE HASIL REKAMAN KE WHATSAPP
-  Future<void> shareToWhatsApp(BuildContext context) async {
-    if (recordedPath == null || !File(recordedPath!).existsSync()) {
-      errorMessage = 'Belum ada rekaman untuk dibagikan!';
+  // ==========================================
+  // SHARE REKAMAN
+  // ==========================================
+
+  Future<void> shareToWhatsApp(
+    BuildContext context,
+  ) async {
+    if (recordedPath == null ||
+        !File(recordedPath!).existsSync()) {
+      errorMessage =
+          'Belum ada rekaman untuk dibagikan';
+
       notifyListeners();
+
       return;
     }
+
     try {
       await Share.shareXFiles(
-        [XFile(recordedPath!)],
-        text: 'Sponsor Babe Info Gawat - ${lyricSentences.isNotEmpty ? "Lagu + Sync Lirik" : "Video Musik 1 Menit"}',
+        <XFile>[
+          XFile(recordedPath!),
+        ],
+        text:
+            'Sponsor Babe Info Gawat - '
+            '${lyricSentences.isNotEmpty ? "Lagu + Sync Lirik" : "Video Musik"}',
       );
     } catch (e) {
-      errorMessage = 'Gagal share WhatsApp: $e';
+      errorMessage =
+          'Gagal share WhatsApp: $e';
+
       notifyListeners();
     }
   }
 
-  Future<void> showPostRecordDialog(BuildContext context) async {
-    if (recordedPath == null || !File(recordedPath!).existsSync()) return;
+  Future<void> showPostRecordDialog(
+    BuildContext context,
+  ) async {
+    if (recordedPath == null ||
+        !File(recordedPath!).existsSync()) {
+      return;
+    }
 
-    await showDialog(
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E24),
-        title: const Text('🎬 Rekaman Selesai', style: TextStyle(color: Colors.amber, fontSize: 14, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              lyricSentences.isNotEmpty ? 'Video Sync Lirik 1 Menit Berhasil Direkam!' : 'Video Musik Tanpa Lirik Berhasil Direkam!',
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          backgroundColor:
+              const Color(0xFF1E1E24),
+          title: const Text(
+            'Rekaman Selesai',
+            style: TextStyle(
+              color: Colors.amber,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 10),
-            Text('Durasi: ${recordSeconds} detik', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Tutup', style: TextStyle(color: Colors.white54))),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF25D366), foregroundColor: Colors.white),
-            onPressed: () {
-              Navigator.pop(ctx);
-              shareToWhatsApp(context);
-            },
-            icon: const Icon(Icons.share, size: 16),
-            label: const Text('Share WhatsApp'),
           ),
-        ],
-      ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                lyricSentences.isNotEmpty
+                    ? 'Video sync lirik berhasil direkam'
+                    : 'Video musik berhasil direkam',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Durasi: $recordSeconds detik',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+              },
+              child: const Text(
+                'Tutup',
+                style: TextStyle(
+                  color: Colors.white54,
+                ),
+              ),
+            ),
+            ElevatedButton.icon(
+              style:
+                  ElevatedButton.styleFrom(
+                backgroundColor:
+                    const Color(0xFF25D366),
+                foregroundColor:
+                    Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                shareToWhatsApp(context);
+              },
+              icon: const Icon(
+                Icons.share,
+                size: 16,
+              ),
+              label: const Text(
+                'Share WhatsApp',
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
+  // ==========================================
+  // PENUTUP MUSIC CONTROLLER
+  // ==========================================
+
   @override
-void dispose() {
-  _beatGeneration++;
+  void dispose() {
+    _beatGeneration++;
 
-  recordTimer?.cancel();
+    recordTimer?.cancel();
 
-  beatTimes.clear();
+    beatTimes.clear();
 
-  audioPlayer.dispose();
-  waveformController.dispose();
+    audioPlayer.dispose();
 
-  super.dispose();
+    waveformController.dispose();
+
+    super.dispose();
+  }
 }
 
 
