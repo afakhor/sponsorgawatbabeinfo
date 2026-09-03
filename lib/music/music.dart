@@ -245,6 +245,70 @@ int _lastPulseBeatIndex = -1;
 
 Timer? _pulseTimer;
 
+// ==========================================
+  // HELPER DURASI TRIM
+  // ==========================================
+
+
+Duration _clampDuration(
+  Duration value,
+  Duration minimum,
+  Duration maximum,
+) {
+  if (value < minimum) {
+    return minimum;
+  }
+
+  if (value > maximum) {
+    return maximum;
+  }
+
+  return value;
+}
+
+Duration _parseTimeInput(
+  String text,
+) {
+  final String value = text.trim();
+
+  if (value.isEmpty) {
+    return Duration.zero;
+  }
+
+  // Mendukung:
+  // 30
+  // 30.5
+  // 00:30
+  // 01:02.500
+  if (!value.contains(':')) {
+    final double seconds =
+        double.tryParse(value) ?? 0.0;
+
+    return Duration(
+      milliseconds: (seconds * 1000).round(),
+    );
+  }
+
+  final List<String> parts =
+      value.split(':');
+
+  if (parts.length != 2) {
+    return Duration.zero;
+  }
+
+  final int minutes =
+      int.tryParse(parts[0]) ?? 0;
+
+  final double seconds =
+      double.tryParse(parts[1]) ?? 0.0;
+
+  return Duration(
+    milliseconds: (
+      minutes * 60 * 1000 +
+      seconds * 1000
+    ).round(),
+  );
+}
 
   // ==========================================
   // CONSTRUCTOR
@@ -1193,7 +1257,6 @@ Future<void> showTrimDialog(
         'Upload lagu terlebih dahulu';
 
     notifyListeners();
-
     return;
   }
 
@@ -1201,44 +1264,56 @@ Future<void> showTrimDialog(
       Duration.zero;
 
   Duration tempEnd =
-      duration.inSeconds > 60
+      duration > const Duration(seconds: 60)
           ? const Duration(seconds: 60)
           : duration;
 
+  final TextEditingController startController =
+      TextEditingController(
+    text: '0',
+  );
+
+  final TextEditingController endController =
+      TextEditingController(
+    text: (tempEnd.inMilliseconds / 1000)
+        .toStringAsFixed(1),
+  );
+
   await showDialog<void>(
     context: context,
-    builder: (BuildContext ctx) {
+    builder: (BuildContext dialogContext) {
       return StatefulBuilder(
         builder: (
-          BuildContext ctx,
-          void Function(void Function()) setSt,
+          BuildContext context,
+          void Function(void Function()) setDialogState,
         ) {
-          double maxSec =
-              duration.inSeconds.toDouble();
+          final double maxSeconds =
+              math.max(
+                duration.inMilliseconds / 1000.0,
+                1.0,
+              );
 
-          if (!maxSec.isFinite ||
-              maxSec <= 0) {
-            maxSec = 60.0;
-          }
+          double startSeconds =
+              tempStart.inMilliseconds / 1000.0;
 
-          double startSec =
-              tempStart.inMilliseconds /
-                  1000.0;
+          double endSeconds =
+              tempEnd.inMilliseconds / 1000.0;
 
-          double endSec =
-              tempEnd.inMilliseconds /
-                  1000.0;
+          startSeconds = startSeconds.clamp(
+            0.0,
+            maxSeconds,
+          );
 
-          startSec =
-              startSec.clamp(0.0, maxSec);
+          endSeconds = endSeconds.clamp(
+            0.0,
+            maxSeconds,
+          );
 
-          endSec =
-              endSec.clamp(0.0, maxSec);
-
-          if (endSec <= startSec) {
-            endSec =
-                (startSec + 1.0)
-                    .clamp(0.0, maxSec);
+          if (endSeconds <= startSeconds) {
+            endSeconds = math.min(
+              startSeconds + 0.1,
+              maxSeconds,
+            );
           }
 
           return AlertDialog(
@@ -1248,123 +1323,256 @@ Future<void> showTrimDialog(
               'TRIM REC KUNING',
               style: TextStyle(
                 color: Colors.amber,
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${fmt(tempStart)} - ${fmt(tempEnd)} '
-                  '(${(tempEnd - tempStart).inSeconds}s)',
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${fmt(tempStart)} - ${fmt(tempEnd)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                RangeSlider(
-                  min: 0.0,
-                  max: maxSec,
-                  values: RangeValues(
-                    startSec,
-                    endSec,
+                  const SizedBox(height: 4),
+                  Text(
+                    'Durasi: ${fmt(tempEnd - tempStart)} '
+                    '(maksimal 01:00)',
+                    style: const TextStyle(
+                      color: Colors.white60,
+                      fontSize: 12,
+                    ),
                   ),
-                  activeColor: Colors.amber,
-                  inactiveColor: Colors.white24,
-                  labels: RangeLabels(
-                    fmt(tempStart),
-                    fmt(tempEnd),
-                  ),
-                  onChanged: (
-                    RangeValues value,
-                  ) {
-                    Duration newStart =
-                        Duration(
-                      milliseconds:
-                          (value.start * 1000)
-                              .round(),
-                    );
+                  const SizedBox(height: 16),
 
-                    Duration newEnd =
-                        Duration(
-                      milliseconds:
-                          (value.end * 1000)
-                              .round(),
-                    );
+                  TextField(
+                    controller: startController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    style: const TextStyle(
+                      color: Colors.white,
+                    ),
+                    decoration:
+                        const InputDecoration(
+                      labelText:
+                          'Start: detik atau mm:ss',
+                      hintText: '0 atau 00:00',
+                      labelStyle: TextStyle(
+                        color: Colors.amber,
+                      ),
+                      hintStyle: TextStyle(
+                        color: Colors.white38,
+                      ),
+                    ),
+                    onSubmitted: (String value) {
+                      Duration newStart =
+                          _parseTimeInput(value);
 
-                    if (newEnd <= newStart) {
-                      newEnd =
-                          newStart +
-                              const Duration(
-                                seconds: 1,
-                              );
-                    }
+                      newStart = _clampDuration(
+                        newStart,
+                        Duration.zero,
+                        duration,
+                      );
 
-                    if (newEnd - newStart >
-                        const Duration(
-                          seconds: 60,
-                        )) {
-                      newEnd =
-                          newStart +
-                              const Duration(
-                                seconds: 60,
-                              );
+                      if (tempEnd - newStart >
+                          const Duration(seconds: 60)) {
+                        tempEnd =
+                            newStart +
+                            const Duration(seconds: 60);
 
-                      if (newEnd > duration) {
-                        newEnd = duration;
-                        newStart =
-                            newEnd -
-                                const Duration(
-                                  seconds: 60,
-                                );
-
-                        if (newStart <
-                            Duration.zero) {
-                          newStart =
-                              Duration.zero;
+                        if (tempEnd > duration) {
+                          tempEnd = duration;
                         }
                       }
-                    }
 
-                    setSt(() {
-                      tempStart = newStart;
-                      tempEnd = newEnd;
-                    });
-                  },
-                ),
-              ],
+                      if (tempEnd <= newStart) {
+                        newStart =
+                            tempEnd -
+                            const Duration(milliseconds: 100);
+
+                        if (newStart < Duration.zero) {
+                          newStart = Duration.zero;
+                        }
+                      }
+
+                      setDialogState(() {
+                        tempStart = newStart;
+                        startController.text =
+                            (newStart.inMilliseconds / 1000)
+                                .toStringAsFixed(1);
+                        endController.text =
+                            (tempEnd.inMilliseconds / 1000)
+                                .toStringAsFixed(1);
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  TextField(
+                    controller: endController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    style: const TextStyle(
+                      color: Colors.white,
+                    ),
+                    decoration:
+                        const InputDecoration(
+                      labelText:
+                          'End: detik atau mm:ss',
+                      hintText: '60 atau 01:00',
+                      labelStyle: TextStyle(
+                        color: Colors.amber,
+                      ),
+                      hintStyle: TextStyle(
+                        color: Colors.white38,
+                      ),
+                    ),
+                    onSubmitted: (String value) {
+                      Duration newEnd =
+                          _parseTimeInput(value);
+
+                      newEnd = _clampDuration(
+                        newEnd,
+                        Duration.zero,
+                        duration,
+                      );
+
+                      if (newEnd <= tempStart) {
+                        newEnd =
+                            tempStart +
+                            const Duration(
+                              milliseconds: 100,
+                            );
+                      }
+
+                      if (newEnd - tempStart >
+                          const Duration(seconds: 60)) {
+                        newEnd =
+                            tempStart +
+                            const Duration(seconds: 60);
+
+                        if (newEnd > duration) {
+                          newEnd = duration;
+                        }
+                      }
+
+                      setDialogState(() {
+                        tempEnd = newEnd;
+                        endController.text =
+                            (newEnd.inMilliseconds / 1000)
+                                .toStringAsFixed(1);
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  RangeSlider(
+                    min: 0.0,
+                    max: maxSeconds,
+                    values: RangeValues(
+                      startSeconds,
+                      endSeconds,
+                    ),
+                    activeColor: Colors.amber,
+                    inactiveColor: Colors.white24,
+                    onChanged: (
+                      RangeValues values,
+                    ) {
+                      Duration newStart =
+                          Duration(
+                        milliseconds:
+                            (values.start * 1000).round(),
+                      );
+
+                      Duration newEnd =
+                          Duration(
+                        milliseconds:
+                            (values.end * 1000).round(),
+                      );
+
+                      if (newEnd <= newStart) {
+                        newEnd =
+                            newStart +
+                            const Duration(
+                              milliseconds: 100,
+                            );
+                      }
+
+                      if (newEnd - newStart >
+                          const Duration(seconds: 60)) {
+                        newEnd =
+                            newStart +
+                            const Duration(seconds: 60);
+
+                        if (newEnd > duration) {
+                          newEnd = duration;
+                          newStart =
+                              newEnd -
+                              const Duration(seconds: 60);
+
+                          if (newStart < Duration.zero) {
+                            newStart = Duration.zero;
+                          }
+                        }
+                      }
+
+                      setDialogState(() {
+                        tempStart = newStart;
+                        tempEnd = newEnd;
+
+                        startController.text =
+                            (newStart.inMilliseconds / 1000)
+                                .toStringAsFixed(1);
+
+                        endController.text =
+                            (newEnd.inMilliseconds / 1000)
+                                .toStringAsFixed(1);
+                      });
+                    },
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.pop(ctx);
+                  Navigator.pop(dialogContext);
                 },
-                child: const Text(
-                  'Batal',
-                ),
+                child: const Text('Batal'),
               ),
               ElevatedButton(
-                style:
-                    ElevatedButton.styleFrom(
-                  backgroundColor:
-                      Colors.amber,
-                  foregroundColor:
-                      Colors.black,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber,
+                  foregroundColor: Colors.black,
                 ),
                 onPressed: () async {
-                  Navigator.pop(ctx);
+                  if (tempEnd <= tempStart) {
+                    return;
+                  }
 
-                  trimStart =
-                      tempStart;
+                  if (tempEnd - tempStart >
+                      const Duration(seconds: 60)) {
+                    return;
+                  }
 
-                  trimEnd =
-                      tempEnd;
+                  Navigator.pop(dialogContext);
+
+                  trimStart = tempStart;
+                  trimEnd = tempEnd;
 
                   await startRecord(
-                    startFrom: trimStart,
-                    endAt: trimEnd,
+                    startFrom: tempStart,
+                    endAt: tempEnd,
                   );
                 },
                 child: const Text(
@@ -1377,7 +1585,11 @@ Future<void> showTrimDialog(
       );
     },
   );
+
+  startController.dispose();
+  endController.dispose();
 }
+
 
 
   // ==========================================
@@ -1391,21 +1603,67 @@ Future<void> showTrimDialog(
   try {
     await _req();
 
-    if (selectedMusicFile != null) {
-      await seekTo(
-        startFrom ?? Duration.zero,
+    final bool isTrimRecording =
+        startFrom != null &&
+        endAt != null;
+
+    final Duration recordStart =
+        isTrimRecording
+            ? _clampDuration(
+                startFrom,
+                Duration.zero,
+                duration,
+              )
+            : Duration.zero;
+
+    Duration recordEnd;
+
+    if (isTrimRecording) {
+      recordEnd = _clampDuration(
+        endAt,
+        recordStart +
+            const Duration(milliseconds: 100),
+        duration,
       );
 
-      await audioPlayer.play();
+      // Maksimum panjang rekaman 60 detik.
+      if (recordEnd - recordStart >
+          const Duration(seconds: 60)) {
+        recordEnd =
+            recordStart +
+            const Duration(seconds: 60);
 
-      try {
-        await waveformController
-            .startPlayer();
-      } catch (_) {}
+        if (recordEnd > duration) {
+          recordEnd = duration;
+        }
+      }
+    } else {
+      // REC merah selalu dari nol dan maksimum 60 detik.
+      recordEnd = duration;
+
+      if (recordEnd >
+          const Duration(seconds: 60)) {
+        recordEnd =
+            const Duration(seconds: 60);
+      }
     }
 
-    await SystemChrome
-        .setEnabledSystemUIMode(
+    if (recordEnd <= recordStart) {
+      errorMessage =
+          'Rentang waktu rekaman tidak valid';
+      notifyListeners();
+      return;
+    }
+
+    await seekTo(recordStart);
+
+    await audioPlayer.play();
+
+    try {
+      await waveformController.startPlayer();
+    } catch (_) {}
+
+    await SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.immersiveSticky,
     );
 
@@ -1421,51 +1679,63 @@ Future<void> showTrimDialog(
     await FlutterScreenRecording
         .startRecordScreenAndAudio(
       fileName,
-      titleNotification:
-          'Babe Info REC 60s',
-      messageNotification:
-          'Recording music video...',
+      titleNotification: 'Babe Info REC',
+      messageNotification: isTrimRecording
+          ? 'Recording selected music range...'
+          : 'Recording from beginning...',
     );
-
-    final Duration targetEnd =
-        endAt ??
-            (duration.inSeconds > 60
-                ? const Duration(seconds: 60)
-                : duration);
 
     recordTimer?.cancel();
 
     recordTimer = Timer.periodic(
-      const Duration(seconds: 1),
+      const Duration(milliseconds: 200),
       (Timer timer) {
-        recordSeconds++;
+        if (!isRecording) {
+          timer.cancel();
+          return;
+        }
+
+        final Duration current =
+            position;
+
+        final Duration elapsed =
+            current - recordStart;
+
+        recordSeconds =
+            elapsed.inMilliseconds <= 0
+                ? 0
+                : (elapsed.inMilliseconds / 1000)
+                    .floor();
+
         notifyListeners();
 
-        if (startFrom != null &&
-            position >= targetEnd) {
-          stopRecord();
-        } else if (recordSeconds >= 60 ||
-            (startFrom == null &&
-                recordSeconds >=
-                    targetEnd.inSeconds)) {
+        if (current >= recordEnd ||
+            elapsed >= const Duration(seconds: 60)) {
           stopRecord();
         }
       },
     );
   } catch (e) {
+    recordTimer?.cancel();
+
     isRecording = false;
 
-    await SystemChrome
-        .setEnabledSystemUIMode(
-      SystemUiMode.edgeToEdge,
-    );
+    try {
+      await audioPlayer.pause();
+    } catch (_) {}
 
-    errorMessage =
-        'Record gagal: $e';
+    try {
+      await SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.edgeToEdge,
+      );
+    } catch (_) {}
+
+    errorMessage = 'Record gagal: $e';
 
     notifyListeners();
   }
 }
+
 
   Future<void> stopRecord() async {
     try {
@@ -1623,10 +1893,11 @@ Future<void> showTrimDialog(
                 foregroundColor:
                     Colors.white,
               ),
-              onPressed: () {
-                Navigator.pop(ctx);
-                shareToWhatsApp(context);
-              },
+              onPressed: () async {
+  Navigator.pop(ctx);
+  await shareToWhatsApp(context);
+},
+
               icon: const Icon(
                 Icons.share,
                 size: 16,
@@ -2041,46 +2312,98 @@ class _MusicPanelState extends State<MusicPanel> {
               ),
               const SizedBox(height: 12),
               Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: ctrl.isRecording
-                          ? () async {
-                              await ctrl.stopRecord();
-                              if (context.mounted) {
-                                await ctrl.showPostRecordDialog(context);
-                              }
-                            }
-                          : () => ctrl.startRecord(),
-                      icon: Icon(ctrl.isRecording ? Icons.stop : Icons.fiber_manual_record, size: 18),
-                      label: Text(
-                        ctrl.isRecording ? '${ctrl.recordSeconds}s STOP' : 'REC MERAH',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.amber,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: ctrl.isRecording ? null : () => ctrl.showTrimDialog(context),
-                      icon: const Icon(Icons.content_cut, size: 18),
-                      label: const Text('TRIM REC KUNING', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                    ),
-                  ),
-                ],
-              ),
+  children: [
+    // ==========================================
+    // REC MERAH
+    // ==========================================
+    Expanded(
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(
+            vertical: 12,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        onPressed: ctrl.isRecording
+            ? () async {
+                await ctrl.stopRecord();
+
+                if (context.mounted &&
+                    ctrl.recordedPath != null) {
+                  await ctrl.showPostRecordDialog(
+                    context,
+                  );
+                }
+              }
+            : () async {
+                await ctrl.startRecord(
+                  startFrom: Duration.zero,
+                  endAt: ctrl.duration >
+                          const Duration(seconds: 60)
+                      ? const Duration(seconds: 60)
+                      : ctrl.duration,
+                );
+              },
+        icon: Icon(
+          ctrl.isRecording
+              ? Icons.stop
+              : Icons.fiber_manual_record,
+          size: 18,
+        ),
+        label: Text(
+          ctrl.isRecording
+              ? '${ctrl.recordSeconds}s STOP'
+              : 'REC MERAH',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    ),
+
+    const SizedBox(width: 8),
+
+    // ==========================================
+    // REC KUNING
+    // ==========================================
+    Expanded(
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.amber,
+          foregroundColor: Colors.black,
+          padding: const EdgeInsets.symmetric(
+            vertical: 12,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        onPressed: ctrl.isRecording
+            ? null
+            : () => ctrl.showTrimDialog(
+                  context,
+                ),
+        icon: const Icon(
+          Icons.content_cut,
+          size: 18,
+        ),
+        label: const Text(
+          'TRIM REC KUNING',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 11,
+          ),
+        ),
+      ),
+    ),
+  ],
+),
+
             ],
           );
         },
