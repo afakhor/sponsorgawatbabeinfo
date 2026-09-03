@@ -155,10 +155,7 @@ class LyricKaraoke extends StatelessWidget {
   }
 }
 
-// ==========================================
-// MUSIC CONTROLLER
-// ==========================================
-class MusicController extends ChangeNotifier {
+ 
   // ==========================================
 // MUSIC CONTROLLER
 // ==========================================
