@@ -3,18 +3,16 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:audio_decode/audio_decode.dart';
-
-import 'beat_detector.dart';
-
 import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screen_recording/flutter_screen_recording.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
+
+import 'beat_detector.dart';
 
 // ==========================================
 // RUNNING TEXT WIDGET
@@ -229,56 +227,75 @@ class MusicController extends ChangeNotifier {
   // DATA BEAT
   // ==========================================
 
-  List<double> beatTimes =
-      <double>[];
+  List<double> beatTimes = <double>[];
 
-  int currentBeatIndex = 0;
+int currentBeatIndex = 0;
 
-  double beatPulse = 0.0;
+double beatPulse = 0.0;
 
-  bool isAnalyzingBeats = false;
+bool isAnalyzingBeats = false;
 
-  String? beatError;
+String? beatError;
 
-  int _beatGeneration = 0;
+int _beatGeneration = 0;
+
+double _lastPositionSeconds = 0.0;
+
+int _lastPulseBeatIndex = -1;
+
+Timer? _pulseTimer;
+
 
   // ==========================================
   // CONSTRUCTOR
   // ==========================================
 
-  MusicController() {
-    audioPlayer.positionStream.listen(
-      (Duration value) {
-        position = value;
+ MusicController() {
+  audioPlayer.positionStream.listen(
+    (Duration value) {
+      position = value;
 
-        _updateLyricIndex();
+      final double currentSeconds =
+          value.inMicroseconds /
+              Duration.microsecondsPerSecond;
 
-        updateBeatFromPosition(value);
+      _updateLyricIndex();
 
-        notifyListeners();
-      },
-    );
+      updateBeatFromPosition(
+        value,
+      );
 
-    audioPlayer.playerStateStream.listen(
-      (ja.PlayerState state) {
-        isPlaying = state.playing;
+      _lastPositionSeconds =
+          currentSeconds;
 
-        if (state.processingState ==
-            ja.ProcessingState.completed) {
-          currentBeatIndex = 0;
-          beatPulse = 0.0;
-        }
+      notifyListeners();
+    },
+  );
 
-        notifyListeners();
-      },
-    );
-  }
+  audioPlayer.playerStateStream.listen(
+    (ja.PlayerState state) {
+      isPlaying = state.playing;
+
+      if (state.processingState ==
+          ja.ProcessingState.completed) {
+        position = duration;
+        currentBeatIndex = 0;
+        _lastPulseBeatIndex = -1;
+        beatPulse = 0.0;
+        _lastPositionSeconds = 0.0;
+      }
+
+      notifyListeners();
+    },
+  );
+}
+
 
   // ==========================================
   // ANALISIS BEAT OFFLINE
   // ==========================================
 
-  Future<void> analyzeBeats(
+ Future<void> analyzeBeats(
   String path,
 ) async {
   final int generation =
@@ -289,6 +306,7 @@ class MusicController extends ChangeNotifier {
     beatError = null;
     beatTimes = <double>[];
     currentBeatIndex = 0;
+    _lastPulseBeatIndex = -1;
     beatPulse = 0.0;
 
     notifyListeners();
@@ -303,20 +321,16 @@ class MusicController extends ChangeNotifier {
       return;
     }
 
+    final List<double> samples =
+        pcm.samples.map((int sample) {
+      return sample / 32768.0;
+    }).toList();
+
     final BeatDetector detector =
         BeatDetector(
       sampleRate: pcm.sampleRate,
       channels: pcm.channels,
     );
-
-    final List<double> samples =
-        pcm.samples
-            .map(
-              (int sample) {
-                return sample / 32768.0;
-              },
-            )
-            .toList();
 
     final List<double> detected =
         await Future<List<double>>.microtask(
@@ -333,12 +347,18 @@ class MusicController extends ChangeNotifier {
 
     beatTimes = detected;
     currentBeatIndex = 0;
+    _lastPulseBeatIndex = -1;
     beatPulse = 0.0;
     isAnalyzingBeats = false;
 
-    errorMessage =
-        'Beat terdeteksi: '
-        '${beatTimes.length} titik';
+    if (beatTimes.isEmpty) {
+      errorMessage =
+          'Beat tidak terdeteksi';
+    } else {
+      errorMessage =
+          'Beat terdeteksi: '
+          '${beatTimes.length} titik';
+    }
 
     notifyListeners();
   } catch (e) {
@@ -358,52 +378,93 @@ class MusicController extends ChangeNotifier {
   }
 }
 
-
   // ==========================================
   // UPDATE BEAT SESUAI POSISI MUSIK
   // ==========================================
 
   void updateBeatFromPosition(
-    Duration currentPosition,
-  ) {
-    if (!isPlaying ||
-        beatTimes.isEmpty) {
-      beatPulse *= 0.84;
+  Duration currentPosition,
+) {
+  final double seconds =
+      currentPosition.inMicroseconds /
+          Duration.microsecondsPerSecond;
 
-      if (beatPulse < 0.01) {
-        beatPulse = 0.0;
-      }
+  if (!isPlaying ||
+      beatTimes.isEmpty) {
+    beatPulse = _decayPulse(
+      beatPulse,
+      0.88,
+    );
 
-      return;
-    }
+    return;
+  }
 
-    final double seconds =
-        currentPosition.inMicroseconds /
-            Duration.microsecondsPerSecond;
+  // Jika posisi mundur, berarti user melakukan seek.
+  if (seconds < _lastPositionSeconds - 0.08) {
+    currentBeatIndex = 0;
+    _lastPulseBeatIndex = -1;
 
     while (
-        currentBeatIndex <
-            beatTimes.length &&
-        beatTimes[currentBeatIndex] <=
-            seconds) {
-      final double difference =
-          seconds -
-          beatTimes[currentBeatIndex];
-
-      if (difference >= 0.0 &&
-          difference < 0.14) {
-        beatPulse = 1.0;
-      }
-
+      currentBeatIndex < beatTimes.length &&
+      beatTimes[currentBeatIndex] < seconds
+    ) {
       currentBeatIndex++;
     }
 
-    beatPulse *= 0.78;
-
-    if (beatPulse < 0.01) {
-      beatPulse = 0.0;
-    }
+    beatPulse = 0.0;
+    _lastPositionSeconds = seconds;
+    return;
   }
+
+  // Lewati beat yang sudah waktunya.
+  while (
+    currentBeatIndex < beatTimes.length &&
+    beatTimes[currentBeatIndex] <= seconds
+  ) {
+    final int beatIndex =
+        currentBeatIndex;
+
+    final double beatTime =
+        beatTimes[beatIndex];
+
+    final double difference =
+        seconds - beatTime;
+
+    // Satu beat hanya boleh memicu satu pulse.
+    if (difference >= 0.0 &&
+        difference <= 0.16 &&
+        beatIndex != _lastPulseBeatIndex) {
+      beatPulse = 1.0;
+      _lastPulseBeatIndex = beatIndex;
+    }
+
+    currentBeatIndex++;
+  }
+
+  // Decay hanya jika tidak ada beat baru.
+  if (beatPulse > 0.0 &&
+      beatPulse < 0.999) {
+    beatPulse *= 0.88;
+  }
+
+  if (beatPulse < 0.01) {
+    beatPulse = 0.0;
+  }
+
+  _lastPositionSeconds = seconds;
+}
+
+double _decayPulse(
+  double value,
+  double factor,
+) {
+  final double result =
+      value * factor;
+
+  return result < 0.01
+      ? 0.0
+      : result;
+}
 
   // ==========================================
   // UPDATE LIRIK
@@ -553,14 +614,13 @@ class MusicController extends ChangeNotifier {
 
       currentLyricIndex = 0;
 
-      beatTimes =
-          <double>[];
+      beatTimes = <double>[];
+currentBeatIndex = 0;
+_lastPulseBeatIndex = -1;
+_lastPositionSeconds = 0.0;
+beatPulse = 0.0;
+beatError = null;
 
-      currentBeatIndex = 0;
-
-      beatPulse = 0.0;
-
-      beatError = null;
       errorMessage = null;
       isLoading = true;
 
@@ -625,49 +685,51 @@ class MusicController extends ChangeNotifier {
   // ==========================================
 
   Future<void> seekTo(
-    Duration value,
-  ) async {
-    Duration safe =
-        value;
+  Duration value,
+) async {
+  Duration safe = value;
 
-    if (safe < Duration.zero) {
-      safe = Duration.zero;
-    }
-
-    if (safe > duration) {
-      safe = duration;
-    }
-
-    try {
-      await audioPlayer.seek(safe);
-    } catch (_) {}
-
-    try {
-      await waveformController.seekTo(
-        safe.inMilliseconds,
-      );
-    } catch (_) {}
-
-    position = safe;
-    beatPulse = 0.0;
-    currentBeatIndex = 0;
-
-    final double seconds =
-        safe.inMicroseconds /
-            Duration.microsecondsPerSecond;
-
-    while (
-        currentBeatIndex <
-            beatTimes.length &&
-        beatTimes[currentBeatIndex] <
-            seconds) {
-      currentBeatIndex++;
-    }
-
-    _updateActiveLyricIndex(safe);
-
-    notifyListeners();
+  if (safe < Duration.zero) {
+    safe = Duration.zero;
   }
+
+  if (safe > duration) {
+    safe = duration;
+  }
+
+  try {
+    await audioPlayer.seek(safe);
+  } catch (_) {}
+
+  try {
+    await waveformController.seekTo(
+      safe.inMilliseconds,
+    );
+  } catch (_) {}
+
+  position = safe;
+  beatPulse = 0.0;
+  _lastPulseBeatIndex = -1;
+
+  final double seconds =
+      safe.inMicroseconds /
+          Duration.microsecondsPerSecond;
+
+  currentBeatIndex = 0;
+
+  while (
+    currentBeatIndex < beatTimes.length &&
+    beatTimes[currentBeatIndex] < seconds
+  ) {
+    currentBeatIndex++;
+  }
+
+  _lastPositionSeconds = seconds;
+
+  _updateActiveLyricIndex(safe);
+
+  notifyListeners();
+}
 
   // ==========================================
   // PARSER LIRIK LRC DAN TEKS BIASA
@@ -1584,20 +1646,20 @@ Future<void> showTrimDialog(
   // ==========================================
 
   @override
-  void dispose() {
-    _beatGeneration++;
+void dispose() {
+  _beatGeneration++;
 
-    recordTimer?.cancel();
+  recordTimer?.cancel();
+  _pulseTimer?.cancel();
 
-    beatTimes.clear();
+  beatTimes.clear();
 
-    audioPlayer.dispose();
+  audioPlayer.dispose();
+  waveformController.dispose();
 
-    waveformController.dispose();
-
-    super.dispose();
-  }
+  super.dispose();
 }
+
 
 
 // ==========================================
