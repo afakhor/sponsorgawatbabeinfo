@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -67,69 +68,92 @@ class _SponsorBabePageState extends State<SponsorBabePage>
 
   String? _error;
 
-  // Mencegah dialog share tampil dua kali.
-  bool _postRecordDialogShowing = false;
+// Mencegah dialog share tampil dua kali.
+bool _postRecordDialogShowing = false;
+
+// Menyimpan status rekaman sebelumnya.
+// Dialog hanya muncul ketika status berubah
+// dari true menjadi false.
+bool _wasRecording = false;
+
 
   @override
-  void initState() {
-    super.initState();
+void initState() {
+  super.initState();
 
-    _musicController = MusicController();
+  _musicController = MusicController();
 
-    // Memantau saat rekaman selesai otomatis maupun manual.
-    _musicController.addListener(
-      _handleRecordingFinished,
-    );
+  _musicController.addListener(
+    _handleRecordingFinished,
+  );
 
-    _ticker = createTicker(
-      _onTick,
-    )..start();
+  _ticker = createTicker(
+    _onTick,
+  )..start();
 
-    _loadShaderAndTexture();
-  }
+  _loadShaderAndTexture();
+}
+
 
   // ==================================================
   // DETEKSI REKAMAN SELESAI
   // ==================================================
 
   void _handleRecordingFinished() {
-    if (!mounted) {
-      return;
-    }
+  if (!mounted) {
+    return;
+  }
 
-    // Masih merekam, jangan tampilkan dialog.
-    if (_musicController.isRecording) {
-      return;
-    }
+  final bool currentlyRecording =
+      _musicController.isRecording;
 
-    // Belum ada file rekaman.
-    if (_musicController.recordedPath == null ||
-        _musicController.recordedPath!.isEmpty) {
-      return;
-    }
+  // Selama masih merekam, simpan status true.
+  if (currentlyRecording) {
+    _wasRecording = true;
+    return;
+  }
 
-    // Dialog sudah sedang ditampilkan.
-    if (_postRecordDialogShowing) {
-      return;
-    }
+  // Tidak ada perubahan true -> false.
+  // Mencegah dialog muncul berulang kali
+  // setiap notifyListeners().
+  if (!_wasRecording) {
+    return;
+  }
 
-    _postRecordDialogShowing = true;
+  _wasRecording = false;
 
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) async {
-        if (!mounted) {
-          _postRecordDialogShowing = false;
-          return;
-        }
+  final String? path =
+      _musicController.recordedPath;
 
+  if (path == null ||
+      path.isEmpty ||
+      !File(path).existsSync()) {
+    return;
+  }
+
+  if (_postRecordDialogShowing) {
+    return;
+  }
+
+  _postRecordDialogShowing = true;
+
+  WidgetsBinding.instance.addPostFrameCallback(
+    (_) async {
+      if (!mounted) {
+        _postRecordDialogShowing = false;
+        return;
+      }
+
+      try {
         await _musicController.showPostRecordDialog(
           context,
         );
-
+      } finally {
         _postRecordDialogShowing = false;
-      },
-    );
-  }
+      }
+    },
+  );
+}
 
   // ==================================================
   // TICKER
@@ -252,21 +276,22 @@ class _SponsorBabePageState extends State<SponsorBabePage>
   // ==================================================
 
   @override
-  void dispose() {
-    _ticker.dispose();
+void dispose() {
+  _ticker.dispose();
 
-    _musicController.removeListener(
-      _handleRecordingFinished,
-    );
+  _musicController.removeListener(
+    _handleRecordingFinished,
+  );
 
-    _textTexture?.dispose();
+  _textTexture?.dispose();
 
-    _musicController.dispose();
+  _musicController.dispose();
 
-    _sheetController.dispose();
+  _sheetController.dispose();
 
-    super.dispose();
-  }
+  super.dispose();
+}
+
 
   // ==================================================
   // BUILD
