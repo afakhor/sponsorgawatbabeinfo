@@ -5,6 +5,9 @@ uniform float iTime;
 uniform float rotY;
 uniform float windRot;
 uniform float glow;
+uniform float beatPulse;
+uniform float rotX;
+uniform float axisTilt;
 
 uniform sampler2D textTexture;
 
@@ -12,14 +15,10 @@ out vec4 fragColor;
 
 const float PI = 3.14159265359;
 const float TWO_PI = 6.28318530718;
-// Ukuran globe
+
 const float GLOBE_RADIUS = 0.27;
-
-// Jarak kosong antara globe dan atmosfer
-const float ATMOSPHERE_GAP = 0.010;
-
- //Ketebalan atmosfer setelah jarak kosong
-const float ATMOSPHERE_THICKNESS = 0.180;
+const float ATMOSPHERE_GAP = 0.025;
+const float ATMOSPHERE_THICKNESS = 0.16;
 
 // --------------------------------------------------
 // RANDOM
@@ -27,8 +26,7 @@ const float ATMOSPHERE_THICKNESS = 0.180;
 
 float hash1(float p) {
     return fract(
-        sin(p * 127.1) *
-        43758.5453
+        sin(p * 127.1) * 43758.5453
     );
 }
 
@@ -39,36 +37,57 @@ float hash2(vec2 p) {
     );
 }
 
-float angularDistance(float a, float b) {
-    float d = abs(a - b);
-    return min(d, TWO_PI - d);
+// --------------------------------------------------
+// ROTASI TITIK 3D
+// --------------------------------------------------
+
+vec3 rotateXPoint(vec3 p, float angle) {
+    float c = cos(angle);
+    float s = sin(angle);
+
+    return vec3(
+        p.x,
+        p.y * c - p.z * s,
+        p.y * s + p.z * c
+    );
+}
+
+vec3 rotateYPoint(vec3 p, float angle) {
+    float c = cos(angle);
+    float s = sin(angle);
+
+    return vec3(
+        p.x * c - p.z * s,
+        p.y,
+        p.x * s + p.z * c
+    );
+}
+
+vec3 rotateZPoint(vec3 p, float angle) {
+    float c = cos(angle);
+    float s = sin(angle);
+
+    return vec3(
+        p.x * c - p.y * s,
+        p.x * s + p.y * c,
+        p.z
+    );
 }
 
 // --------------------------------------------------
-// BUIH NEBULA LOOPING
+// BUIH / NEBULA
 // --------------------------------------------------
 
 vec3 spaceBubbles(
     vec2 p,
-    float time
+    float time,
+    float pulse
 ) {
-    // p adalah koordinat yang sudah dipusatkan.
-    // Ukuran grid dibuat berdasarkan tinggi layar.
-    vec2 grid =
-        p *
-        9.5;
+    vec2 grid = p * 9.5;
+    vec2 baseCell = floor(grid);
 
-    vec2 baseCell =
-        floor(
-            grid
-        );
+    vec3 result = vec3(0.0);
 
-    vec3 bubbleColor =
-        vec3(
-            0.0
-        );
-
-    // Beberapa lapisan agar terlihat seperti nebula
     for (
         float layer = 0.0;
         layer < 3.0;
@@ -81,97 +100,49 @@ vec3 spaceBubbles(
                 layer * 37.41
             );
 
-        float seed =
-            hash2(
-                cell
-            );
+        float seed = hash2(cell);
 
-        // Tidak semua cell memiliki buih
         float exists =
-            step(
-                0.72,
-                seed
-            );
+            step(0.72, seed);
 
-        // Posisi acak buih di dalam cell
         vec2 randomPosition =
             vec2(
-                hash2(
-                    cell +
-                    vec2(
-                        13.1,
-                        4.7
-                    )
-                ),
-                hash2(
-                    cell +
-                    vec2(
-                        7.3,
-                        21.8
-                    )
-                )
-            ) -
-            0.5;
+                hash2(cell + vec2(13.1, 4.7)),
+                hash2(cell + vec2(7.3, 21.8))
+            ) - 0.5;
 
-        // Posisi lokal cell
         vec2 localPosition =
-            fract(
-                grid
-            ) -
-            0.5;
+            fract(grid) - 0.5;
 
-        // Satu siklus penuh:
-        // kecil -> besar -> putih -> kecil -> hilang
         float cycleLength =
             3.5 +
             hash2(
-                cell +
-                vec2(
-                    44.2,
-                    16.8
-                )
-            ) *
-            3.0;
+                cell + vec2(44.2, 16.8)
+            ) * 3.0;
 
         float phase =
             fract(
-                time /
-                cycleLength +
-                seed
+                time / cycleLength + seed
             );
 
-        // Gerakan perlahan ke atas
         vec2 bubblePosition =
             localPosition -
             randomPosition;
 
-        bubblePosition.y +=
-            phase *
-            0.55;
+        bubblePosition.y += phase * 0.55;
 
-        // Goyangan horizontal halus
         bubblePosition.x +=
             sin(
-                phase *
-                TWO_PI +
-                seed *
-                18.0
-            ) *
-            0.045;
+                phase * TWO_PI +
+                seed * 18.0
+            ) * 0.045;
 
         float distanceToBubble =
-            length(
-                bubblePosition
-            );
+            length(bubblePosition);
 
-        // 0 -> kecil, 1 -> besar, 0 -> mengecil
         float grow =
-            sin(
-                phase *
-                PI
-            );
+            sin(phase * PI);
 
-        // Ukuran buih berubah selama siklus
         float bubbleSize =
             mix(
                 0.018,
@@ -179,7 +150,10 @@ vec3 spaceBubbles(
                 grow
             );
 
-        // Bentuk kabut lembut
+        bubbleSize *=
+            1.0 +
+            pulse * 0.28;
+
         float bubble =
             1.0 -
             smoothstep(
@@ -188,7 +162,6 @@ vec3 spaceBubbles(
                 distanceToBubble
             );
 
-        // Cincin luar agar tampak seperti buih
         float bubbleRing =
             1.0 -
             smoothstep(
@@ -204,8 +177,6 @@ vec3 spaceBubbles(
                 distanceToBubble
             );
 
-        // Cahaya naik saat membesar,
-        // paling terang saat fase tengah
         float brightness =
             smoothstep(
                 0.04,
@@ -214,119 +185,79 @@ vec3 spaceBubbles(
             ) *
             (
                 0.20 +
-                grow *
-                0.80
+                grow * 0.80
             );
 
-        // Membuat warna berubah selama siklus:
-        // merah -> jingga -> emas -> biru kehijauan -> putih
         vec3 redColor =
-            vec3(
-                0.95,
-                0.015,
-                0.003
-            );
+            vec3(0.95, 0.015, 0.003);
 
         vec3 orangeColor =
-            vec3(
-                1.0,
-                0.16,
-                0.015
-            );
+            vec3(1.0, 0.16, 0.015);
 
         vec3 goldColor =
-            vec3(
-                1.0,
-                0.62,
-                0.045
-            );
+            vec3(1.0, 0.62, 0.045);
 
         vec3 cyanColor =
-            vec3(
-                0.03,
-                0.80,
-                0.72
-            );
+            vec3(0.03, 0.80, 0.72);
 
         vec3 whiteColor =
-            vec3(
-                1.0,
-                0.98,
-                0.90
-            );
+            vec3(1.0, 0.98, 0.90);
 
         vec3 colorPhase;
 
-        if (
-            grow < 0.25
-        ) {
+        if (grow < 0.25) {
             colorPhase =
                 mix(
                     redColor,
                     orangeColor,
-                    grow /
-                    0.25
+                    grow / 0.25
                 );
-        } else if (
-            grow < 0.50
-        ) {
+        } else if (grow < 0.50) {
             colorPhase =
                 mix(
                     orangeColor,
                     goldColor,
-                    (
-                        grow -
-                        0.25
-                    ) /
-                    0.25
+                    (grow - 0.25) / 0.25
                 );
-        } else if (
-            grow < 0.78
-        ) {
+        } else if (grow < 0.78) {
             colorPhase =
                 mix(
                     goldColor,
                     cyanColor,
-                    (
-                        grow -
-                        0.50
-                    ) /
-                    0.28
+                    (grow - 0.50) / 0.28
                 );
         } else {
             colorPhase =
                 mix(
                     cyanColor,
                     whiteColor,
-                    (
-                        grow -
-                        0.78
-                    ) /
-                    0.22
+                    (grow - 0.78) / 0.22
                 );
         }
 
-        // Buih utama
-        bubbleColor +=
+        float pulseBoost =
+            1.0 +
+            pulse * 0.80;
+
+        result +=
             colorPhase *
             bubble *
             brightness *
             exists *
             (
                 0.45 +
-                layer *
-                0.18
-            );
+                layer * 0.18
+            ) *
+            pulseBoost;
 
-        // Lingkaran pinggir berwarna lebih terang
-        bubbleColor +=
+        result +=
             whiteColor *
             bubbleRing *
             brightness *
             exists *
-            0.85;
+            0.85 *
+            pulseBoost;
 
-        // Titik pusat putih
         float whiteCenter =
             1.0 -
             smoothstep(
@@ -342,37 +273,382 @@ vec3 spaceBubbles(
                 grow
             );
 
-        bubbleColor +=
+        result +=
             whiteColor *
             whiteCenter *
             brightness *
             exists *
-            1.35;
+            1.35 *
+            pulseBoost;
     }
 
-    return bubbleColor;
+    return result;
 }
 
 // --------------------------------------------------
-// PETIR YANG MENYELIMUTI GLOBE
+// BINTANG
+// --------------------------------------------------
+
+vec3 starLayer(
+    vec2 p,
+    float time
+) {
+    vec2 cell = floor(p * 110.0);
+
+    float value =
+        hash2(cell);
+
+    float star =
+        step(0.993, value);
+
+    float twinkle =
+        0.65 +
+        0.35 *
+        sin(
+            time * 3.0 +
+            value * 60.0
+        );
+
+    return vec3(
+        0.55,
+        0.75,
+        1.0
+    ) *
+    star *
+    twinkle *
+    0.40;
+}
+
+// --------------------------------------------------
+// ATMOSFER
+// --------------------------------------------------
+
+float globeAtmosphere(
+    float radius,
+    float time,
+    float pulse
+) {
+    float distanceFromGlobe =
+        radius -
+        GLOBE_RADIUS;
+
+    float startMask =
+        smoothstep(
+            ATMOSPHERE_GAP,
+            ATMOSPHERE_GAP + 0.018,
+            distanceFromGlobe
+        );
+
+    float atmosphereEnd =
+        ATMOSPHERE_GAP +
+        ATMOSPHERE_THICKNESS;
+
+    float endMask =
+        1.0 -
+        smoothstep(
+            atmosphereEnd - 0.035,
+            atmosphereEnd,
+            distanceFromGlobe
+        );
+
+    float shellMask =
+        startMask *
+        endMask;
+
+    float distanceFromAtmosphere =
+        max(
+            distanceFromGlobe -
+            ATMOSPHERE_GAP,
+            0.0
+        );
+
+    float wideSmoke =
+        exp(
+            -distanceFromAtmosphere * 4.8
+        );
+
+    float denseSmoke =
+        exp(
+            -distanceFromAtmosphere * 16.0
+        );
+
+    float cloud1 =
+        sin(
+            time * 1.8 +
+            radius * 17.0
+        ) * 0.5 + 0.5;
+
+    float cloud2 =
+        sin(
+            time * 2.7 -
+            radius * 31.0
+        ) * 0.5 + 0.5;
+
+    float cloud3 =
+        sin(
+            time * 4.4 +
+            radius * 54.0
+        ) * 0.5 + 0.5;
+
+    float noise =
+        smoothstep(
+            0.25,
+            0.72,
+            cloud1 * 0.45 +
+            cloud2 * 0.32 +
+            cloud3 * 0.23
+        );
+
+    float ring =
+        exp(
+            -abs(
+                distanceFromGlobe -
+                (
+                    ATMOSPHERE_GAP +
+                    ATMOSPHERE_THICKNESS * 0.46
+                )
+            ) * 55.0
+        );
+
+    float pulseBoost =
+        1.0 +
+        pulse * 0.55;
+
+    float value =
+        wideSmoke *
+        noise *
+        1.60;
+
+    value +=
+        denseSmoke *
+        noise *
+        1.00;
+
+    value +=
+        ring *
+        0.90;
+
+    return value *
+        shellMask *
+        pulseBoost;
+}
+
+// --------------------------------------------------
+// PLASMA
+// --------------------------------------------------
+
+vec3 plasmaEffect(
+    vec2 localUV,
+    float time,
+    float pulse
+) {
+    float radius =
+        length(localUV);
+
+    float angle =
+        atan(
+            localUV.y,
+            localUV.x
+        );
+
+    float distortion =
+        sin(
+            angle * 5.0 +
+            time * 2.0
+        ) * 0.10;
+
+    distortion +=
+        sin(
+            angle * 11.0 -
+            time * 3.0
+        ) * 0.055;
+
+    float ray1 =
+        sin(
+            angle * 24.0 +
+            distortion * 18.0 +
+            time * 2.5 +
+            radius * 13.0
+        );
+
+    float ray2 =
+        sin(
+            angle * 39.0 -
+            distortion * 22.0 -
+            time * 3.2 +
+            radius * 27.0
+        );
+
+    float ray3 =
+        sin(
+            angle * 67.0 +
+            time * 4.5 -
+            radius * 42.0
+        );
+
+    float rays =
+        ray1 * 0.48 +
+        ray2 * 0.32 +
+        ray3 * 0.20;
+
+    rays =
+        rays * 0.5 + 0.5;
+
+    float sharpRays =
+        smoothstep(
+            0.54,
+            0.88,
+            rays
+        );
+
+    float branches =
+        sin(
+            angle * 91.0 +
+            radius * 150.0 -
+            time * 11.0
+        ) * 0.5 + 0.5;
+
+    branches =
+        smoothstep(
+            0.42,
+            0.76,
+            branches
+        );
+
+    float radialMask =
+        smoothstep(
+            0.035,
+            0.18,
+            radius
+        ) *
+        (
+            1.0 -
+            smoothstep(
+                0.84,
+                1.02,
+                radius
+            )
+        );
+
+    float plasmaMask =
+        sharpRays *
+        (
+            0.45 +
+            branches * 0.85
+        ) *
+        radialMask;
+
+    float aura =
+        smoothstep(
+            0.32,
+            0.70,
+            rays
+        ) *
+        radialMask *
+        0.72;
+
+    float centerCore =
+        exp(
+            -radius * 7.5
+        );
+
+    float centerRing =
+        exp(
+            -abs(
+                radius - 0.16
+            ) * 55.0
+        );
+
+    float pulseBoost =
+        1.0 +
+        pulse * 0.60;
+
+    vec3 purple =
+        vec3(
+            0.40,
+            0.015,
+            1.0
+        );
+
+    vec3 magenta =
+        vec3(
+            1.0,
+            0.025,
+            0.55
+        );
+
+    vec3 blue =
+        vec3(
+            0.08,
+            0.28,
+            1.0
+        );
+
+    vec3 cyan =
+        vec3(
+            0.10,
+            0.75,
+            1.0
+        );
+
+    vec3 white =
+        vec3(
+            1.0,
+            0.92,
+            1.0
+        );
+
+    vec3 result =
+        vec3(0.0);
+
+    result +=
+        purple *
+        plasmaMask *
+        1.75;
+
+    result +=
+        magenta *
+        aura *
+        2.10;
+
+    result +=
+        blue *
+        plasmaMask *
+        1.35;
+
+    result +=
+        purple *
+        centerCore *
+        2.20;
+
+    result +=
+        magenta *
+        centerRing *
+        2.00;
+
+    result +=
+        white *
+        exp(-radius * 20.0) *
+        4.20;
+
+    return result *
+        pulseBoost;
+}
+
+// --------------------------------------------------
+// PETIR
 // --------------------------------------------------
 
 float wrappingLightning(
     float angle,
     float radius,
-    float time
+    float time,
+    float pulse
 ) {
-    const float globeRadius =
-    GLOBE_RADIUS;
-
-    float total =
-        0.0;
-
     float distanceFromGlobe =
         radius -
-        globeRadius;
+        GLOBE_RADIUS;
 
-    // Area pusaran dari permukaan sampai ke luar globe
     float vortexArea =
         smoothstep(
             -0.025,
@@ -381,25 +657,21 @@ float wrappingLightning(
         ) *
         (
             1.0 -
-smoothstep(
-    0.24,
-    0.52,
-    distanceFromGlobe
-)
+            smoothstep(
+                0.24,
+                0.52,
+                distanceFromGlobe
+            )
         );
 
-    // Arah gerakan pusaran
-    float vortexTime =
-        -time * 2.2;
+    float total =
+        0.0;
 
-    // Radius memengaruhi posisi sudut.
-    // Ini yang membuat garis menjadi spiral.
-    float spiralAngle =
-        angle
-        + distanceFromGlobe * 28.0
-        - vortexTime;
-
-    for (float i = 0.0; i < 9.0; i += 1.0) {
+    for (
+        float i = 0.0;
+        i < 8.0;
+        i += 1.0
+    ) {
         float seed =
             i * 19.731;
 
@@ -428,792 +700,70 @@ smoothstep(
                 ) *
                 TWO_PI;
 
-            float pulsePhase =
+            float phase =
                 fract(
                     time * speed +
                     seed
                 );
 
-            // Kilatan dimulai dari luar,
-            // lalu terasa tersedot ke arah globe
-            float suction =
-                1.0 -
-                smoothstep(
-                    0.0,
-                    1.0,
-                    pulsePhase
-                );
-
-            float pulse =
+            float pulseShape =
                 exp(
-                    -pulsePhase *
-                    8.5
+                    -phase * 8.5
                 );
 
-            // Gangguan zig-zag pada jalur spiral
+            float spiralAngle =
+                angle +
+                distanceFromGlobe * 28.0 -
+                time * 2.2 +
+                baseAngle;
+
             float distortion =
                 sin(
                     radius * 125.0 +
                     time * 18.0 +
                     seed
-                ) *
-                0.050
-              + sin(
-                    radius * 240.0 -
-                    time * 27.0 +
-                    seed * 1.7
-                ) *
-                0.028
-              + sin(
-                    radius * 410.0 +
-                    time * 41.0 +
-                    seed * 2.4
-                ) *
-                0.014;
+                ) * 0.05;
 
-            // Setiap petir memiliki spiral yang sedikit berbeda
-            float localSpiralAngle =
-                spiralAngle
-                + baseAngle
-                + distortion
-                + suction *
-                0.35;
-
-            // Jarak sudut dari jalur spiral
-            float pathDistance =
+            float path =
                 abs(
                     sin(
                         (
-                            localSpiralAngle
-                        ) *
-                        0.5
+                            spiralAngle +
+                            distortion
+                        ) * 0.5
                     )
                 );
 
-            // Jalur utama spiral
-            float mainPath =
-                smoothstep(
-                    0.075,
-                    0.0,
-                    pathDistance
-                );
-
-            // Garis inti yang sangat tipis
             float core =
                 smoothstep(
                     0.022,
                     0.0,
-                    pathDistance
+                    path
                 );
 
-            // Cabang-cabang listrik
-            float branchWave1 =
-                sin(
-                    angle * 42.0 +
-                    radius * 170.0 +
-                    seed -
-                    time * 5.0
-                ) *
-                0.5 +
-                0.5;
-
-            float branchWave2 =
-                sin(
-                    angle * 71.0 -
-                    radius * 280.0 +
-                    seed * 2.0 +
-                    time * 7.0
-                ) *
-                0.5 +
-                0.5;
-
-            float branches =
-                pow(
-                    branchWave1,
-                    18.0
-                ) *
-                mainPath *
-                1.4;
-
-            branches +=
-                pow(
-                    branchWave2,
-                    24.0
-                ) *
-                mainPath *
-                1.0;
-
-            // Efek penarikan menuju permukaan globe
-            float suctionMask =
-                exp(
-                    -abs(
-                        distanceFromGlobe
-                    ) *
-                    18.0
+            float aura =
+                smoothstep(
+                    0.075,
+                    0.0,
+                    path
                 );
-
-            // Jalur listrik luar
-            float outerPath =
-                mainPath *
-                vortexArea *
-                (
-                    0.45 +
-                    suctionMask *
-                    1.8
-                );
-
-            // Inti listrik
-            float electricCore =
-                core *
-                vortexArea *
-                suction *
-                4.5;
-
-            // Aura besar di sekeliling jalur
-            float electricAura =
-                mainPath *
-                vortexArea *
-                1.2;
 
             total +=
                 (
-                    electricCore +
-                    electricAura +
-                    branches *
-                    0.8 +
-                    outerPath
+                    core * 4.5 +
+                    aura * 1.2
                 ) *
-                pulse;
+                vortexArea *
+                pulseShape;
         }
     }
 
-    // Pita spiral tambahan agar pusaran lebih penuh
-    float broadSpiral =
-        sin(
-            angle * 11.0 +
-            distanceFromGlobe * 38.0 -
-            time * 4.0
-        ) *
-        0.5 +
-        0.5;
-
-    broadSpiral =
-        smoothstep(
-            0.62,
-            0.90,
-            broadSpiral
-        );
-
-    broadSpiral *=
-        vortexArea *
-        exp(
-            -max(
-                distanceFromGlobe,
-                0.0
-            ) *
-            5.5
-        );
-
-    total +=
-        broadSpiral *
-        1.35;
-
-    // Cincin kuat di bibir globe,
-    // seperti pusaran sedang menelan permukaan
-    float globeRim =
-        exp(
-            -abs(
-                distanceFromGlobe
-            ) *
-            145.0
-        );
-
-    total +=
-        globeRim *
-        1.4;
-
-    return total;
-}
-
-
-// // --------------------------------------------------
-// ATMOSFER BERJARAK, TEBAL, DAN MENYEBAR
-// --------------------------------------------------
-
-float globeAtmosphere(
-    float radius,
-    float angle,
-    float time
-) {
-    float globeRadius =
-        GLOBE_RADIUS;
-
-    // Jarak titik dari permukaan globe.
-    //
-    // Nilai:
-    // negatif  = berada di dalam globe
-    // 0.0      = tepat di permukaan globe
-    // positif  = berada di luar globe
-    float distanceFromGlobe =
-        radius -
-        globeRadius;
-
-    // --------------------------------------------------
-    // JARAK KOSONG ANTARA GLOBE DAN ATMOSFER
-    // --------------------------------------------------
-
-    // Atmosfer belum terlihat selama jaraknya
-    // masih lebih kecil dari ATMOSPHERE_GAP.
-    float atmosphereStart =
-        ATMOSPHERE_GAP;
-
-    float atmosphereStartSoftness =
-        0.012;
-
-    float startMask =
-        smoothstep(
-            atmosphereStart,
-            atmosphereStart +
-            atmosphereStartSoftness,
-            distanceFromGlobe
-        );
-
-    // --------------------------------------------------
-    // BATAS LUAR ATMOSFER
-    // --------------------------------------------------
-
-    float atmosphereEnd =
-        ATMOSPHERE_GAP +
-        ATMOSPHERE_THICKNESS;
-
-    float atmosphereEndSoftness =
-        0.035;
-
-    float endMask =
-        1.0 -
-        smoothstep(
-            atmosphereEnd -
-            atmosphereEndSoftness,
-            atmosphereEnd,
-            distanceFromGlobe
-        );
-
-    // Mask akhir atmosfer.
-    // Atmosfer hanya muncul di antara batas awal
-    // dan batas akhir.
-    float shellMask =
-        startMask *
-        endMask;
-
-    // --------------------------------------------------
-    // JARAK EFEKTIF ASAP
-    // --------------------------------------------------
-
-    // Asap dihitung mulai dari awal atmosfer,
-    // bukan dari permukaan globe.
-    float atmosphericDistance =
-        max(
-            distanceFromGlobe -
-            ATMOSPHERE_GAP,
-            0.0
-        );
-
-    // Angka lebih kecil membuat asap lebih menyebar.
-    float wideSmoke =
-        exp(
-            -atmosphericDistance *
-            4.5
-        );
-
-    // Asap bagian dalam lebih pekat.
-    float denseSmoke =
-        exp(
-            -atmosphericDistance *
-            16.0
-        );
-
-    // --------------------------------------------------
-    // GUMPALAN ASAP ANIMASI
-    // --------------------------------------------------
-
-    float cloud1 =
-        sin(
-            angle * 3.0 +
-            time * 1.8 +
-            radius * 17.0
-        ) *
-        0.5 +
-        0.5;
-
-    float cloud2 =
-        sin(
-            angle * 6.0 -
-            time * 2.7 +
-            radius * 31.0
-        ) *
-        0.5 +
-        0.5;
-
-    float cloud3 =
-        sin(
-            angle * 11.0 +
-            time * 4.4 -
-            radius * 54.0
-        ) *
-        0.5 +
-        0.5;
-
-    float cloud4 =
-        sin(
-            angle * 19.0 -
-            time * 6.2 +
-            radius * 83.0
-        ) *
-        0.5 +
-        0.5;
-
-    // Gabungan noise asap.
-    float smokeNoise =
-        cloud1 * 0.40 +
-        cloud2 * 0.28 +
-        cloud3 * 0.20 +
-        cloud4 * 0.12;
-
-    smokeNoise =
-        smoothstep(
-            0.25,
-            0.72,
-            smokeNoise
-        );
-
-    // Asap utama yang menyebar.
-    float packedSmoke =
-        wideSmoke *
-        smokeNoise;
-
-    // Lapisan asap yang lebih pekat dekat bagian dalam.
-    float secondaryNoise =
-        smoothstep(
-            0.20,
-            0.70,
-            cloud1 * 0.65 +
-            cloud2 * 0.35
-        );
-
-    float secondarySmoke =
-        denseSmoke *
-        secondaryNoise;
-
-    // --------------------------------------------------
-    // RING ATMOSFER
-    // --------------------------------------------------
-
-    // Ring diletakkan di tengah lapisan atmosfer,
-    // bukan menempel pada permukaan globe.
-    float ringDistance =
-        ATMOSPHERE_GAP +
-        ATMOSPHERE_THICKNESS *
-        0.48;
-
-    float softRing =
-        exp(
-            -abs(
-                distanceFromGlobe -
-                ringDistance
-            ) *
-            55.0
-        );
-
-    // --------------------------------------------------
-    // GABUNGKAN SEMUA KOMPONEN ATMOSFER
-    // --------------------------------------------------
-
-    float result =
-        packedSmoke *
-        1.65;
-
-    result +=
-        secondarySmoke *
-        1.05;
-
-    result +=
-        softRing *
-        0.85;
-
-    // Terapkan batas awal dan batas akhir atmosfer.
-    return result *
-        shellMask;
-}
-
-
-// --------------------------------------------------
-// PLASMA AKTIF DI DALAM GLOBE
-// --------------------------------------------------
-
-vec3 plasmaEffect(
-    vec2 localUV,
-    float radius,
-    float time
-) {
-    // Posisi dari pusat globe
-    float localRadius =
-        length(
-            localUV
-        );
-
-    float localAngle =
-        atan(
-            localUV.y,
-            localUV.x
-        );
-
-    // Membuat bentuk plasma tidak simetris
-    float distortion =
-        sin(
-            localAngle * 5.0 +
-            time * 2.0
-        ) *
-        0.10;
-
-    distortion +=
-        sin(
-            localAngle * 11.0 -
-            time * 3.0
-        ) *
-        0.055;
-
-    // Jalur plasma utama
-    float ray1 =
-        sin(
-            localAngle * 24.0
-            + distortion * 18.0
-            + time * 2.5
-            + localRadius * 13.0
-        );
-
-    // Jalur plasma kedua
-    float ray2 =
-        sin(
-            localAngle * 39.0
-            - distortion * 22.0
-            - time * 3.2
-            + localRadius * 27.0
-        );
-
-    // Jalur plasma kecil dan tajam
-    float ray3 =
-        sin(
-            localAngle * 67.0
-            + time * 4.5
-            - localRadius * 42.0
-        );
-
-    // Gabungkan semua jalur
-    float plasmaRays =
-        ray1 * 0.48
-        +
-        ray2 * 0.32
-        +
-        ray3 * 0.20;
-
-    plasmaRays =
-        plasmaRays *
-        0.5 +
-        0.5;
-
-    // Membuat jalur menjadi lebih padat
-    float sharpRays =
-        smoothstep(
-            0.54,
-            0.88,
-            plasmaRays
-        );
-
-    // Noise cabang plasma
-    float branchNoise =
-        sin(
-            localAngle * 91.0
-            + localRadius * 150.0
-            - time * 11.0
-        ) *
-        0.5 +
-        0.5;
-
-    branchNoise =
-        smoothstep(
-            0.42,
-            0.76,
-            branchNoise
-        );
-
-    // Noise cabang kedua
-    float branchNoise2 =
-        sin(
-            localAngle * 137.0
-            - localRadius * 230.0
-            + time * 8.0
-        ) *
-        0.5 +
-        0.5;
-
-    branchNoise2 =
-        smoothstep(
-            0.48,
-            0.82,
-            branchNoise2
-        );
-
-    // Plasma dibuat lebih kuat dari bagian tengah
-    // menuju pinggiran globe
-    float radialMask =
-        smoothstep(
-            0.035,
-            0.18,
-            localRadius
-        ) *
+    return total *
         (
-            1.0 -
-            smoothstep(
-                0.84,
-                1.02,
-                localRadius
-            )
+            1.0 +
+            pulse * 0.35
         );
-
-    // Cabang utama
-    float branches =
-        sharpRays *
-        (
-            0.40 +
-            branchNoise *
-            0.75 +
-            branchNoise2 *
-            0.35
-        ) *
-        radialMask;
-
-    // Aura plasma yang lebih lebar
-    float plasmaAura =
-        smoothstep(
-            0.32,
-            0.70,
-            plasmaRays
-        ) *
-        radialMask *
-        0.72;
-
-    // Gelombang radial yang berdenyut
-    float radialWave =
-        sin(
-            localRadius * 30.0
-            - time * 5.5
-        ) *
-        0.5 +
-        0.5;
-
-    radialWave =
-        smoothstep(
-            0.52,
-            0.88,
-            radialWave
-        );
-
-    // Gelombang kedua agar plasma lebih hidup
-    float radialWave2 =
-        sin(
-            localRadius * 58.0
-            + time * 7.0
-        ) *
-        0.5 +
-        0.5;
-
-    radialWave2 =
-        smoothstep(
-            0.60,
-            0.92,
-            radialWave2
-        );
-
-    // Plasma membentuk spiral ringan
-    float spiral =
-        sin(
-            localAngle * 8.0
-            + localRadius * 20.0
-            - time * 3.0
-        ) *
-        0.5 +
-        0.5;
-
-    spiral =
-        smoothstep(
-            0.50,
-            0.86,
-            spiral
-        );
-
-    // Inti plasma
-    float centerCore =
-        exp(
-            -localRadius *
-            7.5
-        );
-
-    // Titik panas di pusat
-    float centerHotspot =
-        exp(
-            -localRadius *
-            20.0
-        );
-
-    // Cincin energi di sekitar pusat
-    float centerRing =
-        exp(
-            -abs(
-                localRadius -
-                0.16
-            ) *
-            55.0
-        );
-
-    // Warna plasma
-    vec3 purpleColor =
-        vec3(
-            0.40,
-            0.015,
-            1.0
-        );
-
-    vec3 magentaColor =
-        vec3(
-            1.0,
-            0.025,
-            0.55
-        );
-
-    vec3 blueColor =
-        vec3(
-            0.08,
-            0.28,
-            1.0
-        );
-
-    vec3 cyanColor =
-        vec3(
-            0.10,
-            0.75,
-            1.0
-        );
-
-    vec3 whiteColor =
-        vec3(
-            1.0,
-            0.92,
-            1.0
-        );
-
-    vec3 plasmaColor =
-        vec3(
-            0.0
-        );
-
-    // Cahaya ungu pada cabang utama
-    plasmaColor +=
-        purpleColor *
-        branches *
-        1.75;
-
-    // Aura magenta
-    plasmaColor +=
-        magentaColor *
-        plasmaAura *
-        2.10;
-
-    // Biru pada jalur yang berdenyut
-    plasmaColor +=
-        blueColor *
-        branches *
-        radialWave *
-        2.25;
-
-    // Cyan pada sebagian jalur
-    plasmaColor +=
-        cyanColor *
-        branches *
-        radialWave2 *
-        spiral *
-        1.45;
-
-    // Cahaya ungu dari inti
-    plasmaColor +=
-        purpleColor *
-        centerCore *
-        2.2;
-
-    // Cincin energi di sekitar inti
-    plasmaColor +=
-        magentaColor *
-        centerRing *
-        2.0;
-
-    // Titik putih panas di pusat
-    plasmaColor +=
-        whiteColor *
-        centerHotspot *
-        4.2;
-
-    return plasmaColor;
 }
-
-
-
-// --------------------------------------------------
-// FLASH GLOBAL
-// --------------------------------------------------
-
-float lightningFlash(float time) {
-    float flash = 0.0;
-
-    for (float i = 0.0; i < 8.0; i += 1.0) {
-        float speed =
-            0.55 +
-            i * 0.19;
-
-        float id =
-            floor(
-                time * speed +
-                i * 13.17
-            );
-
-        float randomValue =
-            hash1(
-                id +
-                i * 3.71
-            );
-
-        if (randomValue > 0.63) {
-            float phase =
-                fract(
-                    time * speed +
-                    i * 13.17
-                );
-
-            flash +=
-                exp(
-                    -phase * 28.0
-                ) *
-                (
-                    randomValue -
-                    0.63
-                ) *
-                7.0;
-        }
-    }
-
-    return flash;
-}
-
-
-
 
 // --------------------------------------------------
 // MAIN
@@ -1231,12 +781,10 @@ void main() {
         uv * 2.0 -
         1.0;
 
-    // Koreksi aspect ratio.
     p.x *=
         iResolution.x /
         iResolution.y;
 
-    // Posisi globe.
     vec2 center =
         vec2(
             0.0,
@@ -1256,101 +804,99 @@ void main() {
             delta.x
         );
 
-    float globeR =
-        GLOBE_RADIUS;
-
-    // --------------------------------------------------
-    // WARNA AWAL
-    // --------------------------------------------------
-
-    // Jangan gunakan warna hitam sebagai background.
-    // Area kosong akan menjadi alpha 0.0.
-    vec3 color =
-        vec3(
-            0.0
+    float pulse =
+        clamp(
+            beatPulse,
+            0.0,
+            1.0
         );
 
+    // Warna awal.
+    vec3 color =
+        vec3(0.0);
+
+    float alpha =
+        0.0;
+
     // --------------------------------------------------
-    // BUIH NEBULA
+    // BUIH
     // --------------------------------------------------
 
-    vec3 bubbleLayer =
+    vec3 bubbles =
         spaceBubbles(
             p,
-            iTime
+            iTime,
+            pulse
         ) *
         1.8;
 
-    color +=
-        bubbleLayer;
-
-    // Intensitas buih untuk menentukan alpha.
-    float bubbleBrightness =
+    float bubbleIntensity =
         max(
+            bubbles.r,
             max(
-                bubbleLayer.r,
-                bubbleLayer.g
-            ),
-            bubbleLayer.b
+                bubbles.g,
+                bubbles.b
+            )
         );
 
-    float bubbleVisibility =
+    float bubbleAlpha =
         smoothstep(
             0.015,
             0.20,
-            bubbleBrightness
-        );
+            bubbleIntensity
+        ) *
+        0.65;
 
-    // Target alpha buih = 0.7.
-    float bubbleAlpha =
-        bubbleVisibility *
-        0.70;
+    color +=
+        bubbles;
+
+    alpha =
+        max(
+            alpha,
+            bubbleAlpha
+        );
 
     // --------------------------------------------------
     // BINTANG
     // --------------------------------------------------
 
-    float stars =
-        hash2(
-            floor(
-                p *
-                110.0
+    vec3 stars =
+        starLayer(
+            p,
+            iTime
+        );
+
+    float starIntensity =
+        max(
+            stars.r,
+            max(
+                stars.g,
+                stars.b
             )
         );
 
-    float starMask =
-        step(
-            0.992,
-            stars
+    color +=
+        stars;
+
+    alpha =
+        max(
+            alpha,
+            step(
+                0.01,
+                starIntensity
+            ) *
+            0.75
         );
 
-    vec3 starColor =
-        vec3(
-            0.70,
-            0.85,
-            1.0
-        ) *
-        starMask *
-        0.30;
-
-    color +=
-        starColor;
-
-    // Bintang juga ikut transparan, tetapi tidak
-    // menjadi background hitam.
-    float starAlpha =
-        starMask *
-        0.80;
-
     // --------------------------------------------------
-    // ATMOSFER LUAR
+    // ATMOSFER
     // --------------------------------------------------
 
     float atmosphere =
         globeAtmosphere(
             radius,
-            angle,
-            iTime
+            iTime,
+            pulse
         );
 
     float lowerBowl =
@@ -1388,148 +934,71 @@ void main() {
         glow *
         1.45;
 
-    // Alpha atmosfer berdasarkan intensitas atmosfer.
-    float atmosphereVisibility =
+    float atmosphereAlpha =
         smoothstep(
             0.01,
             0.18,
             atmosphere
+        ) *
+        0.82;
+
+    alpha =
+        max(
+            alpha,
+            atmosphereAlpha
         );
 
-    // Target alpha atmosfer = 0.8.
-    float atmosphereAlpha =
-        atmosphereVisibility *
-        0.80;
-
     // --------------------------------------------------
-    // PETIR DI LUAR GLOBE
+    // PETIR
     // --------------------------------------------------
 
     float bolt =
         wrappingLightning(
             angle,
             radius,
-            iTime
+            iTime,
+            pulse
         );
 
-    vec3 boltAura =
+    vec3 boltColor =
         vec3(
             1.0,
-            0.10,
-            0.001
+            0.20,
+            0.01
         ) *
         bolt *
-        2.2;
-
-    vec3 boltCore =
-        vec3(
-            1.0,
-            0.88,
-            0.40
-        ) *
-        pow(
-            max(
-                bolt,
-                0.0
-            ),
-            1.25
-        ) *
-        5.5;
+        2.5;
 
     color +=
-        boltAura;
+        boltColor;
 
-    color +=
-        boltCore;
-
-    float boltVisibility =
-        smoothstep(
-            0.01,
-            0.25,
-            bolt
+    alpha =
+        max(
+            alpha,
+            smoothstep(
+                0.01,
+                0.25,
+                bolt
+            ) *
+            0.85
         );
 
-    // Target alpha petir = 0.8.
-    float boltAlpha =
-        boltVisibility *
-        0.80;
-
     // --------------------------------------------------
-    // PUSARAN TENGAH
+    // GLOBE 3D
     // --------------------------------------------------
 
-    float vortexCenter =
-        exp(
-            -radius *
-            7.0
-        ) *
-        smoothstep(
-            0.32,
-            0.0,
-            radius
-        );
-
-    color +=
-        vec3(
-            1.0,
-            0.16,
-            0.002
-        ) *
-        vortexCenter *
-        0.22;
-
-    float vortexAlpha =
-        smoothstep(
-            0.01,
-            0.15,
-            vortexCenter
-        ) *
-        0.80;
-
-    // --------------------------------------------------
-    // FLASH GLOBAL
-    // --------------------------------------------------
-
-    float flash =
-        lightningFlash(
-            iTime
-        );
-
-    color +=
-        vec3(
-            1.0,
-            0.38,
-            0.025
-        ) *
-        flash *
-        0.22;
-
-    float flashAlpha =
-        smoothstep(
-            0.01,
-            0.35,
-            flash
-        ) *
-        0.80;
-
-    // --------------------------------------------------
-    // PERMUKAAN GLOBE 3D
-    // --------------------------------------------------
-
-    // Nilai ini akan menjadi 1.0 di dalam globe
-    // dan 0.0 di luar globe.
     float globeMask =
         1.0 -
         smoothstep(
-            globeR - 0.008,
-            globeR + 0.008,
+            GLOBE_RADIUS - 0.008,
+            GLOBE_RADIUS + 0.008,
             radius
         );
 
-    if (radius < globeR) {
+    if (radius < GLOBE_RADIUS) {
         vec2 sphereUV =
             delta /
-            globeR;
+            GLOBE_RADIUS;
 
         float zSquared =
             1.0 -
@@ -1540,48 +1009,36 @@ void main() {
 
         if (zSquared > 0.0) {
             float z =
-                sqrt(
-                    zSquared
+                sqrt(zSquared);
+
+            vec3 point =
+                vec3(
+                    sphereUV.x,
+                    sphereUV.y,
+                    z
                 );
 
-            float c =
-                cos(
+            // Rotasi gesture.
+            point =
+                rotateYPoint(
+                    point,
                     rotY
                 );
 
-            float s =
-                sin(
-                    rotY
+            point =
+                rotateXPoint(
+                    point,
+                    rotX
                 );
 
-            vec2 rotatedXZ =
-                vec2(
-                    sphereUV.x * c -
-                    z * s,
-
-                    sphereUV.x * s +
-                    z * c
+            point =
+                rotateZPoint(
+                    point,
+                    axisTilt
                 );
 
             vec3 normal =
-                normalize(
-                    vec3(
-                        rotatedXZ.x,
-                        sphereUV.y,
-                        rotatedXZ.y
-                    )
-                );
-
-            vec3 plasma =
-                plasmaEffect(
-                    sphereUV,
-                    radius,
-                    iTime
-                );
-
-            // ------------------------------------------
-            // LIGHTING
-            // ------------------------------------------
+                normalize(point);
 
             vec3 lightDirection =
                 normalize(
@@ -1617,10 +1074,6 @@ void main() {
                     ),
                     3.0
                 );
-
-            // ------------------------------------------
-            // WARNA DASAR GLOBE
-            // ------------------------------------------
 
             vec3 darkGold =
                 vec3(
@@ -1659,82 +1112,30 @@ void main() {
                     0.82
                 );
 
-            // ------------------------------------------
-            // PLASMA GLOBE
-            // ------------------------------------------
-
-            float plasmaVisibility =
-                smoothstep(
-                    -0.20,
-                    0.60,
-                    normal.z
+            // Plasma mengikuti area permukaan globe.
+            vec3 plasma =
+                plasmaEffect(
+                    sphereUV,
+                    iTime,
+                    pulse
                 );
 
             globeColor +=
                 plasma *
-                plasmaVisibility *
+                frontLight *
                 0.75;
 
-            // ------------------------------------------
-            // INTI PLASMA
-            // ------------------------------------------
-
-            float centerDistance =
-                length(
-                    sphereUV
-                );
-
-            float centerOrb =
-                exp(
-                    -centerDistance *
-                    15.0
-                );
-
-            float centerOrbRing =
-                exp(
-                    -abs(
-                        centerDistance -
-                        0.13
-                    ) *
-                    70.0
-                );
-
-            vec3 centerOrbColor =
-                vec3(
-                    1.0,
-                    0.04,
-                    0.60
-                ) *
-                centerOrb *
-                2.4;
-
-            centerOrbColor +=
-                vec3(
-                    0.20,
-                    0.50,
-                    1.0
-                ) *
-                centerOrbRing *
-                1.7;
-
-            globeColor +=
-                centerOrbColor *
-                plasmaVisibility;
-
-            // ------------------------------------------
-            // TEXTURE BABE.INFO
-            // ------------------------------------------
-
+            // Tekstur BABE.INFO.
             float longitude =
                 atan(
-                    rotatedXZ.x,
-                    rotatedXZ.y
+                    point.x,
+                    point.z
                 );
 
             float latitude =
                 asin(
                     clamp(
-                        normal.y,
+                        point.y,
                         -1.0,
                         1.0
                     )
@@ -1754,8 +1155,7 @@ void main() {
             textUV.x =
                 fract(
                     textUV.x -
-                    windRot *
-                    0.04
+                    windRot * 0.04
                 );
 
             textUV.y =
@@ -1785,41 +1185,17 @@ void main() {
                     0.25
                 );
 
-            float textLight =
-                0.80 +
-                diffuse *
-                0.65;
-
             globeColor =
                 mix(
                     globeColor,
                     textColor *
-                    textLight,
+                    (
+                        0.80 +
+                        diffuse * 0.65
+                    ),
                     textAlpha *
                     0.96
                 );
-
-            // ------------------------------------------
-            // PETIR PADA PERMUKAAN
-            // ------------------------------------------
-
-            globeColor +=
-                vec3(
-                    1.0,
-                    0.20,
-                    0.005
-                ) *
-                bolt *
-                0.30;
-
-            globeColor +=
-                vec3(
-                    1.0,
-                    0.72,
-                    0.16
-                ) *
-                flash *
-                0.48;
 
             // Rim globe.
             globeColor +=
@@ -1831,12 +1207,19 @@ void main() {
                 rim *
                 1.55;
 
-            // Globe menimpa warna luar hanya di area globe.
+            // Globe berada di atas efek luar.
             color =
                 mix(
                     color,
                     globeColor,
                     globeMask
+                );
+
+            alpha =
+                max(
+                    alpha,
+                    globeMask *
+                    0.92
                 );
         }
     }
@@ -1851,7 +1234,7 @@ void main() {
             p,
             p
         ) *
-        0.20;
+        0.16;
 
     color *=
         max(
@@ -1859,8 +1242,6 @@ void main() {
             0.0
         );
 
-    // Color grading hanya pada warna.
-    // Tidak digunakan untuk membuat background.
     color =
         pow(
             max(
@@ -1872,67 +1253,22 @@ void main() {
             )
         );
 
-    // --------------------------------------------------
-    // ALPHA AKHIR
-    // --------------------------------------------------
-
-    // Globe       = 0.90
-    // Atmosfer    = 0.80
-    // Petir       = 0.80
-    // Buih        = 0.70
-    // Bintang     = 0.80
-    // Background  = 0.00
-
-    float finalAlpha =
-        globeMask *
-        0.90;
-
-    finalAlpha =
-        max(
-            finalAlpha,
-            atmosphereAlpha
-        );
-
-    finalAlpha =
-        max(
-            finalAlpha,
-            boltAlpha
-        );
-
-    finalAlpha =
-        max(
-            finalAlpha,
-            vortexAlpha
-        );
-
-    finalAlpha =
-        max(
-            finalAlpha,
-            flashAlpha
-        );
-
-    finalAlpha =
-        max(
-            finalAlpha,
-            bubbleAlpha
-        );
-
-    finalAlpha =
-        max(
-            finalAlpha,
-            starAlpha
-        );
-
-    finalAlpha =
+    alpha =
         clamp(
-            finalAlpha,
+            alpha,
             0.0,
             1.0
         );
 
+    // Sangat penting:
+    // RGB dikalikan alpha agar area transparan
+    // benar-benar tidak menutupi bg.png.
+    color *=
+        alpha;
+
     fragColor =
         vec4(
             color,
-            finalAlpha
+            alpha
         );
 }
