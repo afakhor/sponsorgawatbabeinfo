@@ -149,33 +149,37 @@ class BeatDetector {
   }
 
   List<double> _normalize(
-    List<double> energies,
-  ) {
-    final List<double> sorted =
-        List<double>.from(energies)
-          ..sort();
-
-    final double median =
-        sorted[sorted.length ~/ 2];
-
-    final double average =
-        energies.reduce(
-              (double a, double b) => a + b,
-            ) /
-            energies.length;
-
-    final double baseline =
-        math.max(
-          median,
-          average * 0.35,
-        );
-
-    return energies.map((double energy) {
-      final double value =
-          energy /
-          (baseline + 0.0000001);
-
-      return value.clamp(0.0, 1.0);
-    }).toList();
+  List<double> energies,
+) {
+  if (energies.isEmpty) {
+    return <double>[];
   }
+
+  final List<double> sorted =
+      List<double>.from(energies)..sort();
+
+  final double median =
+      sorted[sorted.length ~/ 2];
+
+  final double average =
+      energies.reduce(
+            (double a, double b) => a + b,
+          ) /
+          energies.length;
+
+  final double baseline =
+      math.max(
+        median,
+        average * 0.35,
+      );
+
+  return energies.map((double energy) {
+    final double value =
+        energy /
+        (baseline + 0.0000001);
+
+    // Jangan langsung clamp ke 1.0 sebelum
+    // dibandingkan dengan energi sekitar.
+    return value;
+  }).toList();
 }
