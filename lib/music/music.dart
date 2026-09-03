@@ -173,6 +173,74 @@ class MusicController extends ChangeNotifier {
    bool isAnalyzingBeats = false;
    String? beatError;
    int _beatGeneration = 0;
+Future<void> analyzeBeats(
+  String path,
+) async {
+  final int generation =
+      ++_beatGeneration;
+
+  try {
+    isAnalyzingBeats = true;
+    beatError = null;
+    beatTimes = <double>[];
+    currentBeatIndex = 0;
+    beatPulse = 0.0;
+
+    notifyListeners();
+
+    final Uint8List bytes =
+        await File(path).readAsBytes();
+
+    final PcmAudio pcm =
+        decodeAudio(bytes);
+
+    if (generation != _beatGeneration) {
+      return;
+    }
+
+    final detector =
+        BeatDetector(
+      sampleRate: pcm.sampleRate,
+      channels: pcm.channels,
+    );
+
+    final List<double> detected =
+        await Future<List<double>>.microtask(
+      () {
+        return detector.detectBeatTimes(
+          pcm.samples,
+        );
+      },
+    );
+
+    if (generation != _beatGeneration) {
+      return;
+    }
+
+    beatTimes = detected;
+    currentBeatIndex = 0;
+    isAnalyzingBeats = false;
+
+    errorMessage =
+        'Beat terdeteksi: '
+        '${beatTimes.length} titik';
+
+    notifyListeners();
+  } catch (e) {
+    if (generation != _beatGeneration) {
+      return;
+    }
+
+    isAnalyzingBeats = false;
+    beatError =
+        'Analisis beat gagal: $e';
+
+    errorMessage =
+        beatError;
+
+    notifyListeners();
+  }
+}
 
 
   List<TimedSentence> lyricSentences = [];
@@ -192,16 +260,36 @@ class MusicController extends ChangeNotifier {
   bool get usePreTrim => trimStart > Duration.zero || trimEnd < duration;
 
   MusicController() {
-    audioPlayer.positionStream.listen((p) {
-      position = p;
+  audioPlayer.positionStream.listen(
+    (Duration value) {
+      position = value;
+
       _updateLyricIndex();
+
+      updateBeatFromPosition(
+        value,
+      );
+
       notifyListeners();
-    });
-    audioPlayer.playerStateStream.listen((s) {
-      isPlaying = s.playing;
+    },
+  );
+
+  audioPlayer.playerStateStream.listen(
+    (ja.PlayerState state) {
+      isPlaying =
+          state.playing;
+
+      if (state.processingState ==
+          ja.ProcessingState.completed) {
+        currentBeatIndex = 0;
+        beatPulse = 0.0;
+      }
+
       notifyListeners();
-    });
-  }
+    },
+  );
+}
+
 
   void _updateLyricIndex() {
     if (lyricSentences.isEmpty) return;
@@ -239,46 +327,170 @@ class MusicController extends ChangeNotifier {
   }
 
   // UPLOAD MUSIK (MP3 ATAU WAV)
-  Future<void> pickMusic(BuildContext context) async {
-    try {
-      await _req();
-      final res = await FilePicker.platform.pickFiles(type: FileType.audio, withData: false);
-      if (res == null || res.files.isEmpty) return;
-      final p = res.files.single;
-      String? path = p.path;
-      if (path == null) return;
+  Future<void> pickMusic(
+  BuildContext context,
+) async {
+  try {
+    await _req();
 
-      selectedMusicFile = File(path);
-      musicName = p.name;
-      editableTitle = musicName;
-      lyricSentences = []; // Reset lirik saat ganti lagu
-      currentLyricIndex = 0;
-      errorMessage = null;
-      isLoading = true;
-      notifyListeners();
+    final FilePickerResult? res =
+        await FilePicker.platform.pickFiles(
+      type: FileType.audio,
+      withData: false,
+    );
 
-      await audioPlayer.stop();
-      try { await waveformController.stopPlayer(); } catch (_) {}
-
-      await audioPlayer.setAudioSource(ja.AudioSource.file(path));
-      duration = audioPlayer.duration ?? Duration.zero;
-      trimStart = Duration.zero;
-      trimEnd = duration.inSeconds > 60 ? const Duration(seconds: 60) : duration;
-
-      try {
-        await waveformController.preparePlayer(path: path, shouldExtractWaveform: true, noOfSamples: 100);
-        await waveformController.stopPlayer();
-      } catch (_) {}
-
-      isLoading = false;
-      errorMessage = '✅ Musik siap diputar';
-      notifyListeners();
-    } catch (e) {
-      errorMessage = 'Gagal upload file: $e';
-      isLoading = false;
-      notifyListeners();
+    if (res == null ||
+        res.files.isEmpty) {
+      return;
     }
+
+    final PlatformFile picked =
+        res.files.single;
+
+    final String? path =
+        picked.path;
+
+    if (path == null) {
+      return;
+    }
+
+    await audioPlayer.stop();
+
+    try {
+      await waveformController.stopPlayer();
+    } catch (_) {}
+
+    selectedMusicFile =
+        File(path);
+
+    musicName =
+        picked.name;
+
+    editableTitle =
+        musicName;
+
+    lyricSentences =
+        <TimedSentence>[];
+
+    currentLyricIndex = 0;
+
+    beatTimes =
+        <double>[];
+
+    currentBeatIndex = 0;
+
+    beatPulse = 0.0;
+
+    errorMessage = null;
+
+    beatError = null;
+
+    isLoading = true;
+
+    notifyListeners();
+
+    await audioPlayer.setAudioSource(
+      ja.AudioSource.file(path),
+    );
+
+    duration =
+        audioPlayer.duration ??
+            Duration.zero;
+
+    trimStart =
+        Duration.zero;
+
+    trimEnd =
+        duration.inSeconds > 60
+            ? const Duration(seconds: 60)
+            : duration;
+
+    try {
+      await waveformController.preparePlayer(
+        path: path,
+        shouldExtractWaveform: true,
+        noOfSamples: 100,
+      );
+
+      await waveformController.stopPlayer();
+    } catch (_) {}
+
+    isLoading = false;
+
+    notifyListeners();
+
+    // Analisis file secara offline.
+    await analyzeBeats(path);
+
+    if (!isAnalyzingBeats) {
+      errorMessage =
+          'Musik siap diputar. '
+          'Beat: ${beatTimes.length}';
+    }
+
+    notifyListeners();
+  } catch (e) {
+    isLoading = false;
+
+    errorMessage =
+        'Gagal upload file: $e';
+
+    notifyListeners();
   }
+}
+
+void updateBeatFromPosition(
+  Duration currentPosition,
+) {
+  if (beatTimes.isEmpty) {
+    beatPulse *= 0.84;
+
+    if (beatPulse < 0.01) {
+      beatPulse = 0.0;
+    }
+
+    return;
+  }
+
+  final double seconds =
+      currentPosition.inMicroseconds /
+      1000000.0;
+
+  // Jika posisi mundur karena seek,
+  // cari ulang index beat dari posisi sekarang.
+  if (currentBeatIndex > 0 &&
+      currentBeatIndex < beatTimes.length &&
+      seconds <
+          beatTimes[currentBeatIndex - 1]) {
+    currentBeatIndex = 0;
+  }
+
+  while (
+      currentBeatIndex <
+          beatTimes.length &&
+      beatTimes[currentBeatIndex] <=
+          seconds) {
+    final double difference =
+        seconds -
+        beatTimes[currentBeatIndex];
+
+    // Window toleransi beat.
+    if (difference >= 0.0 &&
+        difference < 0.14) {
+      beatPulse = 1.0;
+    }
+
+    currentBeatIndex++;
+  }
+
+  // Decay cepat supaya pulse berbentuk hentakan.
+  beatPulse *= 0.78;
+
+  if (beatPulse < 0.01) {
+    beatPulse = 0.0;
+  }
+}
+
 
   // DIALOG PASTE LIRIK (SUPPORT TEKS BIASA & FORMAT TIMESTAMP LRC)
   Future<void> openTranscribeDialog(BuildContext context) async {
