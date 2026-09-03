@@ -1660,7 +1660,7 @@ void dispose() {
   super.dispose();
 }
 
-
+}
 
 // ==========================================
 // MUSIC PLAYER BAR
