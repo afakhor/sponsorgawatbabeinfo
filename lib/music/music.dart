@@ -2176,288 +2176,612 @@ class _MusicPanelState extends State<MusicPanel> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      canPop: !widget.controller.isRecording,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (!didPop && widget.controller.isRecording) {
-          await widget.controller.cancelRecord();
-        }
-      },
-      child: AnimatedBuilder(
-        animation: widget.controller,
-        builder: (context, _) {
-          final ctrl = widget.controller;
-          final showPicker = isSheetExpanded;
-          final currentSentence = ctrl.lyricSentences.isNotEmpty && ctrl.currentLyricIndex < ctrl.lyricSentences.length
-              ? ctrl.lyricSentences[ctrl.currentLyricIndex]
-              : null;
+Widget build(BuildContext context) {
+  return PopScope(
+    canPop: !widget.controller.isRecording,
+    onPopInvokedWithResult: (
+      bool didPop,
+      Object? result,
+    ) async {
+      if (!didPop &&
+          widget.controller.isRecording) {
+        await widget.controller.cancelRecord();
+      }
+    },
+    child: AnimatedBuilder(
+      animation: widget.controller,
+      builder: (
+        BuildContext context,
+        Widget? child,
+      ) {
+        final MusicController ctrl =
+            widget.controller;
 
-          return ListView(
-            controller: widget.scrollController,
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
-            children: [
-              Center(child: Container(width: 42, height: 5, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)))),
-              const SizedBox(height: 10),
-              AnimatedCrossFade(
-                duration: const Duration(milliseconds: 250),
-                firstChild: const SizedBox.shrink(),
-                secondChild: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.07),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.amber.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.music_note, color: Colors.amber, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          ctrl.musicName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: () => ctrl.pickMusic(context),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)),
-                          child: const Icon(Icons.folder_open, color: Colors.black, size: 22),
-                        ),
-                      )
-                    ],
-                  ),
-                ),
-                crossFadeState: showPicker ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-              ),
-              if (ctrl.errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(ctrl.errorMessage!, style: const TextStyle(color: Colors.amber, fontSize: 11)),
-                ),
-              const SizedBox(height: 10),
-              InkWell(
-                onTap: _editTitle,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: Colors.amber.withOpacity(0.14), borderRadius: BorderRadius.circular(8)),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.edit, size: 14, color: Colors.amber),
-                      const SizedBox(width: 6),
-                      Expanded(child: RunningText(text: ctrl.editableTitle)),
-                    ],
-                  ),
+        final bool showPicker =
+            isSheetExpanded;
+
+        final TimedSentence? currentSentence =
+            ctrl.lyricSentences.isNotEmpty &&
+                    ctrl.currentLyricIndex >= 0 &&
+                    ctrl.currentLyricIndex <
+                        ctrl.lyricSentences.length
+                ? ctrl.lyricSentences[
+                    ctrl.currentLyricIndex]
+                : null;
+
+        return ListView(
+          controller: widget.scrollController,
+          padding: const EdgeInsets.fromLTRB(
+            12,
+            10,
+            12,
+            16,
+          ),
+          children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius:
+                      BorderRadius.circular(10),
                 ),
               ),
-              const SizedBox(height: 8),
+            ),
 
-              MusicPlayerBar(controller: ctrl),
+            const SizedBox(height: 10),
 
-              Container(
-                height: 52,
-                decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-                child: ctrl.selectedMusicFile == null
-                    ? const Center(child: Text('Waveform Audio', style: TextStyle(color: Colors.white24, fontSize: 11)))
-                    : AudioFileWaveforms(
-                        size: Size(MediaQuery.of(context).size.width - 24, 52),
-                        playerController: ctrl.waveformController,
-                        enableSeekGesture: true,
-                        waveformType: WaveformType.fitWidth,
-                        playerWaveStyle: const PlayerWaveStyle(
-                          fixedWaveColor: Colors.white24,
-                          liveWaveColor: Colors.amber,
-                          spacing: 3,
-                          waveThickness: 2,
-                        ),
-                      ),
+            AnimatedCrossFade(
+              duration: const Duration(
+                milliseconds: 250,
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => ctrl.openTranscribeDialog(context),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 10)),
-                      icon: const Icon(Icons.subtitles, size: 16),
-                      label: const Text('Transcribe + Sync Lirik', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+              firstChild: const SizedBox.shrink(),
+              secondChild: Container(
+                padding:
+                    const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(
+                    0.07,
+                  ),
+                  borderRadius:
+                      BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.amber.withOpacity(
+                      0.3,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () => setState(() => lyricExpanded = !lyricExpanded),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.amber.withOpacity(0.2)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.lyrics, size: 14, color: Colors.amber),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              lyricExpanded ? 'SYNC LIRIK KARAOKE - TAP UNTUK LIPAT' : 'KARAOKE: ${currentSentence?.text ?? ''}',
-                              style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.music_note,
+                      color: Colors.amber,
+                      size: 20,
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    Expanded(
+                      child: Text(
+                        ctrl.musicName,
+                        maxLines: 1,
+                        overflow:
+                            TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
                       ),
-                      const SizedBox(height: 8),
-                      if (lyricExpanded)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.06), borderRadius: BorderRadius.circular(10)),
-                              child: currentSentence == null
-                                  ? const Text('Belum ada sync lirik (Klik Transcribe)', style: TextStyle(color: Colors.white24, fontSize: 11))
-                                  : LyricKaraoke(sentence: currentSentence, position: ctrl.position),
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    InkWell(
+                      onTap: ctrl.isLoading
+                          ? null
+                          : () async {
+                              await ctrl.pickMusic(
+                                context,
+                              );
+                            },
+                      child: Container(
+                        padding:
+                            const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.amber,
+                          borderRadius:
+                              BorderRadius.circular(
+                            8,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.folder_open,
+                          color: Colors.black,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              crossFadeState: showPicker
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+            ),
+
+            if (ctrl.errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(
+                  top: 6,
+                ),
+                child: Text(
+                  ctrl.errorMessage!,
+                  style: const TextStyle(
+                    color: Colors.amber,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 10),
+
+            InkWell(
+              onTap: _editTitle,
+              child: Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(
+                    0.14,
+                  ),
+                  borderRadius:
+                      BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.edit,
+                      size: 14,
+                      color: Colors.amber,
+                    ),
+
+                    const SizedBox(width: 6),
+
+                    Expanded(
+                      child: RunningText(
+                        text: ctrl.editableTitle,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            MusicPlayerBar(
+              controller: ctrl,
+            ),
+
+            Container(
+              height: 52,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius:
+                    BorderRadius.circular(10),
+                border: Border.all(
+                  color: Colors.white12,
+                ),
+              ),
+              child: ctrl.selectedMusicFile ==
+                      null
+                  ? const Center(
+                      child: Text(
+                        'Waveform Audio',
+                        style: TextStyle(
+                          color: Colors.white24,
+                          fontSize: 11,
+                        ),
+                      ),
+                    )
+                  : AudioFileWaveforms(
+                      size: Size(
+                        MediaQuery.of(context)
+                                .size
+                                .width -
+                            24,
+                        52,
+                      ),
+                      playerController:
+                          ctrl.waveformController,
+                      enableSeekGesture: true,
+                      waveformType:
+                          WaveformType.fitWidth,
+                      playerWaveStyle:
+                          const PlayerWaveStyle(
+                        fixedWaveColor:
+                            Colors.white24,
+                        liveWaveColor:
+                            Colors.amber,
+                        spacing: 3,
+                        waveThickness: 2,
+                      ),
+                    ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: ctrl.isLoading
+                        ? null
+                        : () async {
+                            await ctrl
+                                .openTranscribeDialog(
+                              context,
+                            );
+                          },
+                    style: ElevatedButton
+                        .styleFrom(
+                      backgroundColor:
+                          Colors.amber,
+                      foregroundColor:
+                          Colors.black,
+                      padding:
+                          const EdgeInsets.symmetric(
+                        vertical: 10,
+                      ),
+                    ),
+                    icon: const Icon(
+                      Icons.subtitles,
+                      size: 16,
+                    ),
+                    label: const Text(
+                      'Transcribe + Sync Lirik',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  lyricExpanded =
+                      !lyricExpanded;
+                });
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(
+                    0.6,
+                  ),
+                  borderRadius:
+                      BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.amber.withOpacity(
+                      0.2,
+                    ),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.lyrics,
+                          size: 14,
+                          color: Colors.amber,
+                        ),
+
+                        const SizedBox(width: 6),
+
+                        Expanded(
+                          child: Text(
+                            lyricExpanded
+                                ? 'SYNC LIRIK KARAOKE - TAP UNTUK LIPAT'
+                                : 'KARAOKE: ${currentSentence?.text ?? ''}',
+                            style:
+                                const TextStyle(
+                              color: Colors.amber,
+                              fontSize: 11,
+                              fontWeight:
+                                  FontWeight.bold,
                             ),
-                            const SizedBox(height: 8),
-                            ...ctrl.lyricSentences.asMap().entries.map((e) {
-                              final isActive = e.key == ctrl.currentLyricIndex;
+                            maxLines: 1,
+                            overflow:
+                                TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    if (lyricExpanded)
+                      Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: double.infinity,
+                            padding:
+                                const EdgeInsets.all(
+                              10,
+                            ),
+                            decoration:
+                                BoxDecoration(
+                              color: Colors.white
+                                  .withOpacity(0.06),
+                              borderRadius:
+                                  BorderRadius.circular(
+                                10,
+                              ),
+                            ),
+                            child: currentSentence ==
+                                    null
+                                ? const Text(
+                                    'Belum ada sync lirik '
+                                    '(Klik Transcribe)',
+                                    style: TextStyle(
+                                      color:
+                                          Colors.white24,
+                                      fontSize: 11,
+                                    ),
+                                  )
+                                : LyricKaraoke(
+                                    sentence:
+                                        currentSentence,
+                                    position:
+                                        ctrl.position,
+                                  ),
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          ...ctrl.lyricSentences
+                              .asMap()
+                              .entries
+                              .map(
+                            (
+                              MapEntry<
+                                  int,
+                                  TimedSentence>
+                              entry,
+                            ) {
+                              final bool isActive =
+                                  entry.key ==
+                                      ctrl
+                                          .currentLyricIndex;
+
                               return Container(
-                                padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
-                                margin: const EdgeInsets.only(bottom: 2),
-                                decoration: isActive ? BoxDecoration(color: Colors.amber.withOpacity(0.12), borderRadius: BorderRadius.circular(6)) : null,
+                                padding:
+                                    const EdgeInsets
+                                        .symmetric(
+                                  vertical: 3,
+                                  horizontal: 6,
+                                ),
+                                margin:
+                                    const EdgeInsets
+                                        .only(
+                                  bottom: 2,
+                                ),
+                                decoration: isActive
+                                    ? BoxDecoration(
+                                        color: Colors
+                                            .amber
+                                            .withOpacity(
+                                          0.12,
+                                        ),
+                                        borderRadius:
+                                            BorderRadius
+                                                .circular(
+                                          6,
+                                        ),
+                                      )
+                                    : null,
                                 child: Row(
                                   children: [
-                                    Text('${e.key + 1}. ', style: TextStyle(color: isActive ? Colors.amber : Colors.white24, fontSize: 10)),
+                                    Text(
+                                      '${entry.key + 1}. ',
+                                      style: TextStyle(
+                                        color: isActive
+                                            ? Colors
+                                                .amber
+                                            : Colors
+                                                .white24,
+                                        fontSize: 10,
+                                      ),
+                                    ),
                                     Expanded(
                                       child: Text(
-                                        e.value.text,
-                                        style: TextStyle(color: isActive ? Colors.white : Colors.white38, fontSize: isActive ? 13 : 11),
+                                        entry.value.text,
+                                        style: TextStyle(
+                                          color: isActive
+                                              ? Colors
+                                                  .white
+                                              : Colors
+                                                  .white38,
+                                          fontSize: isActive
+                                              ? 13
+                                              : 11,
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
                               );
-                            }),
-                          ],
-                        )
-                      else
-                        currentSentence == null ? const SizedBox.shrink() : LyricKaraoke(sentence: currentSentence, position: ctrl.position),
-                    ],
-                  ),
+                            },
+                          ),
+                        ],
+                      )
+                    else if (currentSentence != null)
+                      LyricKaraoke(
+                        sentence: currentSentence,
+                        position: ctrl.position,
+                      ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
-  children: [
-    // ==========================================
-    // REC MERAH
-    // ==========================================
-    Expanded(
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.red,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(
-            vertical: 12,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        onPressed: ctrl.isRecording
-            ? () async {
-                await ctrl.stopRecord();
+            ),
 
-                if (context.mounted &&
-                    ctrl.recordedPath != null) {
-                  await ctrl.showPostRecordDialog(
-                    context,
-                  );
-                }
-              }
-            : () async {
-                await ctrl.startRecord(
-                  startFrom: Duration.zero,
-                  endAt: ctrl.duration >
-                          const Duration(seconds: 60)
-                      ? const Duration(seconds: 60)
-                      : ctrl.duration,
-                );
-              },
-        icon: Icon(
-          ctrl.isRecording
-              ? Icons.stop
-              : Icons.fiber_manual_record,
-          size: 18,
-        ),
-        label: Text(
-          ctrl.isRecording
-              ? '${ctrl.recordSeconds}s STOP'
-              : 'REC MERAH',
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
-        ),
-      ),
-    ),
+            const SizedBox(height: 12),
 
-    const SizedBox(width: 8),
+            Row(
+              children: [
+                // ==========================================
+                // REC MERAH
+                // ==========================================
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton
+                        .styleFrom(
+                      backgroundColor:
+                          Colors.red,
+                      foregroundColor:
+                          Colors.white,
+                      padding:
+                          const EdgeInsets.symmetric(
+                        vertical: 12,
+                      ),
+                      shape:
+                          RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(
+                          12,
+                        ),
+                      ),
+                    ),
+                    onPressed: ctrl.isRecording
+                        ? () async {
+                            // Jangan memanggil
+                            // showPostRecordDialog
+                            // di sini.
+                            await ctrl.stopRecord();
+                          }
+                        : () async {
+                            if (ctrl.duration <=
+                                Duration.zero) {
+                              ctrl.errorMessage =
+                                  'Pilih lagu terlebih dahulu';
 
-    // ==========================================
-    // REC KUNING
-    // ==========================================
-    Expanded(
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.amber,
-          foregroundColor: Colors.black,
-          padding: const EdgeInsets.symmetric(
-            vertical: 12,
-          ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        onPressed: ctrl.isRecording
-            ? null
-            : () => ctrl.showTrimDialog(
-                  context,
+                              ctrl.notifyListeners();
+                              return;
+                            }
+
+                            final Duration endAt =
+                                ctrl.duration >
+                                        const Duration(
+                                          seconds: 60,
+                                        )
+                                    ? const Duration(
+                                        seconds: 60,
+                                      )
+                                    : ctrl.duration;
+
+                            await ctrl.startRecord(
+                              startFrom:
+                                  Duration.zero,
+                              endAt: endAt,
+                            );
+                          },
+                    icon: Icon(
+                      ctrl.isRecording
+                          ? Icons.stop
+                          : Icons
+                              .fiber_manual_record,
+                      size: 18,
+                    ),
+                    label: Text(
+                      ctrl.isRecording
+                          ? '${ctrl.recordSeconds}s STOP'
+                          : 'REC MERAH',
+                      style: const TextStyle(
+                        fontWeight:
+                            FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
                 ),
-        icon: const Icon(
-          Icons.content_cut,
-          size: 18,
-        ),
-        label: const Text(
-          'TRIM REC KUNING',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 11,
-          ),
-        ),
-      ),
-    ),
-  ],
-),
 
-            ],
-          );
-        },
-      ),
-    );
-  }
+                const SizedBox(width: 8),
+
+                // ==========================================
+                // REC KUNING
+                // ==========================================
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton
+                        .styleFrom(
+                      backgroundColor:
+                          Colors.amber,
+                      foregroundColor:
+                          Colors.black,
+                      padding:
+                          const EdgeInsets.symmetric(
+                        vertical: 12,
+                      ),
+                      shape:
+                          RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(
+                          12,
+                        ),
+                      ),
+                    ),
+                    onPressed: ctrl.isRecording ||
+                            ctrl.duration <=
+                                Duration.zero
+                        ? null
+                        : () async {
+                            await ctrl
+                                .showTrimDialog(
+                              context,
+                            );
+                          },
+                    icon: const Icon(
+                      Icons.content_cut,
+                      size: 18,
+                    ),
+                    label: const Text(
+                      'TRIM REC KUNING',
+                      style: TextStyle(
+                        fontWeight:
+                            FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }
