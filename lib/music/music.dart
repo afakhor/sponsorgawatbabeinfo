@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:math' as math;
 
 import 'package:audio_decode/audio_decode.dart';
 import 'package:audio_waveforms/audio_waveforms.dart';
@@ -1596,133 +1597,169 @@ Future<void> showTrimDialog(
   // REKAM LAYAR
   // ==========================================
 
-  Future<void> startRecord({
+ Future<void> startRecord({
   Duration? startFrom,
   Duration? endAt,
 }) async {
+  if (isRecording) {
+    return;
+  }
+
+  if (selectedMusicFile == null ||
+      duration <= Duration.zero) {
+    errorMessage =
+        'Pilih lagu terlebih dahulu';
+
+    notifyListeners();
+    return;
+  }
+
   try {
     await _req();
 
-    final bool isTrimRecording =
-        startFrom != null &&
-        endAt != null;
+    const Duration minimumRange =
+        Duration(milliseconds: 100);
+
+    const Duration maximumRecord =
+        Duration(seconds: 60);
 
     final Duration recordStart =
-        isTrimRecording
-            ? _clampDuration(
-                startFrom,
-                Duration.zero,
-                duration,
-              )
-            : Duration.zero;
+        _clampDuration(
+      startFrom ?? Duration.zero,
+      Duration.zero,
+      duration,
+    );
 
-    Duration recordEnd;
+    Duration recordEnd =
+        endAt ?? duration;
 
-    if (isTrimRecording) {
-      recordEnd = _clampDuration(
-        endAt,
-        recordStart +
-            const Duration(milliseconds: 100),
-        duration,
-      );
+    recordEnd = _clampDuration(
+      recordEnd,
+      recordStart + minimumRange,
+      duration,
+    );
 
-      // Maksimum panjang rekaman 60 detik.
-      if (recordEnd - recordStart >
-          const Duration(seconds: 60)) {
-        recordEnd =
-            recordStart +
-            const Duration(seconds: 60);
+    if (recordEnd - recordStart >
+        maximumRecord) {
+      recordEnd =
+          recordStart + maximumRecord;
 
-        if (recordEnd > duration) {
-          recordEnd = duration;
-        }
-      }
-    } else {
-      // REC merah selalu dari nol dan maksimum 60 detik.
-      recordEnd = duration;
-
-      if (recordEnd >
-          const Duration(seconds: 60)) {
-        recordEnd =
-            const Duration(seconds: 60);
+      if (recordEnd > duration) {
+        recordEnd = duration;
       }
     }
 
     if (recordEnd <= recordStart) {
       errorMessage =
-          'Rentang waktu rekaman tidak valid';
+          'Start dan end tidak valid';
+
       notifyListeners();
       return;
     }
 
+    recordTimer?.cancel();
+    recordTimer = null;
+
+    recordedPath = null;
+    recordSeconds = 0;
+
+    try {
+      await audioPlayer.pause();
+    } catch (_) {}
+
+    try {
+      await waveformController.pausePlayer();
+    } catch (_) {}
+
     await seekTo(recordStart);
 
+    final String fileName =
+        'babe_${DateTime.now().millisecondsSinceEpoch}';
+
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.immersiveSticky,
+    );
+
+    // Mulai screen recording lebih dahulu.
+    await FlutterScreenRecording
+        .startRecordScreenAndAudio(
+      fileName,
+      titleNotification: 'Babe Info REC',
+      messageNotification: 'Recording...',
+    );
+
+    isRecording = true;
+    notifyListeners();
+
+    // Audio mulai setelah screen recorder aktif.
     await audioPlayer.play();
 
     try {
       await waveformController.startPlayer();
     } catch (_) {}
 
-    await SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.immersiveSticky,
-    );
-
-    isRecording = true;
-    recordSeconds = 0;
-    recordedPath = null;
-
-    notifyListeners();
-
-    final String fileName =
-        'babe_${DateTime.now().millisecondsSinceEpoch}';
-
-    await FlutterScreenRecording
-        .startRecordScreenAndAudio(
-      fileName,
-      titleNotification: 'Babe Info REC',
-      messageNotification: isTrimRecording
-          ? 'Recording selected music range...'
-          : 'Recording from beginning...',
-    );
-
-    recordTimer?.cancel();
-
     recordTimer = Timer.periodic(
-      const Duration(milliseconds: 200),
+      const Duration(milliseconds: 100),
       (Timer timer) {
         if (!isRecording) {
           timer.cancel();
           return;
         }
 
-        final Duration current =
+        final Duration currentPosition =
             position;
 
-        final Duration elapsed =
-            current - recordStart;
+        Duration elapsed =
+            currentPosition - recordStart;
+
+        if (elapsed < Duration.zero) {
+          elapsed = Duration.zero;
+        }
 
         recordSeconds =
-            elapsed.inMilliseconds <= 0
-                ? 0
-                : (elapsed.inMilliseconds / 1000)
-                    .floor();
+            elapsed.inMilliseconds ~/ 1000;
+
+        if (recordSeconds < 0) {
+          recordSeconds = 0;
+        }
+
+        if (recordSeconds > 60) {
+          recordSeconds = 60;
+        }
 
         notifyListeners();
 
-        if (current >= recordEnd ||
-            elapsed >= const Duration(seconds: 60)) {
-          stopRecord();
+        final bool reachedEnd =
+            currentPosition >= recordEnd;
+
+        final bool reachedMaximum =
+            elapsed >= maximumRecord;
+
+        if (reachedEnd || reachedMaximum) {
+          timer.cancel();
+          recordTimer = null;
+
+          unawaited(stopRecord());
         }
       },
     );
   } catch (e) {
     recordTimer?.cancel();
+    recordTimer = null;
 
-    isRecording = false;
+    try {
+      await FlutterScreenRecording.stopRecordScreen;
+    } catch (_) {}
 
     try {
       await audioPlayer.pause();
     } catch (_) {}
+
+    try {
+      await waveformController.pausePlayer();
+    } catch (_) {}
+
+    isRecording = false;
 
     try {
       await SystemChrome.setEnabledSystemUIMode(
@@ -1737,33 +1774,46 @@ Future<void> showTrimDialog(
 }
 
 
+
   Future<void> stopRecord() async {
-    try {
-      recordTimer?.cancel();
-
-      try {
-        await audioPlayer.pause();
-        await waveformController
-            .pausePlayer();
-      } catch (_) {}
-
-      recordedPath =
-          await FlutterScreenRecording
-              .stopRecordScreen;
-    } catch (e) {
-      errorMessage =
-          'Stop gagal: $e';
-    } finally {
-      isRecording = false;
-
-      await SystemChrome
-          .setEnabledSystemUIMode(
-        SystemUiMode.edgeToEdge,
-      );
-
-      notifyListeners();
-    }
+  if (!isRecording) {
+    return;
   }
+
+  recordTimer?.cancel();
+  recordTimer = null;
+
+  try {
+    await audioPlayer.pause();
+  } catch (_) {}
+
+  try {
+    await waveformController.pausePlayer();
+  } catch (_) {}
+
+  try {
+    final String? path =
+        await FlutterScreenRecording
+            .stopRecordScreen;
+
+    if (path != null &&
+        path.isNotEmpty) {
+      recordedPath = path;
+    }
+  } catch (e) {
+    errorMessage = 'Stop gagal: $e';
+  }
+
+  isRecording = false;
+
+  try {
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.edgeToEdge,
+    );
+  } catch (_) {}
+
+  notifyListeners();
+}
 
   Future<void> cancelRecord() async {
     try {
