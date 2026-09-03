@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-/// Beat detector offline untuk mencari waktu beat dari seluruh buffer audio.
 class BeatDetector {
   final int sampleRate;
   final int channels;
@@ -10,14 +9,6 @@ class BeatDetector {
     required this.channels,
   });
 
-  /// Mendeteksi posisi beat dalam satuan detik.
-  ///
-  /// [samples] dapat berupa:
-  /// - mono:       [L, L, L, L, ...]
-  /// - stereo:     [L, R, L, R, ...]
-  ///
-  /// Hasil:
-  /// [0.52, 1.01, 1.49, ...]
   List<double> detectBeatTimes(
     List<double> samples, {
     double? bpm,
@@ -50,8 +41,7 @@ class BeatDetector {
         final double phase =
             i / (windowSize - 1);
 
-        // Hann window.
-        final double window =
+        final double hann =
             0.5 -
             0.5 *
                 math.cos(
@@ -62,7 +52,7 @@ class BeatDetector {
             mono[start + i];
 
         final double value =
-            sample * window;
+            sample * hann;
 
         energy += value * value;
       }
@@ -76,19 +66,17 @@ class BeatDetector {
       return <double>[];
     }
 
-    // Mengambil kenaikan energi untuk mendeteksi onset.
     final List<double> onset =
         _calculateOnsetStrength(energies);
-
-    if (onset.isEmpty) {
-      return <double>[];
-    }
 
     final List<double> normalized =
         _normalize(onset);
 
-    final List<double> beatTimes =
-        <double>[];
+    if (normalized.length < 5) {
+      return <double>[];
+    }
+
+    final List<double> beats = <double>[];
 
     double lastBeatTime = -100.0;
 
@@ -115,35 +103,33 @@ class BeatDetector {
       final double next2 =
           normalized[i + 2];
 
-      // Puncak lokal lima titik.
-      final bool isPeak =
+      final bool localPeak =
           current > previous2 &&
           current >= previous &&
           current >= next &&
           current > next2;
 
+      final bool strongEnough =
+          current >= 0.48;
+
       final double timeSeconds =
           i * hopSize / sampleRate;
-
-      final bool isStrong =
-          current >= 0.48;
 
       final bool farEnough =
           timeSeconds - lastBeatTime >=
           minimumInterval;
 
-      if (isPeak &&
-          isStrong &&
+      if (localPeak &&
+          strongEnough &&
           farEnough) {
-        beatTimes.add(timeSeconds);
+        beats.add(timeSeconds);
         lastBeatTime = timeSeconds;
       }
     }
 
-    return beatTimes;
+    return beats;
   }
 
-  /// Mengubah sinyal interleaved menjadi mono.
   List<double> _toMono(
     List<double> samples,
   ) {
@@ -151,8 +137,7 @@ class BeatDetector {
       return List<double>.from(samples);
     }
 
-    final List<double> mono =
-        <double>[];
+    final List<double> mono = <double>[];
 
     for (
       int i = 0;
@@ -180,17 +165,9 @@ class BeatDetector {
     return mono;
   }
 
-  /// Menghitung hanya kenaikan energi.
-  ///
-  /// Beat biasanya terlihat sebagai lonjakan energi,
-  /// bukan sebagai volume yang terus-menerus tinggi.
   List<double> _calculateOnsetStrength(
     List<double> energies,
   ) {
-    if (energies.length < 2) {
-      return <double>[];
-    }
-
     final List<double> onset =
         List<double>.filled(
       energies.length,
@@ -198,16 +175,9 @@ class BeatDetector {
     );
 
     for (int i = 1; i < energies.length; i++) {
-      final double current =
-          energies[i];
-
-      final double previous =
-          energies[i - 1];
-
       final double increase =
-          current - previous;
+          energies[i] - energies[i - 1];
 
-      // Hanya kenaikan energi yang dihitung.
       onset[i] = math.max(
         increase,
         0.0,
@@ -217,7 +187,6 @@ class BeatDetector {
     return onset;
   }
 
-  /// Normalisasi onset berdasarkan median.
   List<double> _normalize(
     List<double> values,
   ) {
@@ -227,9 +196,9 @@ class BeatDetector {
 
     final List<double> finiteValues =
         values
-            .where((double value) {
-              return value.isFinite;
-            })
+            .where(
+              (double value) => value.isFinite,
+            )
             .toList();
 
     if (finiteValues.isEmpty) {
@@ -269,22 +238,13 @@ class BeatDetector {
         return 0.0;
       }
 
-      final double normalized =
-          value / safeBaseline;
-
-      // Nilai lebih dari 1 tidak perlu dipertahankan
-      // karena threshold bekerja pada rentang 0 sampai 1.
-      return normalized.clamp(
+      return (value / safeBaseline).clamp(
         0.0,
         1.0,
       );
     }).toList();
   }
 
-  /// Jarak minimum antarbeat.
-  ///
-  /// Tanpa BPM, 180 ms mengizinkan tempo sampai
-  /// sekitar 333 BPM.
   double _minimumBeatInterval(
     double? bpm,
   ) {
@@ -294,140 +254,12 @@ class BeatDetector {
       return 0.18;
     }
 
-    final double beatInterval =
+    final double interval =
         60.0 / bpm;
 
-    // Jangan terlalu cepat dan jangan terlalu lambat.
-    return beatInterval.clamp(
+    return interval.clamp(
       0.12,
       0.70,
     );
-  }
-}
-
-/// Beat pulse realtime untuk shader.
-///
-/// Class ini menerima amplitude audio setiap frame,
-/// lalu menghasilkan nilai pulse dari 0.0 sampai 1.0.
-class RealtimeBeatPulse {
-  double _averageEnergy = 0.0;
-  double _fastEnergy = 0.0;
-  double _pulse = 0.0;
-
-  int _lastBeatMilliseconds =
-      -1000000;
-
-  /// Nilai pulse terakhir.
-  double get value {
-    return _pulse;
-  }
-
-  /// Memperbarui pulse berdasarkan amplitude audio.
-  ///
-  /// [amplitude] sebaiknya sudah berada pada rentang 0.0 sampai 1.0.
-  ///
-  /// [timestampMilliseconds] harus terus meningkat,
-  /// misalnya dari posisi audio atau stopwatch.
-  ///
-  /// [bpm] bersifat opsional.
-  double update({
-    required double amplitude,
-    required int timestampMilliseconds,
-    double? bpm,
-  }) {
-    double input =
-        amplitude.abs();
-
-    if (!input.isFinite) {
-      input = 0.0;
-    }
-
-    input = input.clamp(
-      0.0,
-      1.0,
-    );
-
-    // Energi lambat untuk baseline.
-    _averageEnergy =
-        _averageEnergy * 0.94 +
-        input * 0.06;
-
-    // Energi cepat mengikuti transien atau hentakan.
-    _fastEnergy =
-        _fastEnergy * 0.55 +
-        input * 0.45;
-
-    final double transient =
-        math.max(
-      _fastEnergy - _averageEnergy,
-      0.0,
-    );
-
-    final double adaptiveThreshold =
-        math.max(
-      0.035,
-      _averageEnergy * 0.22,
-    );
-
-    final int cooldownMilliseconds =
-        _cooldownMilliseconds(bpm);
-
-    final bool strongEnough =
-        input > 0.08 &&
-        transient > adaptiveThreshold;
-
-    final bool cooldownPassed =
-        timestampMilliseconds -
-                _lastBeatMilliseconds >=
-            cooldownMilliseconds;
-
-    if (strongEnough && cooldownPassed) {
-      _lastBeatMilliseconds =
-          timestampMilliseconds;
-
-      // Beat baru menghasilkan pulse penuh.
-      _pulse = 1.0;
-    } else {
-      // Decay halus agar animasi tidak patah.
-      _pulse *= 0.885;
-
-      if (_pulse < 0.001) {
-        _pulse = 0.0;
-      }
-    }
-
-    return _pulse.clamp(
-      0.0,
-      1.0,
-    );
-  }
-
-  int _cooldownMilliseconds(
-    double? bpm,
-  ) {
-    if (bpm == null ||
-        !bpm.isFinite ||
-        bpm <= 0.0) {
-      return 180;
-    }
-
-    final double interval =
-        60000.0 / bpm;
-
-    final double cooldown =
-        interval * 0.42;
-
-    return cooldown.clamp(
-      110.0,
-      500.0,
-    ).round();
-  }
-
-  void reset() {
-    _averageEnergy = 0.0;
-    _fastEnergy = 0.0;
-    _pulse = 0.0;
-    _lastBeatMilliseconds =
-        -1000000;
   }
 }
