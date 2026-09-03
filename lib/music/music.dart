@@ -312,19 +312,30 @@ Future<void> analyzeBeats(
 
   // CONTROLLER METHOD UNTUK PLAY/PAUSE
   Future<void> togglePlay() async {
-    if (selectedMusicFile == null) {
-      errorMessage = 'Pilih lagu terlebih dahulu 📁';
-      notifyListeners();
-      return;
-    }
-    if (audioPlayer.playing) {
-      await audioPlayer.pause();
-      try { await waveformController.pausePlayer(); } catch (_) {}
-    } else {
-      await audioPlayer.play();
-      try { await waveformController.startPlayer(); } catch (_) {}
-    }
+  if (selectedMusicFile == null) {
+    errorMessage =
+        'Pilih lagu terlebih dahulu';
+
+    notifyListeners();
+
+    return;
   }
+
+  if (audioPlayer.playing) {
+    await audioPlayer.pause();
+
+    try {
+      await waveformController.pausePlayer();
+    } catch (_) {}
+  } else {
+    await audioPlayer.play();
+
+    try {
+      await waveformController.startPlayer();
+    } catch (_) {}
+  }
+}
+
 
   // UPLOAD MUSIK (MP3 ATAU WAV)
   Future<void> pickMusic(
@@ -679,21 +690,53 @@ void updateBeatFromPosition(
   }
 
 
-    Future<void> seekTo(Duration v) async {
-    Duration safe = v;
-    if (safe < Duration.zero) safe = Duration.zero;
-    if (safe > duration) safe = duration;
+    Future<void> seekTo(
+  Duration value,
+) async {
+  Duration safe =
+      value;
 
-    try { await audioPlayer.seek(safe); } catch (_) {}
-    try { await waveformController.seekTo(safe.inMilliseconds); } catch (_) {}
-    
-    position = safe;
-
-    // Update index lirik aktif sesuai posisi audio yang baru secara instan
-    _updateActiveLyricIndex(safe);
-
-    notifyListeners();
+  if (safe < Duration.zero) {
+    safe = Duration.zero;
   }
+
+  if (safe > duration) {
+    safe = duration;
+  }
+
+  try {
+    await audioPlayer.seek(safe);
+  } catch (_) {}
+
+  try {
+    await waveformController.seekTo(
+      safe.inMilliseconds,
+    );
+  } catch (_) {}
+
+  position = safe;
+
+  currentBeatIndex = 0;
+
+  final double seconds =
+      safe.inMicroseconds /
+      1000000.0;
+
+  while (
+      currentBeatIndex <
+          beatTimes.length &&
+      beatTimes[currentBeatIndex] <
+          seconds) {
+    currentBeatIndex++;
+  }
+
+  beatPulse = 0.0;
+
+  _updateActiveLyricIndex(safe);
+
+  notifyListeners();
+}
+
 
   void _updateActiveLyricIndex(Duration pos) {
     if (lyricSentences.isEmpty) return;
@@ -899,13 +942,19 @@ void updateBeatFromPosition(
   }
 
   @override
-  void dispose() {
-    recordTimer?.cancel();
-    audioPlayer.dispose();
-    waveformController.dispose();
-    super.dispose();
-  }
+void dispose() {
+  _beatGeneration++;
+
+  recordTimer?.cancel();
+
+  beatTimes.clear();
+
+  audioPlayer.dispose();
+  waveformController.dispose();
+
+  super.dispose();
 }
+
 
 // ==========================================
 // MUSIC PLAYER BAR
