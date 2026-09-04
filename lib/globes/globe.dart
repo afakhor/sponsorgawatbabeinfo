@@ -123,7 +123,7 @@ class GlobeShaderPainter extends CustomPainter {
       textTexture,
     );
 
-    // sampler 1 = bg.png
+    // sampler 1 = bg.jpg
     shader.setImageSampler(
       1,
       bgTexture,
