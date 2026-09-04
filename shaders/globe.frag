@@ -5,6 +5,8 @@ uniform float iTime;
 uniform float rotY;
 uniform float windRot;
 uniform float glow;
+uniform float beatPulse;
+
 
 uniform sampler2D textTexture;
 uniform sampler2D bgTexture;
@@ -1222,6 +1224,24 @@ float lightningFlash(float time) {
 // --------------------------------------------------
 
 void main() {
+      
+    float bubbleTime =
+    iTime +
+    beatPulse * 0.18;
+
+    float atmosphereTime =
+    iTime +
+    beatPulse * 0.16;
+
+    float lightningTime =
+    iTime +
+    beatPulse * 0.20;
+
+    float plasmaTime =
+    iTime +
+    beatPulse * 0.24;
+
+
     vec2 fragCoord =
         FlutterFragCoord().xy;
 
