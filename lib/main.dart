@@ -309,9 +309,9 @@ void dispose() {
   );
 
   _textTexture?.dispose();
+  _backgroundTexture?.dispose();
 
   _musicController.dispose();
-
   _sheetController.dispose();
 
   super.dispose();
@@ -323,23 +323,28 @@ void dispose() {
   // ==================================================
 
   @override
-  Widget build(BuildContext context) {
-    final ui.FragmentProgram? program =
-        _fragmentProgram;
+Widget build(BuildContext context) {
+  final ui.FragmentProgram? program =
+      _fragmentProgram;
 
-    final ui.Image? texture =
-        _textTexture;
+  final ui.Image? texture =
+      _textTexture;
 
-    if (program == null || texture == null) {
-      return _buildLoadingScreen();
-    }
+  final ui.Image? backgroundTexture =
+      _backgroundTexture;
 
-    return AnimatedBuilder(
-      animation: _musicController,
-      builder: (
-        BuildContext context,
-        Widget? child,
-      ) {
+  if (program == null ||
+      texture == null ||
+      backgroundTexture == null) {
+    return _buildLoadingScreen();
+  }
+
+  return AnimatedBuilder(
+    animation: _musicController,
+    builder: (
+      BuildContext context,
+      Widget? child,
+    ) {
         final bool isRecording =
             _musicController.isRecording;
 
@@ -358,33 +363,22 @@ void dispose() {
             backgroundColor: Colors.transparent,
             body: Stack(
               fit: StackFit.expand,
-              children: [
-                // ==================================================
-                // BACKGROUND PALING BAWAH
-                // ==================================================
+              children: [    
 
-                Positioned.fill(
-                  child: Image.asset(
-                    'assets/images/bg.png',
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
-                    filterQuality: FilterQuality.high,
-                  ),
-                ),
+                // // ==================================================
+// SHADER GLOBE + bg.png DI DALAM SHADER
+// ==================================================
 
-                // ==================================================
-                // SHADER GLOBE DI ATAS BACKGROUND
-                // ==================================================
+Positioned.fill(
+  child: GlobeShaderWidget(
+    program: program,
+    textTexture: texture,
+    bgTexture: backgroundTexture,
+    time: _time,
+    beatPulse: _musicController.beatPulse,
+  ),
+),
 
-                Positioned.fill(
-                  child: GlobeShaderWidget(
-                    program: program,
-                    textTexture: texture,
-                    time: _time,
-                    beatPulse:
-                        _musicController.beatPulse,
-                  ),
-                ),
 
                 // ==================================================
                 // OVERLAY RECORDING ATAU MUSIC SHEET
