@@ -18,7 +18,7 @@ dependencies:
   device_info_plus: 9.1.2
   file_picker: ^10.3.2
   just_audio: ^0.10.4
-  jpgaudio_waveforms: ^2.0.2
+  audio_waveforms: ^2.0.2
   flutter_screen_recording: ^2.0.25
   sherpa_onnx: ^1.10.20
   http: ^1.2.0
