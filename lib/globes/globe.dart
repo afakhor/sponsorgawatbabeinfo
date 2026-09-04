@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 class GlobeShaderPainter extends CustomPainter {
@@ -53,39 +54,68 @@ class GlobeShaderPainter extends CustomPainter {
     final double safeAxisTilt =
         axisTilt.isFinite ? axisTilt : 0.0;
 
-    // ==================================================
+    // ==========================================
     // FLOAT UNIFORM
-    // Harus sama dengan urutan uniform di globe.frag
-    // ==================================================
+    // Harus sesuai urutan uniform di globe.frag
+    // ==========================================
 
-    // 0-1: iResolution
-    shader.setFloat(0, size.width);
-    shader.setFloat(1, size.height);
+    // iResolution.x
+    shader.setFloat(
+      0,
+      size.width,
+    );
 
-    // 2: iTime
-    shader.setFloat(2, safeTime);
+    // iResolution.y
+    shader.setFloat(
+      1,
+      size.height,
+    );
 
-    // 3: rotY
-    shader.setFloat(3, safeRotationY);
+    // iTime
+    shader.setFloat(
+      2,
+      safeTime,
+    );
 
-    // 4: windRot
-    shader.setFloat(4, safeTime * 1.20);
+    // rotY
+    shader.setFloat(
+      3,
+      safeRotationY,
+    );
 
-    // 5: glow
-    shader.setFloat(5, 1.0);
+    // windRot
+    shader.setFloat(
+      4,
+      safeTime * 1.20,
+    );
 
-    // 6: beatPulse
-    shader.setFloat(6, safePulse);
+    // glow
+    shader.setFloat(
+      5,
+      1.0,
+    );
 
-    // 7: rotX
-    shader.setFloat(7, safeRotationX);
+    // beatPulse
+    shader.setFloat(
+      6,
+      safePulse,
+    );
 
-    // 8: axisTilt
-    shader.setFloat(8, safeAxisTilt);
+    // rotX
+    shader.setFloat(
+      7,
+      safeRotationX,
+    );
 
-    // ==================================================
+    // axisTilt
+    shader.setFloat(
+      8,
+      safeAxisTilt,
+    );
+
+    // ==========================================
     // IMAGE SAMPLER
-    // ==================================================
+    // ==========================================
 
     // sampler 0 = babe_info.png
     shader.setImageSampler(
@@ -124,7 +154,6 @@ class GlobeShaderPainter extends CustomPainter {
   }
 }
 
-
 class GlobeShaderWidget extends StatefulWidget {
   final ui.FragmentProgram program;
   final ui.Image textTexture;
@@ -147,7 +176,6 @@ class GlobeShaderWidget extends StatefulWidget {
   }
 }
 
-
 class _GlobeShaderWidgetState
     extends State<GlobeShaderWidget>
     with TickerProviderStateMixin {
@@ -161,7 +189,8 @@ class _GlobeShaderWidgetState
   double _velocityX = 0.0;
   double _velocityY = 0.0;
 
-  final Map<int, Offset> _pointers = <int, Offset>{};
+  final Map<int, Offset> _pointers =
+      <int, Offset>{};
 
   double? _lastTwoFingerAngle;
   Offset? _lastTwoFingerCenter;
@@ -174,18 +203,18 @@ class _GlobeShaderWidgetState
 
     _inertiaController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 700),
+      duration: const Duration(
+        milliseconds: 700,
+      ),
     )..addListener(_animateInertia);
 
     _axisResetController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(
+        milliseconds: 500,
+      ),
     )..addListener(_animateAxisReset);
   }
-
-  // ==================================================
-  // SATU JARI
-  // ==================================================
 
   void _handleOneFingerMove(Offset delta) {
     const double horizontalSensitivity = 0.010;
@@ -211,10 +240,6 @@ class _GlobeShaderWidgetState
     });
   }
 
-  // ==================================================
-  // DUA JARI
-  // ==================================================
-
   void _handleTwoFingerMove() {
     if (_pointers.length < 2) {
       return;
@@ -226,7 +251,8 @@ class _GlobeShaderWidgetState
     final Offset first = values[0];
     final Offset second = values[1];
 
-    final Offset vector = second - first;
+    final Offset vector =
+        second - first;
 
     if (vector.distance < 1.0) {
       return;
@@ -267,35 +293,37 @@ class _GlobeShaderWidgetState
     _lastTwoFingerCenter = center;
 
     setState(() {
-  // Rotasi berdasarkan gerakan memutar dua jari.
-  _axisTilt += angleDelta;
+      _axisTilt += angleDelta;
 
-  // Geser pusat dua jari memengaruhi rotasi globe.
-  _rotationY += centerDelta.dx * 0.006;
-  _rotationX -= centerDelta.dy * 0.006;
+      _rotationY +=
+          centerDelta.dx * 0.006;
 
-  _rotationX = _rotationX.clamp(
-    -1.35,
-    1.35,
-  );
+      _rotationX -=
+          centerDelta.dy * 0.006;
 
-  _axisTilt = _axisTilt.clamp(
-    -1.50,
-    1.50,
-  );
+      _rotationX = _rotationX.clamp(
+        -1.35,
+        1.35,
+      );
 
-  _velocityX = -centerDelta.dy * 0.006;
-  _velocityY = centerDelta.dx * 0.006;
-});
+      _axisTilt = _axisTilt.clamp(
+        -1.50,
+        1.50,
+      );
 
+      _velocityY =
+          centerDelta.dx * 0.006;
+
+      _velocityX =
+          -centerDelta.dy * 0.006;
+    });
   }
 
-  // ==================================================
-  // POINTER
-  // ==================================================
-
-  void _onPointerDown(PointerDownEvent event) {
-    _pointers[event.pointer] = event.position;
+  void _onPointerDown(
+    PointerDownEvent event,
+  ) {
+    _pointers[event.pointer] =
+        event.position;
 
     _inertiaController.stop();
     _axisResetController.stop();
@@ -306,7 +334,9 @@ class _GlobeShaderWidgetState
     }
   }
 
-  void _onPointerMove(PointerMoveEvent event) {
+  void _onPointerMove(
+    PointerMoveEvent event,
+  ) {
     if (!_pointers.containsKey(event.pointer)) {
       return;
     }
@@ -317,7 +347,8 @@ class _GlobeShaderWidgetState
     final Offset delta =
         event.position - previous;
 
-    _pointers[event.pointer] = event.position;
+    _pointers[event.pointer] =
+        event.position;
 
     if (_pointers.length == 1) {
       _handleOneFingerMove(delta);
@@ -326,7 +357,28 @@ class _GlobeShaderWidgetState
     }
   }
 
-  void _onPointerUp(PointerUpEvent event) {
+  void _onPointerUp(
+    PointerUpEvent event,
+  ) {
+    _pointers.remove(event.pointer);
+
+    if (_pointers.length < 2) {
+      _lastTwoFingerAngle = null;
+      _lastTwoFingerCenter = null;
+    }
+
+    if (_pointers.isEmpty) {
+      _startInertia();
+
+      // Hapus baris ini jika axisTilt
+      // tidak ingin kembali ke nol.
+      _startAxisReset();
+    }
+  }
+
+  void _onPointerCancel(
+    PointerCancelEvent event,
+  ) {
     _pointers.remove(event.pointer);
 
     if (_pointers.length < 2) {
@@ -339,22 +391,6 @@ class _GlobeShaderWidgetState
       _startAxisReset();
     }
   }
-
-  void _onPointerCancel(PointerCancelEvent event) {
-    _pointers.remove(event.pointer);
-
-    if (_pointers.isEmpty) {
-      _lastTwoFingerAngle = null;
-      _lastTwoFingerCenter = null;
-
-      _startInertia();
-      _startAxisReset();
-    }
-  }
-
-  // ==================================================
-  // INERSIA
-  // ==================================================
 
   void _startInertia() {
     if (_velocityX.abs() < 0.0001 &&
@@ -378,7 +414,9 @@ class _GlobeShaderWidgetState
 
     final double friction =
         1.0 -
-        Curves.easeOut.transform(progress);
+        Curves.easeOut.transform(
+          progress,
+        );
 
     setState(() {
       _rotationY +=
@@ -398,10 +436,6 @@ class _GlobeShaderWidgetState
       _velocityY = 0.0;
     }
   }
-
-  // ==================================================
-  // RESET AXIS
-  // ==================================================
 
   void _startAxisReset() {
     if (_axisTilt.abs() < 0.0001) {
@@ -429,7 +463,8 @@ class _GlobeShaderWidgetState
 
     setState(() {
       _axisTilt =
-          _axisTiltAtReset * (1.0 - progress);
+          _axisTiltAtReset *
+          (1.0 - progress);
     });
 
     if (_axisResetController.isCompleted) {
@@ -437,34 +472,29 @@ class _GlobeShaderWidgetState
     }
   }
 
-  // ==================================================
-  // BUILD
-  // ==================================================
-
   @override
-Widget build(BuildContext context) {
-  return Listener(
-    behavior: HitTestBehavior.opaque,
-    onPointerDown: _onPointerDown,
-    onPointerMove: _onPointerMove,
-    onPointerUp: _onPointerUp,
-    onPointerCancel: _onPointerCancel,
-    child: CustomPaint(
-      painter: GlobeShaderPainter(
-        program: widget.program,
-        textTexture: widget.textTexture,
-        bgTexture: widget.bgTexture,
-        time: widget.time,
-        rotationX: _rotationX,
-        rotationY: _rotationY,
-        axisTilt: _axisTilt,
-        beatPulse: widget.beatPulse,
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: _onPointerDown,
+      onPointerMove: _onPointerMove,
+      onPointerUp: _onPointerUp,
+      onPointerCancel: _onPointerCancel,
+      child: CustomPaint(
+        painter: GlobeShaderPainter(
+          program: widget.program,
+          textTexture: widget.textTexture,
+          bgTexture: widget.bgTexture,
+          time: widget.time,
+          rotationX: _rotationX,
+          rotationY: _rotationY,
+          axisTilt: _axisTilt,
+          beatPulse: widget.beatPulse,
+        ),
+        child: const SizedBox.expand(),
       ),
-      child: const SizedBox.expand(),
-    ),
-  );
-}
-
+    );
+  }
 
   @override
   void dispose() {
