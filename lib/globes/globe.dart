@@ -24,7 +24,6 @@ class GlobeShaderPainter extends CustomPainter {
     required this.beatPulse,
   });
 
-
   @override
   void paint(
     Canvas canvas,
@@ -37,48 +36,73 @@ class GlobeShaderPainter extends CustomPainter {
     final ui.FragmentShader shader =
         program.fragmentShader();
 
+    final double safeTime =
+        time.isFinite ? time : 0.0;
+
     final double safePulse =
         beatPulse.isFinite
             ? beatPulse.clamp(0.0, 1.0).toDouble()
             : 0.0;
 
-    final double safeTime =
-        time.isFinite ? time : 0.0;
+    final double safeRotationX =
+        rotationX.isFinite ? rotationX : 0.0;
 
-    // Float index 0 dan 1: iResolution
+    final double safeRotationY =
+        rotationY.isFinite ? rotationY : 0.0;
+
+    final double safeAxisTilt =
+        axisTilt.isFinite ? axisTilt : 0.0;
+
+    // ==================================================
+    // FLOAT UNIFORM
+    // Harus sama dengan urutan uniform di globe.frag
+    // ==================================================
+
+    // 0-1: iResolution
     shader.setFloat(0, size.width);
     shader.setFloat(1, size.height);
 
-    // Float index 2: iTime
+    // 2: iTime
     shader.setFloat(2, safeTime);
 
-    // Float index 3: rotY
-    shader.setFloat(3, rotationY);
+    // 3: rotY
+    shader.setFloat(3, safeRotationY);
 
-    // Float index 4: windRot
+    // 4: windRot
     shader.setFloat(4, safeTime * 1.20);
 
-    // Float index 5: glow
-    // Jangan terlalu besar. Nilai 1.0 cukup.
+    // 5: glow
     shader.setFloat(5, 1.0);
 
-    // Float index 6: beatPulse
+    // 6: beatPulse
     shader.setFloat(6, safePulse);
 
-    // Float index 7: rotX
-    shader.setFloat(7, rotationX);
+    // 7: rotX
+    shader.setFloat(7, safeRotationX);
 
-    // Float index 8: axisTilt
-    shader.setFloat(8, axisTilt);
+    // 8: axisTilt
+    shader.setFloat(8, safeAxisTilt);
 
-    // Sampler index 0: textTexture
-    shader.setImageSampler(0, textTexture);
+    // ==================================================
+    // IMAGE SAMPLER
+    // ==================================================
+
+    // sampler 0 = babe_info.png
+    shader.setImageSampler(
+      0,
+      textTexture,
+    );
+
+    // sampler 1 = bg.png
+    shader.setImageSampler(
+      1,
+      bgTexture,
+    );
 
     final Paint paint = Paint()
       ..shader = shader
       ..blendMode = BlendMode.srcOver;
 
-    // Jangan menggambar warna background apa pun di sini.
     canvas.drawRect(
       Offset.zero & size,
       paint,
@@ -91,6 +115,7 @@ class GlobeShaderPainter extends CustomPainter {
   ) {
     return oldDelegate.program != program ||
         oldDelegate.textTexture != textTexture ||
+        oldDelegate.bgTexture != bgTexture ||
         oldDelegate.time != time ||
         oldDelegate.rotationX != rotationX ||
         oldDelegate.rotationY != rotationY ||
@@ -99,9 +124,11 @@ class GlobeShaderPainter extends CustomPainter {
   }
 }
 
+
 class GlobeShaderWidget extends StatefulWidget {
   final ui.FragmentProgram program;
   final ui.Image textTexture;
+  final ui.Image bgTexture;
   final double time;
   final double beatPulse;
 
@@ -109,6 +136,7 @@ class GlobeShaderWidget extends StatefulWidget {
     super.key,
     required this.program,
     required this.textTexture,
+    required this.bgTexture,
     required this.time,
     this.beatPulse = 0.0,
   });
@@ -118,6 +146,7 @@ class GlobeShaderWidget extends StatefulWidget {
     return _GlobeShaderWidgetState();
   }
 }
+
 
 class _GlobeShaderWidgetState
     extends State<GlobeShaderWidget>
@@ -238,14 +267,27 @@ class _GlobeShaderWidgetState
     _lastTwoFingerCenter = center;
 
     setState(() {
-      _axisTilt += angleDelta;
-      _axisTilt += centerDelta.dy * 0.004;
+  // Rotasi berdasarkan gerakan memutar dua jari.
+  _axisTilt += angleDelta;
 
-      _axisTilt = _axisTilt.clamp(
-        -1.50,
-        1.50,
-      );
-    });
+  // Geser pusat dua jari memengaruhi rotasi globe.
+  _rotationY += centerDelta.dx * 0.006;
+  _rotationX -= centerDelta.dy * 0.006;
+
+  _rotationX = _rotationX.clamp(
+    -1.35,
+    1.35,
+  );
+
+  _axisTilt = _axisTilt.clamp(
+    -1.50,
+    1.50,
+  );
+
+  _velocityX = -centerDelta.dy * 0.006;
+  _velocityY = centerDelta.dx * 0.006;
+});
+
   }
 
   // ==================================================
@@ -400,27 +442,29 @@ class _GlobeShaderWidgetState
   // ==================================================
 
   @override
-  Widget build(BuildContext context) {
-    return Listener(
-      behavior: HitTestBehavior.opaque,
-      onPointerDown: _onPointerDown,
-      onPointerMove: _onPointerMove,
-      onPointerUp: _onPointerUp,
-      onPointerCancel: _onPointerCancel,
-      child: CustomPaint(
-        painter: GlobeShaderPainter(
-          program: widget.program,
-          textTexture: widget.textTexture,
-          time: widget.time,
-          rotationX: _rotationX,
-          rotationY: _rotationY,
-          axisTilt: _axisTilt,
-          beatPulse: widget.beatPulse,
-        ),
-        child: const SizedBox.expand(),
+Widget build(BuildContext context) {
+  return Listener(
+    behavior: HitTestBehavior.opaque,
+    onPointerDown: _onPointerDown,
+    onPointerMove: _onPointerMove,
+    onPointerUp: _onPointerUp,
+    onPointerCancel: _onPointerCancel,
+    child: CustomPaint(
+      painter: GlobeShaderPainter(
+        program: widget.program,
+        textTexture: widget.textTexture,
+        bgTexture: widget.bgTexture,
+        time: widget.time,
+        rotationX: _rotationX,
+        rotationY: _rotationY,
+        axisTilt: _axisTilt,
+        beatPulse: widget.beatPulse,
       ),
-    );
-  }
+      child: const SizedBox.expand(),
+    ),
+  );
+}
+
 
   @override
   void dispose() {
