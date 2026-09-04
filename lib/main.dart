@@ -56,6 +56,8 @@ class _SponsorBabePageState extends State<SponsorBabePage>
     with SingleTickerProviderStateMixin {
   ui.FragmentProgram? _fragmentProgram;
   ui.Image? _textTexture;
+  ui.Image? _backgroundTexture;
+
 
   late final Ticker _ticker;
   late final MusicController _musicController;
@@ -193,6 +195,35 @@ void initState() {
       _time += delta;
     });
   }
+
+// ==================================================
+  // HELPER LOAD GAMBAR
+  // ==================================================
+Future<ui.Image> _loadAssetImage(
+  String assetPath,
+) async {
+  final ByteData data =
+      await rootBundle.load(assetPath);
+
+  final Uint8List bytes =
+      data.buffer.asUint8List(
+    data.offsetInBytes,
+    data.lengthInBytes,
+  );
+
+  final ui.Codec codec =
+      await ui.instantiateImageCodec(bytes);
+
+  try {
+    final ui.FrameInfo frame =
+        await codec.getNextFrame();
+
+    return frame.image;
+  } finally {
+    codec.dispose();
+  }
+}
+
 
   // ==================================================
   // LOAD SHADER DAN TEXTURE
