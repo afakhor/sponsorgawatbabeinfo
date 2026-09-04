@@ -6,7 +6,8 @@ uniform float rotY;
 uniform float windRot;
 uniform float glow;
 uniform float beatPulse;
-
+uniform float rotX;
+uniform float axisTilt;
 
 uniform sampler2D textTexture;
 uniform sampler2D bgTexture;
