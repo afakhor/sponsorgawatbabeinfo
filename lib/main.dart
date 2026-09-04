@@ -230,57 +230,51 @@ Future<ui.Image> _loadAssetImage(
   // ==================================================
 
   Future<void> _loadShaderAndTexture() async {
-    ui.Image? loadedImage;
+  ui.Image? loadedTextImage;
+  ui.Image? loadedBackgroundImage;
 
-    try {
-      final ui.FragmentProgram loadedProgram =
-          await ui.FragmentProgram.fromAsset(
-        'shaders/globe.frag',
-      );
+  try {
+    final ui.FragmentProgram loadedProgram =
+        await ui.FragmentProgram.fromAsset(
+      'shaders/globe.frag',
+    );
 
-      final ByteData data = await rootBundle.load(
-        'assets/images/babe_info.png',
-      );
+    loadedTextImage = await _loadAssetImage(
+      'assets/images/babe_info.png',
+    );
 
-      final Uint8List bytes = data.buffer.asUint8List(
-        data.offsetInBytes,
-        data.lengthInBytes,
-      );
+    loadedBackgroundImage = await _loadAssetImage(
+      'assets/images/bg.png',
+    );
 
-      final ui.Codec codec =
-          await ui.instantiateImageCodec(bytes);
-
-      try {
-        final ui.FrameInfo frame =
-            await codec.getNextFrame();
-
-        loadedImage = frame.image;
-      } finally {
-        codec.dispose();
-      }
-
-      if (!mounted) {
-        loadedImage?.dispose();
-        return;
-      }
-
-      setState(() {
-        _fragmentProgram = loadedProgram;
-        _textTexture = loadedImage;
-        loadedImage = null;
-      });
-    } catch (e) {
-      loadedImage?.dispose();
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _error = e.toString();
-      });
+    if (!mounted) {
+      loadedTextImage.dispose();
+      loadedBackgroundImage.dispose();
+      return;
     }
+
+    setState(() {
+      _fragmentProgram = loadedProgram;
+      _textTexture = loadedTextImage;
+      _backgroundTexture = loadedBackgroundImage;
+
+      loadedTextImage = null;
+      loadedBackgroundImage = null;
+    });
+  } catch (e) {
+    loadedTextImage?.dispose();
+    loadedBackgroundImage?.dispose();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _error = e.toString();
+    });
   }
+}
+
 
   // ==================================================
   // LIRIK AKTIF
