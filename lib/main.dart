@@ -244,7 +244,7 @@ Future<ui.Image> _loadAssetImage(
     );
 
     loadedBackgroundImage = await _loadAssetImage(
-      'assets/images/bg.png',
+      'assets/images/bg.jpg',
     );
 
     if (!mounted) {
@@ -366,7 +366,7 @@ Widget build(BuildContext context) {
               children: [    
 
                 // // ==================================================
-// SHADER GLOBE + bg.png DI DALAM SHADER
+// SHADER GLOBE + bg.jpg DI DALAM SHADER
 // ==================================================
 
 Positioned.fill(
@@ -407,7 +407,7 @@ Positioned.fill(
         fit: StackFit.expand,
         children: [
           Image.asset(
-            'assets/images/bg.png',
+            'assets/images/bg.jpg',
             fit: BoxFit.cover,
             filterQuality: FilterQuality.high,
           ),
