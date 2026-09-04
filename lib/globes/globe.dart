@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 class GlobeShaderPainter extends CustomPainter {
   final ui.FragmentProgram program;
   final ui.Image textTexture;
+  final ui.Image bgTexture;
 
   final double time;
   final double rotationX;
@@ -15,12 +16,14 @@ class GlobeShaderPainter extends CustomPainter {
   const GlobeShaderPainter({
     required this.program,
     required this.textTexture,
+    required this.bgTexture,
     required this.time,
     required this.rotationX,
     required this.rotationY,
     required this.axisTilt,
     required this.beatPulse,
   });
+
 
   @override
   void paint(
